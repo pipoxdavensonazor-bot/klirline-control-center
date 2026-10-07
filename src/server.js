@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { actionsFor, briefing, decide, execute, logCall } from "./engine.js";
-import { DEPARTMENTS, agents, assertOrganization, skillDocument } from "./org/index.js";
-import { COMPANY, PLATFORMS } from "./policy.js";
+import { decide, execute, logCall } from "./engine.js";
+import { agents, assertOrganization } from "./org/index.js";
+import { COMPANY } from "./policy.js";
+import { present } from "./present.js";
 import { dataPath, loadState, resetState, saveState } from "./store.js";
 
 assertOrganization();
@@ -33,26 +34,7 @@ function readPlaybook(id) {
 }
 
 function view(state, actorId) {
-  return {
-    company: COMPANY,
-    generatedAt: new Date().toISOString(),
-    actorId,
-    departments: DEPARTMENTS,
-    agents: agents.map((agent) => ({
-      ...agent,
-      skillDocument: skillDocument(agent),
-      reportIds: agents.filter((item) => item.reportsTo === agent.id).map((item) => item.id),
-    })),
-    platformCatalog: PLATFORMS,
-    platforms: state.platforms,
-    tasks: state.tasks.map((task) => ({ ...task, actions: actionsFor(actorId, task) })),
-    briefing: briefing(state),
-    audit: state.audit.slice(0, 50),
-    outbox: state.outbox,
-    calls: state.calls,
-    playbooks: playbooks(),
-    demonstration: state.demonstration,
-  };
+  return present(state, actorId, playbooks());
 }
 
 function send(res, status, body, type = "application/json; charset=utf-8") {

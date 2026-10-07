@@ -10,6 +10,8 @@ node src/server.js
 
 Puis ouvrir `http://127.0.0.1:4173`.
 
+Le même centre est publié sur `https://centre.klirline.com`. L'état de la journée de démonstration est conservé dans un Durable Object Cloudflare. Les chiffres restent un jeu de démonstration : aucun courriel, appel ou paiement ne part.
+
 Vérifier la chaîne sans interface :
 
 ```bash

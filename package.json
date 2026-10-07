@@ -6,6 +6,11 @@
   "description": "Centre de contrôle de Klirline Inc. — entreprise virtuelle opérée par des agents sous l'autorité du CEO.",
   "scripts": {
     "start": "node src/server.js",
-    "check": "node src/self-check.js"
+    "check": "node src/self-check.js",
+    "stage": "node scripts/stage-assets.mjs",
+    "deploy": "node scripts/stage-assets.mjs && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.135.0"
   }
 }

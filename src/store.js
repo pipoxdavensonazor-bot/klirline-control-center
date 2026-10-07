@@ -1,33 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildDay } from "./engine.js";
-import { seedWorld } from "./seed.js";
+import { freshState } from "./fresh-state.js";
+
+export { freshState };
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const statePath = path.join(root, "data", "state.json");
 
 export function dataPath(...parts) {
   return path.join(root, ...parts);
-}
-
-export function freshState() {
-  const world = seedWorld();
-  const tasks = buildDay(world);
-  return {
-    ...world,
-    tasks,
-    audit: [
-      {
-        at: new Date().toISOString(),
-        actorId: "chief-of-staff",
-        action: "cycle",
-        detail: "Journée préparée à partir de l'état local. Aucun message et aucun paiement n'est parti.",
-      },
-    ],
-    outbox: [],
-    calls: [],
-  };
 }
 
 export function loadState() {
