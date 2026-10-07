@@ -4,7 +4,7 @@ export const salesAgents = [
   defineAgent({
     id: "sales-director",
     name: "Directrice commerciale",
-    title: "AI Sales Director",
+    title: "Directrice commerciale",
     department: "sales",
     icon: "💼",
     reportsTo: "chief-of-staff",
@@ -37,7 +37,7 @@ export const salesAgents = [
   defineAgent({
     id: "prospecting",
     name: "Prospecteur",
-    title: "Prospecting Agent",
+    title: "Prospecteur",
     department: "sales",
     icon: "🎯",
     reportsTo: "sales-director",
@@ -103,7 +103,7 @@ export const salesAgents = [
   defineAgent({
     id: "appointments",
     name: "Agent rendez-vous",
-    title: "Appointment Agent",
+    title: "Agent rendez-vous",
     department: "sales",
     icon: "🗓️",
     reportsTo: "sales-director",
@@ -133,7 +133,7 @@ export const salesAgents = [
   defineAgent({
     id: "proposals",
     name: "Agent propositions",
-    title: "Proposal Agent",
+    title: "Agent propositions",
     department: "sales",
     icon: "📑",
     reportsTo: "sales-director",

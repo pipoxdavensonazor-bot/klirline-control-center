@@ -1,4 +1,5 @@
 const views = [
+  ["scope", "Ce centre"],
   ["report", "Rapport du jour"],
   ["queue", "À valider"],
   ["work", "Travaux"],
@@ -19,6 +20,28 @@ const statusLabel = {
 };
 
 const levelLabel = { 1: "Niveau 1 · autonome", 2: "Niveau 2 · supérieur", 3: "Niveau 3 · CEO" };
+const platformStatusLabel = { operational: "Opérationnel", degraded: "Dégradé", down: "Interrompu" };
+const journalKind = {
+  cycle: "Préparation",
+  recommend: "Décision",
+  approve: "Décision",
+  reject: "Décision",
+  block: "Décision",
+  release: "Décision",
+  execute: "Exécution",
+  log_call: "Exécution",
+};
+const journalAction = {
+  cycle: "Journée préparée",
+  recommend: "Recommandation",
+  approve: "Approbation",
+  reject: "Refus",
+  block: "Gel",
+  release: "Levée du gel",
+  execute: "Action consignée",
+  log_call: "Compte-rendu d'appel",
+};
+const outcomeLabel = { joignable: "Joignable", message: "Message laissé", refus: "Refus", demo: "Démo acceptée" };
 const actionLabel = {
   recommend: "Recommander au CEO",
   approve: "Approuver",
@@ -29,7 +52,7 @@ const actionLabel = {
 };
 
 let actorId = sessionStorage.getItem("klirline-actor") || "ceo";
-let view = "report";
+let view = sessionStorage.getItem("klirline-view") || "scope";
 let selectedTaskId = null;
 let selectedAgentId = "chief-of-staff";
 let playbookId = null;
@@ -110,7 +133,7 @@ function artifactHtml(task) {
   if (artifact.kind === "alert") return `<p>${escapeHtml(artifact.client)} · ${escapeHtml(artifact.product)}</p><ul>${artifact.signals.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><p>${escapeHtml(artifact.plan)}</p>`;
   if (artifact.kind === "discount") return `<p>${escapeHtml(artifact.client)} · ${escapeHtml(artifact.gesture)} · ${artifact.percent} % (seuil CEO ${artifact.threshold} %)</p>`;
   if (artifact.kind === "campaign") return `<p>${escapeHtml(artifact.channel)} · ${money(artifact.budget)} · ${artifact.days} jours</p><p>${escapeHtml(artifact.audience)}</p><p>${escapeHtml(artifact.stopRule)}</p>`;
-  if (artifact.kind === "platform") return `<p>${escapeHtml(artifact.platform)} · ${escapeHtml(artifact.status)}</p><p>${escapeHtml(artifact.note)}</p>`;
+  if (artifact.kind === "platform") return `<p>${escapeHtml(artifact.platform)} · ${escapeHtml(platformStatusLabel[artifact.status] || artifact.status)}</p><p>${escapeHtml(artifact.note)}</p>`;
   if (artifact.kind === "worklist") return `<ul>${artifact.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
   return `<pre>${escapeHtml(artifact.text || "")}</pre>`;
 }
@@ -120,7 +143,7 @@ function detailHtml(task) {
   const owner = agent(task.ownerId);
   const supervisor = agent(task.supervisorId);
   const buttons = task.actions.map((action) => `<button class="${action === "reject" || action === "block" ? "danger" : ""}" data-decision="${action}">${actionLabel[action] || action}</button>`).join("");
-  const outcomes = task.actions.includes("log_call") ? `<div class="actions">${["joignable", "message", "refus", "demo"].map((item) => `<button class="ghost" data-outcome="${item}">${item}</button>`).join("")}</div>` : "";
+  const outcomes = task.actions.includes("log_call") ? `<div class="actions">${Object.entries(outcomeLabel).map(([item, label]) => `<button class="ghost" data-outcome="${item}">${label}</button>`).join("")}</div>` : "";
   return `<div class="detail">
     <div class="chips">${chip(`l${task.level}`, levelLabel[task.level])}${chip(task.status, statusLabel[task.status])}</div>
     <h2>${escapeHtml(task.title)}</h2>
@@ -131,6 +154,7 @@ function detailHtml(task) {
     ${!task.actions.length && task.status === "pending_supervisor" ? `<p class="banner">Dossier chez ${escapeHtml(supervisor.name)}. La signature du CEO s'ouvre après sa recommandation.</p>` : ""}
     ${!task.actions.length && task.status === "pending_ceo" && actorId !== "ceo" ? `<p class="banner">Recommandation faite. La signature appartient à Philippe Azor.</p>` : ""}
     ${artifactHtml(task)}
+    ${(task.approvals || []).length ? `<h3>Historique</h3><ul class="history">${task.approvals.map((item) => `<li><span>${escapeHtml(when(item.at))}</span> ${escapeHtml(agent(item.actorId)?.name || item.actorId)} · ${escapeHtml(journalAction[item.decision] || item.decision)}${item.note ? ` — ${escapeHtml(item.note)}` : ""}</li>`).join("")}</ul>` : `<p class="muted">Aucune décision enregistrée sur ce dossier.</p>`}
     <textarea id="note" placeholder="Note de validation">${escapeHtml(note)}</textarea>
     <div class="actions">${buttons}</div>
     ${outcomes}
@@ -138,13 +162,31 @@ function detailHtml(task) {
   </div>`;
 }
 
+function when(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function scopeHtml() {
+  return `<div class="banner">Démonstration publique. Les entreprises, les montants et les états de plateformes sont un jeu. Aucun courriel, appel, paiement ou publication ne part d'ici.</div>
+  <div class="scope-grid">
+    <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>Chaque décision reste dans l'historique du dossier et dans le journal.</li></ul></article>
+    <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état des huit plateformes, y compris l'export Klirline OS.</li><li>L'identité choisie dans le menu. Ce n'est pas une connexion.</li></ul></article>
+    <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture en direct des plateformes Klirline.</li><li>Authentification des personnes. Les données réelles restent hors de ce centre tant que l'accès n'est pas contrôlé.</li></ul></article>
+  </div>
+  <div class="actions"><button data-view="report">Ouvrir le rapport du jour</button><button class="ghost" data-view="queue">Voir la file à valider</button></div>`;
+}
+
 function reportHtml() {
   const report = state.briefing;
-  const lane = (title, items) => `<section class="lane"><h3>${title}</h3>${items.length ? items.join("") : `<p class="muted">Rien</p>`}</section>`;
+  const lane = (title, items, empty = "Rien") => `<section class="lane"><h3>${title}</h3>${items.length ? items.join("") : `<p class="muted">${empty}</p>`}</section>`;
+  const approveEmpty = actorId === "ceo"
+    ? "Rien n'attend Philippe Azor. Un supérieur doit d'abord recommander le dossier."
+    : "Rien";
   const finance = state.briefing.finance;
-  return `<div class="banner">Cerveau local actif. Les agents préparent avec les playbooks même sans réseau. Envoyer, appeler, payer ou publier réellement exige un connecteur : ici, l'action approuvée est consignée et ne quitte pas la machine.</div>
+  return `<div class="banner">Les agents préparent les dossiers. Une action approuvée est consignée ici : elle n'envoie rien, n'appelle personne et ne déplace pas d'argent.</div>
   <div class="lanes">
-    ${lane("À approuver", report.decisionsReady.map((item) => taskButton(item)))}
+    ${lane("À approuver", report.decisionsReady.map((item) => taskButton(item)), approveEmpty)}
     ${lane("À surveiller", report.decisionsWaiting.map((item) => taskButton(item)))}
     ${lane("Urgent", report.blocked.map((item) => taskButton(item)))}
     ${lane("Opportunités", report.sales.priority.map((item) => `<p>${escapeHtml(item.company)} · ${item.score} · ${escapeHtml(item.action)}</p>`))}
@@ -163,6 +205,17 @@ function listHtml(tasks) {
   return tasks.map((task) => `<article class="card"><div class="chips">${chip(`l${task.level}`, levelLabel[task.level])}${chip(task.status, statusLabel[task.status])}</div><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.summary)}</p><button class="ghost" data-task="${task.id}">Ouvrir le dossier</button></article>`).join("");
 }
 
+function queueHtml() {
+  const mine = state.tasks.filter((task) => task.actions.length);
+  const upstream = state.tasks.filter((task) => task.level === 3 && task.status === "pending_supervisor" && !task.actions.length);
+  const waitingCards = upstream.map((task) => {
+    const supervisor = agent(task.supervisorId);
+    return `<article class="card"><div class="chips">${chip("l3", levelLabel[3])}${chip(task.status, statusLabel[task.status])}</div><h3>${escapeHtml(task.title)}</h3><p>Chez ${escapeHtml(supervisor.name)}. La file de Philippe Azor s'ouvre après sa recommandation.</p><button class="ghost" data-assume="${task.supervisorId}" data-open="${task.id}">Prendre la session de ${escapeHtml(supervisor.name)}</button></article>`;
+  }).join("");
+  const ready = mine.length ? listHtml(mine) : `<article class="card"><p class="muted">${actorId === "ceo" ? "Aucun dossier ne lui a encore été recommandé." : "Aucun dossier n'attend cette session."}</p></article>`;
+  return `<div class="grid"><h2 class="section-title">Pour ${escapeHtml(agent(actorId).name)}</h2>${ready}${upstream.length ? `<h2 class="section-title">Encore chez un supérieur</h2>${waitingCards}` : ""}</div>`;
+}
+
 function workHtml() {
   return state.departments.map((department) => {
     const tasks = state.tasks.filter((task) => task.department === department.id);
@@ -175,10 +228,10 @@ function platformsHtml() {
   const current = agent(actorId);
   const rows = state.platforms.map((platform) => {
     const name = state.platformCatalog.find((item) => item.id === platform.id);
-    const write = current.writePlatforms.includes(platform.id) ? "Écriture" : "Lecture";
-    return `<tr><td>${escapeHtml(name.name)}</td><td>${escapeHtml(name.domain)}</td><td>${escapeHtml(platform.status)}</td><td>${write}</td><td>${escapeHtml(platform.note)}</td></tr>`;
+    const write = current.writePlatforms.includes(platform.id) ? "Écriture prévue" : "Lecture seule";
+    return `<tr><td>${escapeHtml(name.name)}</td><td>${escapeHtml(name.domain)}</td><td>${escapeHtml(platformStatusLabel[platform.status] || platform.status)}</td><td>${write}</td><td>${escapeHtml(platform.note)}</td></tr>`;
   }).join("");
-  return `<article class="card"><h3>Un seul accès</h3><p>${escapeHtml(current.name)} lit les huit plateformes par le centre de contrôle. Écriture : ${current.writePlatforms.length ? escapeHtml(current.writePlatforms.join(", ")) : "aucune"}.</p><table><thead><tr><th>Plateforme</th><th>Domaine</th><th>État</th><th>Droit</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></article>`;
+  return `<div class="banner">Source : jeu de démonstration, relu à ${escapeHtml(when(state.generatedAt))}. Aucune plateforme n'est interrogée en direct. L'écriture reste fermée.</div><article class="card"><h3>Un seul accès</h3><p>${escapeHtml(current.name)} voit les huit plateformes dans ce centre. Écriture réelle : aucune. Périmètre prévu : ${current.writePlatforms.length ? escapeHtml(current.writePlatforms.map((id) => state.platformCatalog.find((item) => item.id === id)?.name || id).join(", ")) : "aucun"}.</p><table><thead><tr><th>Plateforme</th><th>Domaine</th><th>État simulé</th><th>Droit</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></article>`;
 }
 
 function peopleHtml() {
@@ -189,14 +242,18 @@ function peopleHtml() {
 }
 
 function journalHtml() {
-  const lines = state.audit.map((item) => `<div class="row-line"><span>${escapeHtml(agent(item.actorId)?.name || item.actorId)} · ${escapeHtml(item.action)}</span><span class="muted">${escapeHtml(item.detail)}</span></div>`).join("");
-  const outbox = state.outbox.map((item) => `<div class="row-line"><span>${escapeHtml(item.title)}</span><span class="muted">${escapeHtml(item.detail)}</span></div>`).join("");
-  return `<article class="card"><h3>Journal d'exécution</h3>${outbox || `<p class="muted">Rien n'a encore été consigné.</p>`}</article><article class="card"><h3>Audit</h3>${lines}</article>`;
+  const events = state.audit.map((item) => {
+    const effect = item.action === "execute" ? state.outbox.find((entry) => entry.taskId === item.taskId) : null;
+    const result = effect ? (effect.leftTheBuilding ? "Transmis à l'extérieur." : "Résultat : rien n'a quitté le centre.") : "";
+    return `<article class="card timeline"><p class="eyebrow">${escapeHtml(journalKind[item.action] || "Événement")}</p><h3>${escapeHtml(journalAction[item.action] || item.action)}</h3><p>${escapeHtml(agent(item.actorId)?.name || item.actorId)} · ${escapeHtml(when(item.at))}</p><p>${escapeHtml(item.detail)}</p>${result ? `<p class="muted">${escapeHtml(result)}</p>` : ""}</article>`;
+  }).join("");
+  return events || `<article class="card"><p class="muted">Aucun événement.</p></article>`;
 }
 
 function mainHtml() {
+  if (view === "scope") return scopeHtml();
   if (view === "report") return reportHtml();
-  if (view === "queue") return `<div class="grid">${listHtml(state.tasks.filter((task) => task.actions.length))}</div>`;
+  if (view === "queue") return queueHtml();
   if (view === "work") return `<div class="grid">${workHtml()}</div>`;
   if (view === "comms") return `<div class="grid">${listHtml(state.tasks.filter((task) => task.artifact?.kind === "email" || task.artifact?.kind === "call"))}</div>`;
   if (view === "platforms") return platformsHtml();
@@ -217,18 +274,19 @@ function render() {
     <aside class="sidebar">
       <p class="brand">Klirline<span>Centre de contrôle</span></p>
       <div class="priority">${escapeHtml(date)}<br />Priorité : ventes</div>
-      <nav>${views.map(([id, label]) => `<button class="${view === id ? "active" : ""}" data-view="${id}">${label}</button>`).join("")}</nav>
-      <div class="tree"><div class="dept">CEO</div><div>👑 ${escapeHtml(state.company.founder)}</div>${tree}</div>
+      <nav class="desktop-nav">${views.map(([id, label]) => `<button class="${view === id ? "active" : ""}" data-view="${id}">${label}</button>`).join("")}</nav>
+      <details class="tree" ${window.innerWidth > 1100 ? "open" : ""}><summary>Organigramme</summary><div class="dept">CEO</div><div>👑 ${escapeHtml(state.company.founder)}</div>${tree}</details>
     </aside>
     <section class="stage">
       <header class="top">
         <div><p class="eyebrow">Klirline Inc.</p><h1>${views.find(([id]) => id === view)[1]}</h1></div>
         <div class="session">
-          <label for="actor">Session de validation</label>
+          <label for="actor">Identité de démonstration</label>
           <select id="actor">${options}</select>
-          <p class="hint">Le rôle choisi est l'identité qui valide. ${actorId === "ceo" ? `<button class="ghost" id="reset">Recommencer la démonstration</button>` : ""}</p>
+          <p class="hint">Le serveur vérifie le rôle de la décision. Il n'authentifie pas la personne. ${actorId === "ceo" ? `<button class="ghost" id="reset">Recommencer la démonstration</button>` : ""}</p>
         </div>
       </header>
+      <nav class="section-nav">${views.map(([id, label]) => `<button class="${view === id ? "active" : ""}" data-view="${id}">${label}</button>`).join("")}</nav>
       <div class="layout ${showDetail ? "" : "single"}">
         <div>${mainHtml()}</div>
         ${showDetail ? detailHtml(selected) : ""}
@@ -239,7 +297,15 @@ function render() {
 }
 
 function bind() {
-  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => { view = button.dataset.view; error = ""; render(); }));
+  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => { view = button.dataset.view; sessionStorage.setItem("klirline-view", view); error = ""; render(); }));
+  document.querySelectorAll("[data-assume]").forEach((button) => button.addEventListener("click", () => {
+    actorId = button.dataset.assume;
+    selectedTaskId = button.dataset.open;
+    view = "queue";
+    sessionStorage.setItem("klirline-actor", actorId);
+    sessionStorage.setItem("klirline-view", view);
+    load().catch(showLoadError);
+  }));
   document.querySelectorAll("[data-task]").forEach((button) => button.addEventListener("click", () => { selectedTaskId = button.dataset.task; view = ["people", "platforms", "journal", "work"].includes(view) ? "queue" : view; error = ""; render(); }));
   document.querySelectorAll("[data-agent]").forEach((button) => button.addEventListener("click", () => { selectedAgentId = button.dataset.agent; playbookBody = ""; view = "people"; render(); }));
   document.querySelectorAll("[data-book]").forEach((button) => button.addEventListener("click", () => openPlaybook(button.dataset.book, true)));

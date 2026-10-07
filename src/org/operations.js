@@ -4,7 +4,7 @@ export const operationsAgents = [
   defineAgent({
     id: "coo",
     name: "Directeur des opérations",
-    title: "Chief Operations Officer",
+    title: "Directeur des opérations",
     department: "operations",
     icon: "⚙️",
     reportsTo: "chief-of-staff",
@@ -141,7 +141,7 @@ function productManagers() {
     defineAgent({
       id: product.id,
       name: product.name,
-      title: `Product Manager — ${product.platform}`,
+      title: product.name.replace(/^Responsable /, "Responsable produit — "),
       department: "operations",
       icon: "🧩",
       reportsTo: "coo",

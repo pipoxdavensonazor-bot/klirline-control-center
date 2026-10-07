@@ -4,7 +4,7 @@ export const customerAgents = [
   defineAgent({
     id: "cs-director",
     name: "Directrice succès client",
-    title: "Customer Success Director",
+    title: "Directrice succès client",
     department: "customers",
     icon: "👥",
     reportsTo: "chief-of-staff",
@@ -36,7 +36,7 @@ export const customerAgents = [
   defineAgent({
     id: "onboarding",
     name: "Agent accueil",
-    title: "Onboarding Agent",
+    title: "Agent accueil",
     department: "customers",
     icon: "🚪",
     reportsTo: "cs-director",
@@ -65,7 +65,7 @@ export const customerAgents = [
   defineAgent({
     id: "support",
     name: "Agent support",
-    title: "Support Agent",
+    title: "Agent support",
     department: "customers",
     icon: "🛠️",
     reportsTo: "cs-director",
@@ -94,7 +94,7 @@ export const customerAgents = [
   defineAgent({
     id: "account-manager",
     name: "Responsable de comptes",
-    title: "Account Manager Agent",
+    title: "Responsable de comptes",
     department: "customers",
     icon: "📋",
     reportsTo: "cs-director",
@@ -123,7 +123,7 @@ export const customerAgents = [
   defineAgent({
     id: "retention",
     name: "Agent rétention",
-    title: "Retention Agent",
+    title: "Agent rétention",
     department: "customers",
     icon: "🔴",
     reportsTo: "cs-director",

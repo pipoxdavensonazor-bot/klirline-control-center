@@ -4,7 +4,7 @@ export const financeAgents = [
   defineAgent({
     id: "finance-director",
     name: "Directrice finance",
-    title: "Finance Director",
+    title: "Directrice finance",
     department: "finance",
     icon: "💰",
     reportsTo: "chief-of-staff",
@@ -37,7 +37,7 @@ export const financeAgents = [
   defineAgent({
     id: "accounting",
     name: "Agent comptable",
-    title: "Accounting Agent",
+    title: "Agent comptable",
     department: "finance",
     icon: "📒",
     reportsTo: "finance-director",
@@ -66,7 +66,7 @@ export const financeAgents = [
   defineAgent({
     id: "billing",
     name: "Agent facturation",
-    title: "Billing Agent",
+    title: "Agent facturation",
     department: "finance",
     icon: "🧾",
     reportsTo: "finance-director",
@@ -95,7 +95,7 @@ export const financeAgents = [
   defineAgent({
     id: "collections",
     name: "Agent recouvrement",
-    title: "Collections Agent",
+    title: "Agent recouvrement",
     department: "finance",
     icon: "📬",
     reportsTo: "finance-director",
@@ -124,7 +124,7 @@ export const financeAgents = [
   defineAgent({
     id: "financial-analyst",
     name: "Analyste financier",
-    title: "Financial Analyst Agent",
+    title: "Analyste financier",
     department: "finance",
     icon: "📉",
     reportsTo: "finance-director",
@@ -153,7 +153,7 @@ export const financeAgents = [
   defineAgent({
     id: "cashflow",
     name: "Agent trésorerie",
-    title: "Cash Flow Agent",
+    title: "Agent trésorerie",
     department: "finance",
     icon: "💧",
     reportsTo: "finance-director",

@@ -33,7 +33,7 @@ export const directionAgents = [
   defineAgent({
     id: "chief-of-staff",
     name: "Chef de cabinet",
-    title: "Chief of Staff",
+    title: "Chef de cabinet",
     department: "direction",
     icon: "🤖",
     reportsTo: "ceo",
@@ -66,7 +66,7 @@ export const directionAgents = [
   defineAgent({
     id: "analytics",
     name: "Analyste transverse",
-    title: "Analytics Agent",
+    title: "Analyste",
     department: "direction",
     icon: "📊",
     reportsTo: "chief-of-staff",

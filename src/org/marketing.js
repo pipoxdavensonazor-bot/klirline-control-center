@@ -4,7 +4,7 @@ export const marketingAgents = [
   defineAgent({
     id: "marketing-director",
     name: "Directrice marketing",
-    title: "Marketing Director",
+    title: "Directrice marketing",
     department: "marketing",
     icon: "📣",
     reportsTo: "chief-of-staff",
@@ -37,7 +37,7 @@ export const marketingAgents = [
   defineAgent({
     id: "content",
     name: "Agent contenu",
-    title: "Content Agent",
+    title: "Agent contenu",
     department: "marketing",
     icon: "✍️",
     reportsTo: "marketing-director",
@@ -65,8 +65,8 @@ export const marketingAgents = [
   }),
   defineAgent({
     id: "seo",
-    name: "Agent SEO",
-    title: "SEO Agent",
+    name: "Agent référencement",
+    title: "Agent référencement",
     icon: "🔎",
     reportsTo: "marketing-director",
     department: "marketing",
@@ -95,7 +95,7 @@ export const marketingAgents = [
   defineAgent({
     id: "advertising",
     name: "Agent publicité",
-    title: "Advertising Agent",
+    title: "Agent publicité",
     department: "marketing",
     icon: "📈",
     reportsTo: "marketing-director",

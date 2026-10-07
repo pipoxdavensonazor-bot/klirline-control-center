@@ -4,7 +4,7 @@ export const securityAgents = [
   defineAgent({
     id: "security-director",
     name: "Directeur sécurité",
-    title: "Security Director",
+    title: "Directeur sécurité",
     department: "security",
     icon: "🛡️",
     reportsTo: "ceo",
@@ -39,7 +39,7 @@ export const securityAgents = [
   defineAgent({
     id: "compliance",
     name: "Agent conformité",
-    title: "Compliance Agent",
+    title: "Agent conformité",
     department: "security",
     icon: "⚖️",
     reportsTo: "security-director",
