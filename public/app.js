@@ -106,6 +106,23 @@ function siteChip(site) {
   return chip(tone, siteLabel(site));
 }
 
+function healthLabel(site) {
+  const health = site.health;
+  if (!health) return "";
+  if (health.status === "ok") return "Santé en ordre";
+  if (health.status === "degraded") return "Santé à revoir";
+  if (health.status === "unreachable") return "Santé injoignable";
+  return "Santé inattendue";
+}
+
+function healthHtml(site) {
+  const health = site.health;
+  if (!health) return "";
+  const rows = (health.checks || []).map((check) => `<div class="row-line"><span>${escapeHtml(check.label || check.name)}</span><span>${check.ok ? "En ordre" : "À revoir"}</span></div>`).join("");
+  const whenHealth = health.at ? ` <span class="muted">lue à ${escapeHtml(when(health.at))}</span>` : "";
+  return `<p>${escapeHtml(healthLabel(site))}${whenHealth}</p>${rows}`;
+}
+
 async function post(url, payload) {
   error = "";
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -200,7 +217,7 @@ function when(value) {
 function scopeHtml() {
   return `<div class="banner">Démonstration publique. Les entreprises, les montants et les états de plateformes sont un jeu. Aucun courriel, appel, paiement ou publication ne part d'ici.</div>
   <div class="scope-grid">
-    <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li></ul></article>
+    <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li><li>La santé de KlirBuild est lue sur sa route réelle.</li></ul></article>
     <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>L'identité choisie dans le menu. Ce n'est pas une connexion.</li></ul></article>
     <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.</li><li>KlirLead, KlirMarket et Klirline OS n'ont pas encore d'adresse publique.</li></ul></article>
   </div>
@@ -259,7 +276,7 @@ function sitesSummaryHtml() {
   if (!liveSites.length) return `<p class="muted">Vérification des adresses en cours.</p>`;
   const online = liveSites.filter((site) => site.status === "online").length;
   const absent = liveSites.filter((site) => site.status === "absent").length;
-  const rows = liveSites.map((site) => `<div class="row-line"><span>${escapeHtml(siteName(site))}</span><span>${escapeHtml(siteLabel(site))}</span></div>`).join("");
+  const rows = liveSites.map((site) => `<div class="row-line"><span>${escapeHtml(siteName(site))}</span><span>${escapeHtml(site.health ? `${siteLabel(site)} · ${healthLabel(site)}` : siteLabel(site))}</span></div>`).join("");
   return `<p>${online} en ligne, ${absent} sans adresse.</p>${rows}`;
 }
 
@@ -272,9 +289,9 @@ function sitesHtml() {
       : `<p class="muted">Aucun nom public pour ce produit.</p>`;
     const title = site.title ? `<p>${escapeHtml(site.title)}</p>` : "";
     const note = site.note ? `<p class="muted">${escapeHtml(site.note)}</p>` : "";
-    return `<article class="card"><div class="chips">${siteChip(site)}</div><h3>${escapeHtml(siteName(site))}</h3>${address}${title}${note}</article>`;
+    return `<article class="card"><div class="chips">${siteChip(site)}</div><h3>${escapeHtml(siteName(site))}</h3>${address}${title}${healthHtml(site)}${note}</article>`;
   }).join("");
-  return `<h2 class="section-title">Sites réels</h2><p class="muted">Page d'accueil seulement, vérifiée à ${escapeHtml(when(checked))}. Aucun dossier, aucun paiement.</p><div class="scope-grid">${cards}</div>`;
+  return `<h2 class="section-title">Sites réels</h2><p class="muted">Page d'accueil vérifiée à ${escapeHtml(when(checked))}. La santé de KlirBuild vient de sa route réelle. Aucun dossier, aucun paiement.</p><div class="scope-grid">${cards}</div>`;
 }
 
 function platformsHtml() {
