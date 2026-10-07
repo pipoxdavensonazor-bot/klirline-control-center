@@ -4,6 +4,7 @@ import { agents } from "./org/index.js";
 import { COMPANY } from "./policy.js";
 import { freshState } from "./fresh-state.js";
 import { present } from "./present.js";
+import { probeProductSites } from "./product-sites.js";
 
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 
@@ -68,6 +69,7 @@ export default {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/api/health") return json(200, { ok: true, company: COMPANY.legalName });
+      if (request.method === "GET" && url.pathname === "/api/sites") return json(200, { sites: await probeProductSites() });
 
       if (url.pathname.startsWith("/api/playbooks/")) {
         const id = url.pathname.split("/").pop();

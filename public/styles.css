@@ -20,6 +20,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, select, textarea { font: inherit; }
+a { color: var(--ink); }
 button { cursor: pointer; }
 h1, h2, h3, h4 { font-family: Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif; font-weight: 600; }
 

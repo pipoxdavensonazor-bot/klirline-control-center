@@ -60,6 +60,7 @@ let playbookBody = "";
 let state = null;
 let error = "";
 let note = "";
+let liveSites = [];
 
 const app = document.querySelector("#app");
 const money = (value) => new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(value);
@@ -74,6 +75,35 @@ async function load() {
   state = body;
   if (playbookId) await openPlaybook(playbookId, false);
   render();
+  refreshSites();
+}
+
+async function refreshSites() {
+  try {
+    const response = await fetch("/api/sites");
+    const body = await response.json();
+    if (!response.ok) return;
+    liveSites = body.sites || [];
+    if (view === "report" || view === "platforms" || view === "scope") render();
+  } catch {
+    liveSites = [];
+  }
+}
+
+function siteName(site) {
+  return state.platformCatalog.find((item) => item.id === site.id)?.name || site.id;
+}
+
+function siteLabel(site) {
+  if (site.status === "online") return "En ligne";
+  if (site.status === "absent") return "Pas d'adresse";
+  if (site.status === "unreachable") return "Injoignable";
+  return "Réponse inattendue";
+}
+
+function siteChip(site) {
+  const tone = site.status === "online" ? "done" : site.status === "absent" ? "pending_supervisor" : "blocked";
+  return chip(tone, siteLabel(site));
 }
 
 async function post(url, payload) {
@@ -170,9 +200,9 @@ function when(value) {
 function scopeHtml() {
   return `<div class="banner">Démonstration publique. Les entreprises, les montants et les états de plateformes sont un jeu. Aucun courriel, appel, paiement ou publication ne part d'ici.</div>
   <div class="scope-grid">
-    <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>Chaque décision reste dans l'historique du dossier et dans le journal.</li></ul></article>
-    <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état des huit plateformes, y compris l'export Klirline OS.</li><li>L'identité choisie dans le menu. Ce n'est pas une connexion.</li></ul></article>
-    <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture en direct des plateformes Klirline.</li><li>Authentification des personnes. Les données réelles restent hors de ce centre tant que l'accès n'est pas contrôlé.</li></ul></article>
+    <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li></ul></article>
+    <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>L'identité choisie dans le menu. Ce n'est pas une connexion.</li></ul></article>
+    <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.</li><li>KlirLead, KlirMarket et Klirline OS n'ont pas encore d'adresse publique.</li></ul></article>
   </div>
   <div class="actions"><button data-view="report">Ouvrir le rapport du jour</button><button class="ghost" data-view="queue">Voir la file à valider</button></div>`;
 }
@@ -195,7 +225,8 @@ function reportHtml() {
   <div class="grid">
     <article class="card"><h3>Ventes</h3><p>${report.sales.prospects} prospects actifs. Démos : ${escapeHtml(report.sales.demos.join(" · ") || "aucune")}</p></article>
     <article class="card"><h3>Finance</h3><p>Revenus ${money(finance.revenue)} · dépenses ${money(finance.expenses)} · factures ouvertes ${money(finance.receivables)}</p><p class="muted">${escapeHtml(finance.source)}</p></article>
-    <article class="card"><h3>Opérations</h3>${report.operations.degraded.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Toutes les plateformes sont opérationnelles dans l'état local.</p>"}</article>
+    <article class="card"><h3>Sites réels</h3>${sitesSummaryHtml()}</article>
+    <article class="card"><h3>Opérations</h3>${report.operations.degraded.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Toutes les plateformes sont opérationnelles dans l'état local.</p>"}<p class="muted">Ces notes viennent du jeu de démonstration.</p></article>
     <article class="card"><h3>Clients</h3>${report.customers.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Aucune alerte à deux signaux.</p>"}</article>
   </div>`;
 }
@@ -224,6 +255,28 @@ function workHtml() {
   }).join("");
 }
 
+function sitesSummaryHtml() {
+  if (!liveSites.length) return `<p class="muted">Vérification des adresses en cours.</p>`;
+  const online = liveSites.filter((site) => site.status === "online").length;
+  const absent = liveSites.filter((site) => site.status === "absent").length;
+  const rows = liveSites.map((site) => `<div class="row-line"><span>${escapeHtml(siteName(site))}</span><span>${escapeHtml(siteLabel(site))}</span></div>`).join("");
+  return `<p>${online} en ligne, ${absent} sans adresse.</p>${rows}`;
+}
+
+function sitesHtml() {
+  if (!liveSites.length) return `<article class="card"><h3>Sites réels</h3><p class="muted">Vérification des adresses en cours.</p></article>`;
+  const checked = liveSites.find((site) => site.checkedAt)?.checkedAt;
+  const cards = liveSites.map((site) => {
+    const address = site.url
+      ? `<p><a href="${escapeHtml(site.url)}" target="_blank" rel="noreferrer">${escapeHtml(site.url.replace(/^https:\/\//, ""))}</a></p>`
+      : `<p class="muted">Aucun nom public pour ce produit.</p>`;
+    const title = site.title ? `<p>${escapeHtml(site.title)}</p>` : "";
+    const note = site.note ? `<p class="muted">${escapeHtml(site.note)}</p>` : "";
+    return `<article class="card"><div class="chips">${siteChip(site)}</div><h3>${escapeHtml(siteName(site))}</h3>${address}${title}${note}</article>`;
+  }).join("");
+  return `<h2 class="section-title">Sites réels</h2><p class="muted">Page d'accueil seulement, vérifiée à ${escapeHtml(when(checked))}. Aucun dossier, aucun paiement.</p><div class="scope-grid">${cards}</div>`;
+}
+
 function platformsHtml() {
   const current = agent(actorId);
   const rows = state.platforms.map((platform) => {
@@ -231,7 +284,7 @@ function platformsHtml() {
     const write = current.writePlatforms.includes(platform.id) ? "Écriture prévue" : "Lecture seule";
     return `<tr><td>${escapeHtml(name.name)}</td><td>${escapeHtml(name.domain)}</td><td>${escapeHtml(platformStatusLabel[platform.status] || platform.status)}</td><td>${write}</td><td>${escapeHtml(platform.note)}</td></tr>`;
   }).join("");
-  return `<div class="banner">Source : jeu de démonstration, relu à ${escapeHtml(when(state.generatedAt))}. Aucune plateforme n'est interrogée en direct. L'écriture reste fermée.</div><article class="card"><h3>Un seul accès</h3><p>${escapeHtml(current.name)} voit les huit plateformes dans ce centre. Écriture réelle : aucune. Périmètre prévu : ${current.writePlatforms.length ? escapeHtml(current.writePlatforms.map((id) => state.platformCatalog.find((item) => item.id === id)?.name || id).join(", ")) : "aucun"}.</p><div class="table-wrap"><table><thead><tr><th>Plateforme</th><th>Domaine</th><th>État simulé</th><th>Droit</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
+  return `${sitesHtml()}<div class="banner">Le tableau suivant reste un jeu de démonstration, relu à ${escapeHtml(when(state.generatedAt))}. L'écriture réelle reste fermée.</div><article class="card"><h3>Un seul accès</h3><p>${escapeHtml(current.name)} voit les huit plateformes dans ce centre. Écriture réelle : aucune. Périmètre prévu : ${current.writePlatforms.length ? escapeHtml(current.writePlatforms.map((id) => state.platformCatalog.find((item) => item.id === id)?.name || id).join(", ")) : "aucun"}.</p><div class="table-wrap"><table><thead><tr><th>Plateforme</th><th>Domaine</th><th>État simulé</th><th>Droit</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
 }
 
 function peopleHtml() {

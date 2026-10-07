@@ -5,6 +5,7 @@ import { decide, execute, logCall } from "./engine.js";
 import { agents, assertOrganization } from "./org/index.js";
 import { COMPANY } from "./policy.js";
 import { present } from "./present.js";
+import { probeProductSites } from "./product-sites.js";
 import { dataPath, loadState, resetState, saveState } from "./store.js";
 
 assertOrganization();
@@ -71,6 +72,9 @@ const server = http.createServer(async (req, res) => {
         return send(res, 404, { error: "Rôle introuvable" });
       }
       return send(res, 200, view(loadState(), actorId));
+    }
+    if (req.method === "GET" && url.pathname === "/api/sites") {
+      return send(res, 200, { sites: await probeProductSites() });
     }
     if (req.method === "GET" && url.pathname.startsWith("/api/playbooks/")) {
       const id = url.pathname.split("/").pop();
