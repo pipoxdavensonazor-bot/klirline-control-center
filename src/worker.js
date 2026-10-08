@@ -6,7 +6,13 @@ import { freshState } from "./fresh-state.js";
 import { present } from "./present.js";
 import { probeProductSites } from "./product-sites.js";
 
-const jsonHeaders = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
+const jsonHeaders = {
+  "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Content-Security-Policy": "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+};
 
 function json(status, body) {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
@@ -80,7 +86,14 @@ export default {
         return json(200, { id, body: await file.text() });
       }
 
-      if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+      if (!url.pathname.startsWith("/api/")) {
+        const asset = await env.ASSETS.fetch(request);
+        const headers = new Headers(asset.headers);
+        headers.set("X-Content-Type-Options", "nosniff");
+        headers.set("Referrer-Policy", "no-referrer");
+        headers.set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'");
+        return new Response(asset.body, { status: asset.status, statusText: asset.statusText, headers });
+      }
 
       const company = env.COMPANY.get(env.COMPANY.idFromName("klirline"));
       const catalog = await playbookCatalog(request, env);

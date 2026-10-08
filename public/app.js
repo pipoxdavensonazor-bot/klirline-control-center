@@ -28,8 +28,8 @@ const journalKind = {
   reject: "Décision",
   block: "Décision",
   release: "Décision",
-  execute: "Exécution",
-  log_call: "Exécution",
+  execute: "Simulation",
+  log_call: "Simulation",
   command: "Préparation",
   assign: "Préparation",
   draft: "Préparation",
@@ -101,7 +101,7 @@ function siteName(site) {
 }
 
 function siteLabel(site) {
-  if (site.status === "online") return "En ligne";
+  if (site.status === "online") return "Page joignable";
   if (site.status === "absent") return "Pas d'adresse";
   if (site.status === "unreachable") return "Injoignable";
   return "Réponse inattendue";
@@ -260,12 +260,12 @@ function reportHtml() {
     ${lane("À approuver", report.decisionsReady.map((item) => taskButton(item)), approveEmpty)}
     ${lane("À surveiller", report.decisionsWaiting.map((item) => taskButton(item)))}
     ${lane("Urgent", report.blocked.map((item) => taskButton(item)))}
-    ${lane("Opportunités", report.sales.priority.map((item) => `<p>${escapeHtml(item.company)} · ${item.score} · ${escapeHtml(item.action)}</p>`))}
-    ${lane("Résultats", report.results.map((item) => `<p>${escapeHtml(item)}</p>`))}
+    ${lane("Opportunités", report.sales.priority.map((item) => `<p>${escapeHtml(item.company)} · score ${item.score}/100 · ${item.potentialCad == null ? "potentiel non chiffré" : `potentiel ${escapeHtml(money(item.potentialCad))}`} · ${escapeHtml(item.action)}</p>`))}
+    ${lane("Consigné localement", report.results.map((item) => `<p>${escapeHtml(item)}</p>`), "Rien n'a été exécuté à l'extérieur")}
   </div>
   <div class="grid">
     <article class="card"><h3>Ventes</h3><p>${report.sales.prospects} prospects actifs. Démos : ${escapeHtml(report.sales.demos.join(" · ") || "aucune")}</p></article>
-    <article class="card"><h3>Finance</h3><p>Revenus ${money(finance.revenue)} · dépenses ${money(finance.expenses)} · factures ouvertes ${money(finance.receivables)}</p><p class="muted">${escapeHtml(finance.source)}</p></article>
+    <article class="card"><h3>Finance de démonstration</h3><p>Revenus ${money(finance.revenue)} · dépenses ${money(finance.expenses)} · factures ouvertes ${money(finance.receivables)}</p><p class="muted">${escapeHtml(finance.source)}</p></article>
     <article class="card"><h3>Sites réels</h3>${sitesSummaryHtml()}</article>
     <article class="card"><h3>Opérations</h3>${report.operations.degraded.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Toutes les plateformes sont opérationnelles dans l'état local.</p>"}<p class="muted">Ces notes viennent du jeu de démonstration.</p></article>
     <article class="card"><h3>Clients</h3>${report.customers.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Aucune alerte à deux signaux.</p>"}</article>
@@ -310,7 +310,7 @@ function sitesSummaryHtml() {
     const extra = site.health ? ` · ${healthLabel(site)}` : site.skills?.status === "ok" ? ` · ${site.skills.count} compétences` : "";
     return `<div class="row-line"><span>${escapeHtml(siteName(site))}</span><span>${escapeHtml(siteLabel(site) + extra)}</span></div>`;
   }).join("");
-  return `<p>${online} en ligne, ${absent} sans adresse.</p>${rows}`;
+  return `<p>${online} pages joignables, ${absent} sans adresse. Une page qui répond n'est pas la santé de l'application.</p>${rows}`;
 }
 
 function sitesHtml() {
@@ -347,7 +347,11 @@ function peopleHtml() {
 function journalHtml() {
   const events = state.audit.map((item) => {
     const effect = item.action === "execute" ? state.outbox.find((entry) => entry.taskId === item.taskId) : null;
-    const result = effect ? (effect.leftTheBuilding ? "Transmis à l'extérieur." : "Résultat : rien n'a quitté le centre.") : "";
+    const result = item.action === "log_call"
+      ? "Compte-rendu local. Aucun numéro n'a été composé."
+      : effect
+        ? (effect.leftTheBuilding ? "Transmis à l'extérieur." : "Simulation consignée. Rien n'a quitté le centre.")
+        : "";
     return `<article class="card timeline"><p class="eyebrow">${escapeHtml(journalKind[item.action] || "Événement")}</p><h3>${escapeHtml(journalAction[item.action] || item.action)}</h3><p>${escapeHtml(agent(item.actorId)?.name || item.actorId)} · ${escapeHtml(when(item.at))}</p><p>${escapeHtml(item.detail)}</p>${result ? `<p class="muted">${escapeHtml(result)}</p>` : ""}</article>`;
   }).join("");
   return events || `<article class="card"><p class="muted">Aucun événement.</p></article>`;
@@ -386,7 +390,7 @@ function render() {
         <div class="session">
           <label for="actor">Identité de démonstration</label>
           <select id="actor">${options}</select>
-          <p class="hint">Le serveur vérifie le rôle de la décision. Il n'authentifie pas la personne. ${actorId === "ceo" ? `<button class="ghost" id="reset">Recommencer la démonstration</button>` : ""}</p>
+          <p class="hint">Mode démonstration. Ce menu ne connecte personne. Le serveur vérifie seulement le rôle annoncé. ${actorId === "ceo" ? `<button class="ghost" id="reset">Recommencer la démonstration</button>` : ""}</p>
         </div>
       </header>
       <nav class="section-nav">${views.map(([id, label]) => `<button class="${view === id ? "active" : ""}" data-view="${id}">${label}</button>`).join("")}</nav>

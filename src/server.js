@@ -40,7 +40,13 @@ function view(state, actorId) {
 
 function send(res, status, body, type = "application/json; charset=utf-8") {
   const payload = Buffer.isBuffer(body) || typeof body === "string" ? body : JSON.stringify(body);
-  res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
+  res.writeHead(status, {
+    "Content-Type": type,
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+  });
   res.end(payload);
 }
 

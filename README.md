@@ -27,3 +27,21 @@ node src/self-check.js
 - Lecture des huit plateformes pour tous. Écriture limitée au poste.
 
 Les chiffres financiers et le barème sont un jeu de démonstration, pas une comptabilité réelle.
+
+## Architecture
+
+Le navigateur parle à `/api/*`. En local, `src/server.js` garde l'état dans `data/state.json`. En ligne, `src/worker.js` garde le même état dans un Durable Object. Les deux appellent `src/engine.js`. Le menu d'identité est un choix de démonstration : le serveur vérifie que le rôle annoncé a le droit d'agir sur le dossier, il ne vérifie pas qui est la personne.
+
+## Limites connues
+
+- Mode démonstration. Le menu ne connecte personne. N'importe qui peut annoncer un rôle, y compris celui du CEO, sur le centre public.
+- Une action « consignée » est une simulation. Aucun courriel, appel, paiement ou publication ne part.
+- Les revenus, dépenses et factures sont un jeu. Ce n'est pas la comptabilité de Klirline Inc.
+- Le score d'un prospect mesure la qualité de la fiche. Le potentiel en dollars n'existe que lorsqu'un montant de proposition est déjà écrit sur la fiche. Aucune probabilité n'est inventée.
+- « Page joignable » veut dire que la page d'accueil a répondu. Seuls KlirBuild (`/api/health`) et Klir IA (`/api/skills`, nombre seulement) ont une lecture plus précise.
+- KlirMarket et Klirline OS n'ont pas d'adresse publique dans ce centre.
+- Il n'y a pas d'isolation entre visiteurs : le centre public partage une seule journée de démonstration.
+
+## Plus tard
+
+Authentification réelle, lecture des dossiers commerciaux, envoi, appel, paiement, publication. Ces branchements attendent une décision et un accès limité à Philippe Azor.

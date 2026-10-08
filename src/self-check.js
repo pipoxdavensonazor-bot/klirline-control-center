@@ -88,7 +88,16 @@ decide(state, followUp.id, "sales-director", "approve", "Séquence conforme");
 execute(state, followUp.id, "outreach");
 const after = state.prospects.find((item) => item.id === "p-clinique").touches;
 check(after === before + 1, "La relance approuvée avance le compteur local");
+try {
+  execute(state, followUp.id, "outreach");
+  check(false, "Une relance déjà consignée ne part pas une seconde fois");
+} catch (error) {
+  check(error.status === 409, "Une relance déjà consignée ne part pas une seconde fois");
+}
+check(state.prospects.find((item) => item.id === "p-clinique").touches === after, "Le compteur de relance ne double pas");
 check(state.outbox.some((item) => item.type === "send_email" && item.leftTheBuilding === false), "Le courriel reste dans le journal");
+const mailAudit = state.audit.find((item) => item.action === "execute" && item.taskId === followUp.id);
+check(mailAudit?.executionStatus === "simulated" && mailAudit.previousState === "approved", "L'audit marque l'envoi comme simulé");
 
 decide(state, content.id, "marketing-director", "approve", "Voix conforme");
 execute(state, content.id, "content");
@@ -101,9 +110,17 @@ decide(state, call.id, "sales-director", "approve", "Base enregistrée");
 execute(state, call.id, "outreach");
 logCall(state, call.id, "outreach", "demo", "Démo acceptée");
 check(state.tasks.some((task) => task.handoffFrom === call.id && task.ownerId === "appointments"), "Un rendez-vous doit passer à l'agent rendez-vous");
+try {
+  logCall(state, call.id, "outreach", "refus", "Second essai");
+  check(false, "Un compte-rendu d'appel ne s'écrit pas deux fois");
+} catch (error) {
+  check(error.status === 409, "Un compte-rendu d'appel ne s'écrit pas deux fois");
+}
 
 const report = briefing(state);
-check(report.sales.priority[0].score === 94, "Le rapport ventes ouvre sur le score 94");
+check(report.sales.priority[0].score === 94 && report.sales.priority[0].potentialCad === 4500, "Le score 94 et le potentiel 4 500 $ restent séparés");
+check(report.sales.priority.find((item) => item.company === "Groupe Horizon Santé").potentialCad === null, "Aucun potentiel n'est inventé");
+check(String(report.finance.source).includes("démonstration"), "La finance reste marquée comme démonstration");
 check(report.blocked.some((item) => item.title.includes("Banque")), "Le rapport montre l'appel bloqué");
 check(report.customers.some((item) => item.includes("Café Rivière")), "Le rapport montre le client à risque");
 
@@ -125,6 +142,18 @@ check(letter.artifact.body.includes("ne part pas"), "La lettre reste au bureau")
 const mail = issueCommand(state, "ceo", "faire un courriel");
 check(mail.artifact.kind === "email" && mail.artifact.body.includes("STOP"), "Le courriel est rédigé avec un droit de retrait");
 check(mail.ownerId === "outreach", "Le courriel est préparé par l'agent relance");
+try {
+  issueCommand(state, "intrus", "trouver 10 prospects");
+  check(false, "Un rôle inconnu est refusé");
+} catch (error) {
+  check(error.status === 403, "Un rôle inconnu est refusé");
+}
+try {
+  issueCommand(state, "ceo", "x".repeat(501));
+  check(false, "Un ordre trop long est refusé");
+} catch (error) {
+  check(error.status === 400, "Un ordre trop long est refusé");
+}
 
 if (failures.length) {
   console.error(failures.join("\n"));

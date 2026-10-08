@@ -1,4 +1,4 @@
-import { getAgent } from "./org/index.js";
+import { agents, getAgent } from "./org/index.js";
 import { COMPANY, THRESHOLDS, money, platformName } from "./policy.js";
 import { CALL_OK, activeProspects } from "./seed.js";
 
@@ -684,6 +684,7 @@ export function briefing(state) {
         company: prospect.company,
         product: platformName(prospect.product),
         score: prospect.score,
+        potentialCad: Number.isInteger(prospect.proposalAmount) ? prospect.proposalAmount : null,
         action: prospect.action,
       })),
       demos: demos.map((prospect) => `${prospect.company} — ${prospect.demoAt}`),
@@ -720,8 +721,33 @@ function findTask(state, id) {
   return task;
 }
 
-function audit(state, actorId, action, detail, taskId) {
-  state.audit.unshift({ at: stamp(), actorId, action, detail, taskId: taskId ?? null });
+function requireActor(actorId) {
+  if (!agents.some((agent) => agent.id === actorId)) {
+    const error = new Error("Rôle inconnu. Le menu de démonstration n'authentifie personne.");
+    error.status = 403;
+    throw error;
+  }
+}
+
+function audit(state, actorId, action, detail, taskId, extra = {}) {
+  state.audit.unshift({
+    at: stamp(),
+    actorId,
+    actorType: "demonstration",
+    organization: "klirline",
+    action,
+    resource: taskId ? "task" : null,
+    resourceId: taskId ?? null,
+    taskId: taskId ?? null,
+    detail,
+    previousState: extra.previousState ?? null,
+    newState: extra.newState ?? null,
+    riskLevel: extra.riskLevel ?? null,
+    approvalStatus: extra.approvalStatus ?? null,
+    executionStatus: extra.executionStatus ?? "not_connected",
+    result: extra.result ?? null,
+    error: null,
+  });
 }
 
 export function actionsFor(actorId, task) {
@@ -744,6 +770,7 @@ export function actionsFor(actorId, task) {
 
 function executionAllowed(actorId, task) {
   if (!task.action) return { ok: false, reason: "Rien à exécuter" };
+  if (task.status === "executed") return { ok: false, reason: "Déjà consigné. Aucune seconde exécution." };
   if (task.status !== "approved") return { ok: false, reason: "La validation n'est pas complète" };
   if (task.security.state === "blocked") return { ok: false, reason: task.security.reason };
   const actorOk = actorId === task.ownerId || actorId === task.supervisorId || actorId === "ceo";
@@ -752,8 +779,15 @@ function executionAllowed(actorId, task) {
 }
 
 export function decide(state, taskId, actorId, decision, note) {
+  requireActor(actorId);
   const task = findTask(state, taskId);
+  const previous = task.status;
   const cleanNote = String(note ?? "").trim();
+  if (cleanNote.length > 500) {
+    const error = new Error("La note est trop longue.");
+    error.status = 400;
+    throw error;
+  }
   if (task.security.state === "blocked" && decision !== "release") {
     const error = new Error("Action gelée par la sécurité. Seul le directeur sécurité peut lever un gel qui n'est pas une interdiction dure.");
     error.status = 409;
@@ -821,12 +855,19 @@ export function decide(state, taskId, actorId, decision, note) {
     throw error;
   }
   task.approvals.push({ at: stamp(), actorId, decision, note: cleanNote });
-  audit(state, actorId, decision, cleanNote || task.title, task.id);
+  audit(state, actorId, decision, cleanNote || task.title, task.id, {
+    previousState: previous,
+    newState: task.status,
+    approvalStatus: decision,
+    result: "recorded",
+  });
   return task;
 }
 
 export function execute(state, taskId, actorId) {
+  requireActor(actorId);
   const task = findTask(state, taskId);
+  const previous = task.status;
   const allowed = executionAllowed(actorId, task);
   if (!allowed.ok) {
     const error = new Error(allowed.reason);
@@ -884,7 +925,12 @@ export function execute(state, taskId, actorId) {
   }
   task.status = "executed";
   task.execution = record;
-  audit(state, actorId, "execute", record.detail, task.id);
+  audit(state, actorId, "execute", record.detail, task.id, {
+    previousState: previous,
+    newState: "executed",
+    executionStatus: "simulated",
+    result: "nothing_left_the_building",
+  });
   return task;
 }
 
@@ -901,6 +947,7 @@ function externalGuard(state, task) {
 }
 
 export function logCall(state, taskId, actorId, outcome, note) {
+  requireActor(actorId);
   const task = findTask(state, taskId);
   const allowed = ["joignable", "message", "refus", "demo"];
   if (!allowed.includes(outcome)) {
@@ -920,10 +967,20 @@ export function logCall(state, taskId, actorId, outcome, note) {
     error.status = 403;
     throw error;
   }
+  if (call.outcome) {
+    const error = new Error("Ce compte-rendu est déjà consigné.");
+    error.status = 409;
+    throw error;
+  }
   call.outcome = outcome;
-  call.note = String(note ?? "").trim();
+  call.note = String(note ?? "").trim().slice(0, 500);
   call.loggedAt = stamp();
-  audit(state, actorId, "log_call", `${outcome} — ${call.note}`, task.id);
+  audit(state, actorId, "log_call", `${outcome} — ${call.note}`, task.id, {
+    previousState: "executed",
+    newState: "executed",
+    executionStatus: "simulated",
+    result: "local_note",
+  });
   if (outcome === "demo") {
     const prospect = state.prospects.find((item) => item.id === call.prospectId);
     const exists = state.tasks.some((item) => item.handoffFrom === task.id);
@@ -1086,6 +1143,7 @@ function orderItems(state, text, owner) {
 }
 
 export function issueCommand(state, actorId, text) {
+  requireActor(actorId);
   const order = String(text ?? "").trim().replace(/\s+/g, " ");
   if (actorId !== "ceo") {
     const error = new Error("Seul Philippe Azor passe une commande. Le chef de cabinet la transmet.");
@@ -1094,6 +1152,11 @@ export function issueCommand(state, actorId, text) {
   }
   if (order.length < 3) {
     const error = new Error("Écrivez l'ordre. Exemple : trouver 10 prospects.");
+    error.status = 400;
+    throw error;
+  }
+  if (order.length > 500) {
+    const error = new Error("L'ordre est trop long.");
     error.status = 400;
     throw error;
   }
