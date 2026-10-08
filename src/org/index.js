@@ -1,3 +1,4 @@
+import { COMPANY } from "../policy.js";
 import { directionAgents } from "./direction.js";
 import { salesAgents } from "./sales.js";
 import { marketingAgents } from "./marketing.js";
@@ -108,6 +109,7 @@ export function skillDocument(agent) {
     ...agent.kpis.map((item) => `- ${item}`),
     ``,
     `## Voix`,
+    `Maison ${COMPANY.officeName} : ${COMPANY.officeVoice}`,
     agent.style,
     ``,
     `## Lecture des plateformes`,

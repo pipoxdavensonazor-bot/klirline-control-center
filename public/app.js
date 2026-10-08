@@ -103,13 +103,14 @@ function siteName(site) {
 
 function siteLabel(site) {
   if (site.status === "online") return "Page joignable";
+  if (site.status === "private") return "Console privée";
   if (site.status === "absent") return "Pas d'adresse";
   if (site.status === "unreachable") return "Injoignable";
   return "Réponse inattendue";
 }
 
 function siteChip(site) {
-  const tone = site.status === "online" ? "done" : site.status === "absent" ? "pending_supervisor" : "blocked";
+  const tone = site.status === "online" ? "done" : site.status === "absent" || site.status === "private" ? "pending_supervisor" : "blocked";
   return chip(tone, siteLabel(site));
 }
 
@@ -218,6 +219,7 @@ function detailHtml(task) {
     <p>${escapeHtml(task.summary)}</p>
     <p><strong>Recommandation.</strong> ${escapeHtml(task.recommendation)}</p>
     <p class="muted">${escapeHtml(owner.name)} → ${escapeHtml(supervisor.name)}</p>
+    <p class="voice"><strong>Voix.</strong> ${escapeHtml(owner.style)}</p>
     ${task.security?.state === "blocked" ? `<p class="error">${escapeHtml(task.security.reason)}</p>` : ""}
     ${!task.actions.length && task.status === "pending_supervisor" && task.level === 3 ? `<p class="banner">Dossier chez ${escapeHtml(supervisor.name)}. La signature du CEO s'ouvre après sa recommandation.</p>` : ""}
     ${!task.actions.length && task.status === "pending_supervisor" && task.level < 3 ? `<p class="banner">Le brouillon est sur le bureau. L'envoi attend ${escapeHtml(supervisor.name)}.</p>` : ""}
@@ -241,7 +243,7 @@ function scopeHtml() {
   <div class="scope-grid">
     <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Philippe Azor passe une commande. Le chef de cabinet la transmet au poste.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li><li>La santé de KlirBuild est lue sur sa route réelle.</li><li>Le catalogue public de Klir IA est lu sur klirline.io.</li></ul></article>
     <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>${state.accessMode === "cloudflare-access" ? "Les chiffres restent un jeu, même quand le rôle vient de Cloudflare Access." : "L'identité choisie dans le menu. Ce n'est pas une connexion. Le serveur local est en mode démonstration."}</li></ul></article>
-    <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.</li><li>KlirMarket n'a pas encore d'adresse publique.</li></ul></article>
+    <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.</li></ul></article>
   </div>
   <div class="actions"><button data-view="report">Ouvrir le rapport du jour</button><button class="ghost" data-view="queue">Voir la file à valider</button></div>`;
 }
@@ -317,11 +319,12 @@ function sitesSummaryHtml() {
   if (!liveSites.length) return `<p class="muted">Vérification des adresses en cours.</p>`;
   const online = liveSites.filter((site) => site.status === "online").length;
   const absent = liveSites.filter((site) => site.status === "absent").length;
+  const consoles = liveSites.filter((site) => site.status === "private").length;
   const rows = liveSites.map((site) => {
     const extra = site.health ? ` · ${healthLabel(site)}` : site.skills?.status === "ok" ? ` · ${site.skills.count} compétences` : "";
     return `<div class="row-line"><span>${escapeHtml(siteName(site))}</span><span>${escapeHtml(siteLabel(site) + extra)}</span></div>`;
   }).join("");
-  return `<p>${online} pages joignables, ${absent} sans adresse. Une page qui répond n'est pas la santé de l'application.</p>${rows}`;
+  return `<p>${online} pages joignables, ${absent} sans adresse${consoles ? `, ${consoles} console privée` : ""}. Une page qui répond n'est pas la santé de l'application.</p>${rows}`;
 }
 
 function sitesHtml() {
@@ -352,7 +355,7 @@ function peopleHtml() {
   const selected = agent(selectedAgentId);
   const buttons = state.agents.map((item) => `<button class="${item.id === selectedAgentId ? "active" : ""}" data-agent="${item.id}">${item.icon} ${escapeHtml(item.name)}</button>`).join("");
   const books = selected.playbooks.map((id) => `<button class="ghost" data-book="${id}">${escapeHtml(state.playbooks.find((item) => item.id === id)?.title || id)}</button>`).join("");
-  return `<div class="agent-list"><div class="card">${buttons}</div><article class="card doc">${renderMarkdown(selected.skillDocument)}<div class="actions">${books}</div>${playbookBody ? `<hr />${renderMarkdown(playbookBody)}` : ""}</article></div>`;
+  return `<div class="agent-list"><div class="card">${buttons}</div><article class="card doc"><p class="voice"><strong>Voix du poste.</strong> ${escapeHtml(selected.style)}</p>${renderMarkdown(selected.skillDocument)}<div class="actions">${books}</div>${playbookBody ? `<hr />${renderMarkdown(playbookBody)}` : ""}</article></div>`;
 }
 
 function journalHtml() {
@@ -386,18 +389,19 @@ function render() {
   const options = state.agents.map((item) => `<option value="${item.id}" ${item.id === actorId ? "selected" : ""}>${escapeHtml(item.name)} — ${escapeHtml(item.title)}</option>`).join("");
   const tree = state.departments.map((department) => {
     const people = state.agents.filter((item) => item.department === department.id && item.id !== "ceo");
-    return `<div class="dept">${escapeHtml(department.name)}</div>${people.map((item) => `<div><button data-agent="${item.id}">${item.icon} ${escapeHtml(item.name)}</button></div>`).join("")}`;
+    return `<div class="dept">${escapeHtml(department.name)}</div>${people.map((item) => `<div><button data-agent="${item.id}" title="${escapeHtml(item.style)}">${item.icon} ${escapeHtml(item.name)}</button></div>`).join("")}`;
   }).join("");
   app.innerHTML = `<div class="shell">
     <aside class="sidebar">
-      <p class="brand">Klirline<span>Centre de contrôle</span></p>
+      <img class="brand-mark" src="/klirline-office.png" alt="Klirline Office" />
+      <p class="house-voice">${escapeHtml(state.company.officeVoice)}</p>
       <div class="priority">${escapeHtml(date)}<br />Priorité : ventes</div>
       <nav class="desktop-nav">${views.map(([id, label]) => `<button class="${view === id ? "active" : ""}" data-view="${id}">${label}</button>`).join("")}</nav>
       <details class="tree" ${window.innerWidth > 1100 ? "open" : ""}><summary>Organigramme</summary><div class="dept">CEO</div><div>👑 ${escapeHtml(state.company.founder)}</div>${tree}</details>
     </aside>
     <section class="stage">
       <header class="top">
-        <div><p class="eyebrow">Klirline Inc.</p><h1>${views.find(([id]) => id === view)[1]}</h1></div>
+        <div><p class="eyebrow">${escapeHtml(state.company.officeName)}</p><h1>${views.find(([id]) => id === view)[1]}</h1></div>
         <div class="session">
           ${state.accessMode === "cloudflare-access"
             ? `<p class="hint">Rôle attribué par Cloudflare Access : ${escapeHtml(agent(actorId)?.name || actorId)}. Un rôle envoyé par le navigateur est ignoré.</p>`

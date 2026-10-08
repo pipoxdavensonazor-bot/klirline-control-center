@@ -4,8 +4,9 @@
   --paper: #efe6d8;
   --card: #fffaf3;
   --line: #e2d5c3;
-  --sidebar: #1b1612;
-  --sidebar-text: #f6f0e6;
+  --sidebar: #000000;
+  --sidebar-text: #f4f7fa;
+  --office: #1a9fe0;
   --copper: #9a431c;
   --copper-dark: #7a3214;
   --pine: #1e4a38;
@@ -25,17 +26,20 @@ button { cursor: pointer; }
 h1, h2, h3, h4 { font-family: Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif; font-weight: 600; }
 
 .shell { display: grid; grid-template-columns: 292px 1fr; min-height: 100vh; }
-.sidebar { background: var(--sidebar); color: var(--sidebar-text); padding: 28px 22px; }
+.sidebar { background: var(--sidebar); color: var(--sidebar-text); padding: 18px 18px 28px; }
+.brand-mark { display: block; width: calc(100% + 24px); max-width: none; height: auto; margin: -8px -12px 0; }
+.house-voice { margin: 0 4px 8px; color: #b7d7ea; font-size: 13px; line-height: 1.45; }
 .brand { font-family: Palatino, Georgia, serif; font-size: 28px; letter-spacing: 0.04em; margin: 0; }
-.brand span { display: block; font-family: "Segoe UI", sans-serif; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: #d7b08a; margin-top: 4px; }
-.priority { margin: 22px 0; padding: 12px 14px; border: 1px solid rgba(215, 176, 138, 0.35); border-radius: 12px; color: #f0e2d0; font-size: 14px; }
+.brand span { display: block; font-family: "Segoe UI", sans-serif; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--office); margin-top: 4px; }
+.priority { margin: 18px 4px; padding: 12px 14px; border: 1px solid rgba(26, 159, 224, 0.45); border-radius: 12px; color: #e7f4fb; font-size: 14px; }
 nav { display: flex; flex-direction: column; gap: 6px; }
 nav button { text-align: left; background: transparent; color: var(--sidebar-text); border: 0; border-radius: 10px; padding: 10px 12px; }
-nav button.active, nav button:hover { background: rgba(255, 250, 243, 0.08); }
-.tree { margin-top: 28px; font-size: 13px; color: #d9cfc2; }
-.tree summary { cursor: pointer; color: #d7b08a; letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; }
+nav button.active, nav button:hover { background: rgba(26, 159, 224, 0.16); }
+.tree { margin-top: 28px; font-size: 13px; color: #d5dee6; }
+.tree summary { cursor: pointer; color: var(--office); letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; }
 .tree button { background: none; border: 0; color: inherit; padding: 3px 0; text-align: left; }
-.tree .dept { margin-top: 12px; color: #d7b08a; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+.tree .dept { margin-top: 12px; color: var(--office); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+.voice { margin: 8px 0 14px; padding: 10px 12px; border-left: 3px solid var(--office); background: #f3f8fb; }
 .section-nav { display: none; }
 .scope-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .section-title { font-size: 28px; margin: 8px 0; }

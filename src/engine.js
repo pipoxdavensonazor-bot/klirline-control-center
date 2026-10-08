@@ -1108,6 +1108,7 @@ function writingArtifact(state, order, kind) {
     : "Brouillon déposé sur le bureau. Ce courriel ne part pas tant que la directrice commerciale ne l'a pas accepté.\nPour ne plus recevoir de message, répondez STOP.";
   const body = [
     COMPANY.legalName,
+    COMPANY.officeName,
     date,
     "",
     address,

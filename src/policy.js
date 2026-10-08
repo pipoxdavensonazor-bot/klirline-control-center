@@ -1,5 +1,7 @@
 export const COMPANY = {
   legalName: "Klirline Inc.",
+  officeName: "Klirline Office",
+  officeVoice: "On vouvoie. On nomme le fait, le montant et la suite. On ne promet pas ce qui n'est pas branché.",
   founder: "Philippe Azor",
   founderTitle: "CEO / Fondateur",
   currency: "CAD",

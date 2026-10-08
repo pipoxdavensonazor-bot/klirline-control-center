@@ -4,7 +4,7 @@ export const PRODUCT_SITES = [
   { id: "klirline-os", url: "https://klirline.ca" },
   { id: "klirbuild", url: "https://klirline.app", healthUrl: "https://klirline.app/api/health" },
   { id: "klirpay", url: "https://pay.klirline.ca", note: "Bac à sable" },
-  { id: "klirmarket", url: null },
+  { id: "klirmarket", url: "https://klirline.com", note: "Vitrine publique" },
   { id: "klirsecure", url: "https://secure.klirline.ca" },
   { id: "centia", url: "https://centia.app" },
   { id: "klir-ia", name: "Klir IA", url: "https://klirline.io", skillsUrl: "https://klirline.io/api/skills", note: "Assistant marketing" },
@@ -72,6 +72,9 @@ async function probeSkills(url) {
 async function probeOne(site, checkedAt) {
   if (!site.url) {
     return { id: site.id, name: site.name || "", url: null, status: "absent", httpStatus: null, title: "", note: site.note || "", health: null, skills: null, checkedAt };
+  }
+  if (site.private) {
+    return { id: site.id, name: site.name || "", url: site.url, status: "private", httpStatus: null, title: "", note: site.note || "", health: null, skills: null, checkedAt };
   }
   try {
     const response = await fetch(site.url, {
