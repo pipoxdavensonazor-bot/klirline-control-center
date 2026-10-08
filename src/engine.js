@@ -1,5 +1,5 @@
 import { getAgent } from "./org/index.js";
-import { THRESHOLDS, money, platformName } from "./policy.js";
+import { COMPANY, THRESHOLDS, money, platformName } from "./policy.js";
 import { CALL_OK, activeProspects } from "./seed.js";
 
 function stamp() {
@@ -955,4 +955,182 @@ export function logCall(state, taskId, actorId, outcome, note) {
     }
   }
   return call;
+}
+
+const ORDER_POSTS = [
+  { pattern: /klirprospect/, ownerId: "pm-klirprospect" },
+  { pattern: /prospect/, ownerId: "prospecting" },
+  { pattern: /klirlead|\bleads?\b/, ownerId: "pm-klirlead" },
+  { pattern: /rendez-vous|\brdv\b|démo|\bdemo\b/, ownerId: "appointments" },
+  { pattern: /proposition|contrat|devis/, ownerId: "proposals" },
+  { pattern: /courriel|relance|e-mail|email|appel|téléphone|telephone/, ownerId: "outreach" },
+  { pattern: /contenu|publication|article|linkedin/, ownerId: "content" },
+  { pattern: /référencement|referencement|\bseo\b/, ownerId: "seo" },
+  { pattern: /publicité|publicite|campagne/, ownerId: "advertising" },
+  { pattern: /klirpay/, ownerId: "pm-klirpay" },
+  { pattern: /paiement|remboursement|dépense|depense|facture|facturation/, ownerId: "billing" },
+  { pattern: /sécurité|securite|audit|conformité|conformite/, ownerId: "compliance" },
+  { pattern: /client|rétention|retention|support/, ownerId: "support" },
+  { pattern: /klirbuild|chantier/, ownerId: "pm-klirbuild" },
+  { pattern: /centia/, ownerId: "pm-centia" },
+  { pattern: /klirline os|\bos\b|export/, ownerId: "pm-klirline-os" },
+  { pattern: /market/, ownerId: "pm-klirmarket" },
+];
+
+function nextTaskId(state) {
+  const max = state.tasks.reduce((highest, task) => {
+    const value = Number(String(task.id).replace(/\D/g, ""));
+    return Number.isFinite(value) ? Math.max(highest, value) : highest;
+  }, 0);
+  return `t-${String(max + 1).padStart(3, "0")}`;
+}
+
+function orderLevel(text, ownerId) {
+  const amount = Number((text.match(/\d[\d\s]*/)?.[0] || "0").replace(/\s/g, ""));
+  if (/paiement|remboursement|dépense|depense|payer/.test(text)) return amount >= THRESHOLDS.paymentCeoCad ? 3 : 2;
+  if (/publicité|publicite|campagne/.test(text)) return amount >= THRESHOLDS.adBudgetCeoCad ? 3 : 2;
+  if (/proposition|contrat|devis/.test(text)) return amount >= THRESHOLDS.contractCeoCad ? 3 : 2;
+  if (["outreach", "appointments", "content", "advertising", "billing", "proposals"].includes(ownerId)) return 2;
+  return 1;
+}
+
+function writingKind(order) {
+  const text = order.toLowerCase();
+  if (/lettre|courrier/.test(text)) return "letter";
+  if (/courriel|corriel|e-mail|email|\bmail\b/.test(text)) return "email";
+  return null;
+}
+
+function findParty(state, order) {
+  const text = order.toLowerCase();
+  const parties = [...(state.prospects || []), ...(state.clients || [])];
+  return parties
+    .filter((party) => party.company && (text.includes(party.company.toLowerCase()) || (party.contact && text.includes(party.contact.toLowerCase()))))
+    .sort((left, right) => right.company.length - left.company.length)[0] || null;
+}
+
+function writingPurpose(order) {
+  const purpose = order
+    .replace(/\b(faire|rédiger|rediger|écrire|ecrire|préparer|preparer|envoyer|rédige|redige)\b/gi, " ")
+    .replace(/\b(courriel|corriel|lettre|courrier|e-mail|email|mail)\b/gi, " ")
+    .replace(/\b(une|un|le|la|des|de|du|pour|à|a)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return purpose || "ouvrir un échange clair sur la suite utile pour vous";
+}
+
+function writingArtifact(state, order, kind) {
+  const party = findParty(state, order);
+  const purpose = writingPurpose(order);
+  const date = new Date().toLocaleDateString("fr-CA", { day: "numeric", month: "long", year: "numeric" });
+  const greeting = party?.contact ? `Bonjour ${party.contact.split(" ")[0]},` : "Madame, Monsieur,";
+  const subject = party ? `${COMPANY.legalName} — ${party.company}` : `${COMPANY.legalName} — échange à confirmer`;
+  const address = party ? `${party.contact || "Destinataire"}\n${party.company}` : "Destinataire à préciser";
+  const close = kind === "letter"
+    ? "Je vous prie d'agréer, Madame, Monsieur, l'expression de mes salutations distinguées."
+    : "Bien à vous,";
+  const hold = kind === "letter"
+    ? "Brouillon déposé sur le bureau. Cette lettre ne part pas tant que la directrice commerciale ne l'a pas acceptée."
+    : "Brouillon déposé sur le bureau. Ce courriel ne part pas tant que la directrice commerciale ne l'a pas accepté.\nPour ne plus recevoir de message, répondez STOP.";
+  const body = [
+    COMPANY.legalName,
+    date,
+    "",
+    address,
+    "",
+    `Objet : ${subject}`,
+    "",
+    greeting,
+    "",
+    `Je vous écris au nom de ${COMPANY.legalName}.`,
+    `L'objet de ce message : ${purpose}.`,
+    party ? `Ce message s'adresse à ${party.company}.` : "Le destinataire reste à confirmer avant tout envoi.",
+    "",
+    "Je reste disponible pour un échange de vingt minutes, au moment qui vous convient.",
+    "",
+    close,
+    "",
+    COMPANY.founder,
+    "Fondateur",
+    COMPANY.legalName,
+    "",
+    hold,
+  ].join("\n");
+  return {
+    kind,
+    to: party?.email || "Destinataire à préciser",
+    subject,
+    body,
+    company: party?.company || "",
+  };
+}
+
+function orderItems(state, text, owner) {
+  const asked = Number(text.match(/\d+/)?.[0] || 0);
+  const lines = [`Ordre de Philippe Azor : ${text}`, `Chef de cabinet → ${owner.name}.`];
+  if (owner.id === "prospecting") {
+    const known = activeProspects(state.prospects);
+    lines.push(`Demandé : ${asked || "non précisé"}. Fiches présentes dans le jeu local : ${known.length}.`);
+    lines.push("KlirProspect répond, sans route de lecture. Aucun prospect réel n'est ajouté.");
+    known.slice(0, asked || known.length).forEach((prospect) => {
+      lines.push(`${prospect.company} · ${prospect.contact} · score ${prospect.score} · ${prospect.action}`);
+    });
+    if (asked > known.length) {
+      const missing = asked - known.length;
+      lines.push(missing > 1 ? `Il manque ${missing} fiches réelles.` : "Il manque 1 fiche réelle.");
+    }
+    return lines;
+  }
+  lines.push("Rien n'est envoyé, appelé ou payé. L'acceptation du supérieur reste en place quand l'ordre sort du centre.");
+  return lines;
+}
+
+export function issueCommand(state, actorId, text) {
+  const order = String(text ?? "").trim().replace(/\s+/g, " ");
+  if (actorId !== "ceo") {
+    const error = new Error("Seul Philippe Azor passe une commande. Le chef de cabinet la transmet.");
+    error.status = 403;
+    throw error;
+  }
+  if (order.length < 3) {
+    const error = new Error("Écrivez l'ordre. Exemple : trouver 10 prospects.");
+    error.status = 400;
+    throw error;
+  }
+  const kind = writingKind(order);
+  const route = kind ? { ownerId: "outreach" } : ORDER_POSTS.find((item) => item.pattern.test(order.toLowerCase()));
+  const owner = getAgent(route?.ownerId || "chief-of-staff");
+  const level = kind ? 2 : route ? orderLevel(order.toLowerCase(), owner.id) : 1;
+  const document = kind ? writingArtifact(state, order, kind) : null;
+  const label = kind === "letter" ? "Lettre" : kind === "email" ? "Courriel" : "Ordre";
+  const task = {
+    id: nextTaskId(state),
+    createdAt: stamp(),
+    ownerId: owner.id,
+    supervisorId: owner.reportsTo || "ceo",
+    department: owner.department,
+    level,
+    title: document ? `${label} — ${document.company || "destinataire à préciser"}` : `Ordre — ${order.slice(0, 80)}`,
+    summary: document
+      ? `L'agent relance a déposé le brouillon sur le bureau. La directrice commerciale l'accepte avant tout envoi.`
+      : route
+        ? `Le chef de cabinet a reçu l'ordre et l'a transmis à ${owner.name}.`
+        : "Le chef de cabinet n'a pas reconnu le poste. Précisez le métier : prospects, courriel, lettre, contenu, facture, sécurité.",
+    recommendation: document
+      ? "Lire le brouillon sur le bureau. Ne rien envoyer avant l'acceptation."
+      : route
+        ? `${owner.name} prépare. Rien n'est envoyé, appelé ou payé.`
+        : "Nommez le poste dans l'ordre.",
+    status: level === 1 ? "done" : "pending_supervisor",
+    approvals: [{ at: stamp(), actorId: "chief-of-staff", decision: "assign", note: route || kind ? `Transmis à ${owner.name}.` : "Poste non reconnu." }],
+    action: null,
+    origin: "command",
+    security: { state: "clear", by: null, reason: "", hard: false },
+    artifact: document || { kind: "worklist", items: orderItems(state, order, owner) },
+  };
+  state.tasks.unshift(task);
+  audit(state, "ceo", "command", order, task.id);
+  audit(state, "chief-of-staff", "assign", task.summary, task.id);
+  if (document) audit(state, owner.id, "draft", "Brouillon déposé sur le bureau de Philippe Azor.", task.id);
+  return task;
 }

@@ -1,6 +1,5 @@
 import fs from "node:fs";
-import { decide, execute, logCall, briefing } from "./engine.js";
-import { buildDay } from "./engine.js";
+import { buildDay, decide, execute, issueCommand, logCall, briefing } from "./engine.js";
 import { agents, assertOrganization, skillDocument } from "./org/index.js";
 import { THRESHOLDS } from "./policy.js";
 import { activeProspects, seedWorld } from "./seed.js";
@@ -107,6 +106,25 @@ const report = briefing(state);
 check(report.sales.priority[0].score === 94, "Le rapport ventes ouvre sur le score 94");
 check(report.blocked.some((item) => item.title.includes("Banque")), "Le rapport montre l'appel bloqué");
 check(report.customers.some((item) => item.includes("Café Rivière")), "Le rapport montre le client à risque");
+
+const ordered = issueCommand(state, "ceo", "trouver 10 prospects");
+check(ordered.ownerId === "prospecting", "Un ordre de prospects va au prospecteur");
+check(ordered.artifact.items.some((line) => line.includes("Construction ABC")), "Le prospecteur cite les fiches connues");
+check(state.audit[0].actorId === "chief-of-staff" && state.audit[0].action === "assign", "Le chef de cabinet transmet l'ordre");
+check(state.audit[1].actorId === "ceo" && state.audit[1].action === "command", "Le CEO passe la commande");
+try {
+  issueCommand(state, "prospecting", "trouver 10 prospects");
+  check(false, "Un agent ne passe pas la commande du CEO");
+} catch (error) {
+  check(error.status === 403, "Un agent ne passe pas la commande du CEO");
+}
+const letter = issueCommand(state, "ceo", "faire une lettre pour Construction ABC");
+check(letter.artifact.kind === "letter" && letter.artifact.body.includes("Philippe Azor"), "La lettre est rédigée et signée");
+check(letter.artifact.body.includes("Marc Béland"), "La lettre nomme le destinataire connu");
+check(letter.artifact.body.includes("ne part pas"), "La lettre reste au bureau");
+const mail = issueCommand(state, "ceo", "faire un courriel");
+check(mail.artifact.kind === "email" && mail.artifact.body.includes("STOP"), "Le courriel est rédigé avec un droit de retrait");
+check(mail.ownerId === "outreach", "Le courriel est préparé par l'agent relance");
 
 if (failures.length) {
   console.error(failures.join("\n"));

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { decide, execute, logCall } from "./engine.js";
+import { decide, execute, issueCommand, logCall } from "./engine.js";
 import { agents, assertOrganization } from "./org/index.js";
 import { COMPANY } from "./policy.js";
 import { present } from "./present.js";
@@ -100,6 +100,13 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const state = loadState();
       logCall(state, body.taskId, body.actorId, body.outcome, body.note);
+      saveState(state);
+      return send(res, 200, view(state, body.actorId));
+    }
+    if (req.method === "POST" && url.pathname === "/api/command") {
+      const body = await readBody(req);
+      const state = loadState();
+      issueCommand(state, body.actorId, body.text);
       saveState(state);
       return send(res, 200, view(state, body.actorId));
     }

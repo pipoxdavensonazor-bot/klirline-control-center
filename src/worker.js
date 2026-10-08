@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { decide, execute, logCall } from "./engine.js";
+import { decide, execute, issueCommand, logCall } from "./engine.js";
 import { agents } from "./org/index.js";
 import { COMPANY } from "./policy.js";
 import { freshState } from "./fresh-state.js";
@@ -49,6 +49,7 @@ export class CompanyState extends DurableObject {
       if (kind === "decision") decide(state, payload.taskId, payload.actorId, payload.decision, payload.note);
       else if (kind === "execute") execute(state, payload.taskId, payload.actorId);
       else if (kind === "call") logCall(state, payload.taskId, payload.actorId, payload.outcome, payload.note);
+      else if (kind === "command") issueCommand(state, payload.actorId, payload.text);
       else return { status: 400, error: "Action inconnue" };
       this.write(state);
       return { state };
@@ -96,6 +97,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/decision") kind = "decision";
       if (request.method === "POST" && url.pathname === "/api/execute") kind = "execute";
       if (request.method === "POST" && url.pathname === "/api/call") kind = "call";
+      if (request.method === "POST" && url.pathname === "/api/command") kind = "command";
       if (request.method === "POST" && url.pathname === "/api/reset") kind = "reset";
       if (!kind) return json(404, { error: "Introuvable" });
 

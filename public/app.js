@@ -30,6 +30,9 @@ const journalKind = {
   release: "Décision",
   execute: "Exécution",
   log_call: "Exécution",
+  command: "Préparation",
+  assign: "Préparation",
+  draft: "Préparation",
 };
 const journalAction = {
   cycle: "Journée préparée",
@@ -40,6 +43,9 @@ const journalAction = {
   release: "Levée du gel",
   execute: "Action consignée",
   log_call: "Compte-rendu d'appel",
+  command: "Commande reçue",
+  assign: "Ordre transmis",
+  draft: "Brouillon déposé",
 };
 const outcomeLabel = { joignable: "Joignable", message: "Message laissé", refus: "Refus", demo: "Démo acceptée" };
 const actionLabel = {
@@ -141,6 +147,12 @@ async function post(url, payload) {
   }
   state = body;
   note = "";
+  if (url === "/api/command") {
+    const created = state.tasks.find((task) => task.origin === "command");
+    if (created) selectedTaskId = created.id;
+    view = "report";
+    sessionStorage.setItem("klirline-view", view);
+  }
   render();
 }
 
@@ -174,7 +186,7 @@ function artifactHtml(task) {
     const rows = artifact.rows.map((row) => `<tr><td>${escapeHtml(row.company)}</td><td>${escapeHtml(row.product)}</td><td>${row.score}</td><td>${escapeHtml(row.action)}</td></tr>`).join("");
     return `<p>${escapeHtml(artifact.merged.join(" · "))}</p><table><thead><tr><th>Prospect</th><th>Produit</th><th>Score</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
-  if (artifact.kind === "email" || artifact.kind === "content") {
+  if (artifact.kind === "email" || artifact.kind === "content" || artifact.kind === "letter") {
     return `<p><strong>${escapeHtml(artifact.subject || artifact.channel || "")}</strong> ${artifact.to ? `→ ${escapeHtml(artifact.to)}` : ""}</p><pre>${escapeHtml(artifact.body)}</pre>`;
   }
   if (artifact.kind === "call") {
@@ -205,7 +217,8 @@ function detailHtml(task) {
     <p><strong>Recommandation.</strong> ${escapeHtml(task.recommendation)}</p>
     <p class="muted">${escapeHtml(owner.name)} → ${escapeHtml(supervisor.name)}</p>
     ${task.security?.state === "blocked" ? `<p class="error">${escapeHtml(task.security.reason)}</p>` : ""}
-    ${!task.actions.length && task.status === "pending_supervisor" ? `<p class="banner">Dossier chez ${escapeHtml(supervisor.name)}. La signature du CEO s'ouvre après sa recommandation.</p>` : ""}
+    ${!task.actions.length && task.status === "pending_supervisor" && task.level === 3 ? `<p class="banner">Dossier chez ${escapeHtml(supervisor.name)}. La signature du CEO s'ouvre après sa recommandation.</p>` : ""}
+    ${!task.actions.length && task.status === "pending_supervisor" && task.level < 3 ? `<p class="banner">Le brouillon est sur le bureau. L'envoi attend ${escapeHtml(supervisor.name)}.</p>` : ""}
     ${!task.actions.length && task.status === "pending_ceo" && actorId !== "ceo" ? `<p class="banner">Recommandation faite. La signature appartient à Philippe Azor.</p>` : ""}
     ${artifactHtml(task)}
     ${(task.approvals || []).length ? `<h3>Historique</h3><ul class="history">${task.approvals.map((item) => `<li><span>${escapeHtml(when(item.at))}</span> ${escapeHtml(agent(item.actorId)?.name || item.actorId)} · ${escapeHtml(journalAction[item.decision] || item.decision)}${item.note ? ` — ${escapeHtml(item.note)}` : ""}</li>`).join("")}</ul>` : `<p class="muted">Aucune décision enregistrée sur ce dossier.</p>`}
@@ -224,7 +237,7 @@ function when(value) {
 function scopeHtml() {
   return `<div class="banner">Démonstration publique. Les entreprises, les montants et les états de plateformes sont un jeu. Aucun courriel, appel, paiement ou publication ne part d'ici.</div>
   <div class="scope-grid">
-    <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li><li>La santé de KlirBuild est lue sur sa route réelle.</li><li>Le catalogue public de Klir IA est lu sur klirline.io.</li></ul></article>
+    <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Philippe Azor passe une commande. Le chef de cabinet la transmet au poste.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li><li>La santé de KlirBuild est lue sur sa route réelle.</li><li>Le catalogue public de Klir IA est lu sur klirline.io.</li></ul></article>
     <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>L'identité choisie dans le menu. Ce n'est pas une connexion.</li></ul></article>
     <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.</li><li>KlirMarket et Klirline OS n'ont pas encore d'adresse publique.</li></ul></article>
   </div>
@@ -238,7 +251,11 @@ function reportHtml() {
     ? "Rien n'attend Philippe Azor. Un supérieur doit d'abord recommander le dossier."
     : "Rien";
   const finance = state.briefing.finance;
+  const desk = actorId === "ceo"
+    ? `<article class="card"><h3>Place de commande</h3><p>Écrivez l'ordre. Une lettre ou un courriel est rédigé et déposé ici.</p><textarea id="command" placeholder="Exemple : faire une lettre pour Construction ABC"></textarea><div class="actions"><button id="send-command">Passer la commande</button></div></article>${deskPapersHtml()}`
+    : "";
   return `<div class="banner">Les agents préparent les dossiers. Une action approuvée est consignée ici : elle n'envoie rien, n'appelle personne et ne déplace pas d'argent.</div>
+  ${desk}
   <div class="lanes">
     ${lane("À approuver", report.decisionsReady.map((item) => taskButton(item)), approveEmpty)}
     ${lane("À surveiller", report.decisionsWaiting.map((item) => taskButton(item)))}
@@ -253,6 +270,12 @@ function reportHtml() {
     <article class="card"><h3>Opérations</h3>${report.operations.degraded.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Toutes les plateformes sont opérationnelles dans l'état local.</p>"}<p class="muted">Ces notes viennent du jeu de démonstration.</p></article>
     <article class="card"><h3>Clients</h3>${report.customers.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Aucune alerte à deux signaux.</p>"}</article>
   </div>`;
+}
+
+function deskPapersHtml() {
+  const papers = state.tasks.filter((task) => task.origin === "command" && (task.artifact?.kind === "letter" || task.artifact?.kind === "email"));
+  if (!papers.length) return `<article class="card"><h3>Sur le bureau</h3><p class="muted">Les lettres et les courriels commandés apparaissent ici, avant tout envoi.</p></article>`;
+  return `<h2 class="section-title">Sur le bureau</h2>${papers.map((task) => `<article class="card"><div class="chips">${chip(`l${task.level}`, levelLabel[task.level])}${chip(task.status, statusLabel[task.status])}</div><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.summary)}</p>${artifactHtml(task)}</article>`).join("")}`;
 }
 
 function listHtml(tasks) {
@@ -391,6 +414,7 @@ function bind() {
   document.querySelectorAll("[data-book]").forEach((button) => button.addEventListener("click", () => openPlaybook(button.dataset.book, true)));
   document.querySelector("#actor").addEventListener("change", (event) => { actorId = event.target.value; sessionStorage.setItem("klirline-actor", actorId); load().catch(showLoadError); });
   document.querySelector("#reset")?.addEventListener("click", () => post("/api/reset", { actorId }));
+  document.querySelector("#send-command")?.addEventListener("click", () => post("/api/command", { actorId, text: document.querySelector("#command")?.value || "" }));
   document.querySelector("#note")?.addEventListener("input", (event) => { note = event.target.value; });
   document.querySelectorAll("[data-decision]").forEach((button) => button.addEventListener("click", () => {
     const decision = button.dataset.decision;
