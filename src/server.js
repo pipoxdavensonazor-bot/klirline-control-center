@@ -7,6 +7,7 @@ import { COMPANY } from "./policy.js";
 import { present } from "./present.js";
 import { probeProductSites } from "./product-sites.js";
 import { dataPath, loadState, resetState, saveState } from "./store.js";
+import { API_LIMITS, rateKey, take } from "./limits.js";
 
 assertOrganization();
 
@@ -35,10 +36,10 @@ function readPlaybook(id) {
 }
 
 function view(state, actorId) {
-  return present(state, actorId, playbooks());
+  return present(state, actorId, playbooks(), "demonstration");
 }
 
-function send(res, status, body, type = "application/json; charset=utf-8") {
+function send(res, status, body, type = "application/json; charset=utf-8", extra = {}) {
   const payload = Buffer.isBuffer(body) || typeof body === "string" ? body : JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": type,
@@ -46,15 +47,40 @@ function send(res, status, body, type = "application/json; charset=utf-8") {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "Content-Security-Policy": "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+    ...extra,
   });
   res.end(payload);
+}
+
+const hits = new Map();
+
+function guard(req, url) {
+  if (!url.pathname.startsWith("/api/")) return null;
+  const decision = take(hits, rateKey({ ip: req.socket.remoteAddress || "local" }), Date.now());
+  if (decision.allowed) return null;
+  return { status: 429, body: { error: "Trop de requêtes." }, extra: { "Retry-After": String(decision.retryAfter) } };
 }
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
+    let size = 0;
+    let failed = false;
+    req.on("data", (chunk) => {
+      if (failed) return;
+      size += chunk.length;
+      if (size > API_LIMITS.maxBodyBytes) {
+        failed = true;
+        chunks.length = 0;
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => {
+      if (failed) {
+        reject(Object.assign(new Error("Requête trop volumineuse."), { status: 413 }));
+        return;
+      }
       if (!chunks.length) return resolve({});
       try {
         resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
@@ -62,15 +88,19 @@ function readBody(req) {
         reject(Object.assign(new Error("JSON illisible"), { status: 400 }));
       }
     });
-    req.on("error", reject);
+    req.on("error", (error) => {
+      if (!failed) reject(error);
+    });
   });
 }
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const limited = guard(req, url);
+    if (limited) return send(res, limited.status, limited.body, "application/json; charset=utf-8", limited.extra);
+    try {
     if (req.method === "GET" && url.pathname === "/api/health") {
-      return send(res, 200, { ok: true, company: COMPANY.legalName });
+      return send(res, 200, { ok: true, company: COMPANY.legalName, accessMode: "demonstration" });
     }
     if (req.method === "GET" && url.pathname === "/api/bootstrap") {
       const actorId = url.searchParams.get("actor") || "ceo";

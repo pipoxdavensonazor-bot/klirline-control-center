@@ -676,6 +676,20 @@ export function briefing(state) {
   const degraded = state.platforms.filter((platform) => platform.status !== "operational");
   const atRisk = state.clients.filter((client) => client.signals.length >= 2);
   const demos = ranked.filter((prospect) => prospect.demoAt);
+  const priced = ranked.filter((prospect) => Number.isInteger(prospect.proposalAmount));
+  const closed = new Set(["done", "rejected", "executed"]);
+  const agentLoad = [];
+  for (const task of state.tasks) {
+    if (closed.has(task.status)) continue;
+    let row = agentLoad.find((item) => item.ownerId === task.ownerId);
+    if (!row) {
+      row = { ownerId: task.ownerId, open: 0, blocked: 0 };
+      agentLoad.push(row);
+    }
+    if (task.status === "blocked") row.blocked += 1;
+    else row.open += 1;
+  }
+  agentLoad.sort((a, b) => b.open + b.blocked - (a.open + a.blocked) || a.ownerId.localeCompare(b.ownerId));
   return {
     priority: "Ventes",
     sales: {
@@ -694,7 +708,10 @@ export function briefing(state) {
       revenue: state.finance.monthRevenue,
       expenses: state.finance.monthExpenses,
       receivables: state.invoices.filter((item) => item.status === "open").reduce((sum, item) => sum + item.amount, 0),
+      proposalTotal: priced.reduce((sum, prospect) => sum + prospect.proposalAmount, 0),
+      proposalCount: priced.length,
     },
+    agentLoad,
     operations: {
       degraded: degraded.map((platform) => `${platformName(platform.id)} : ${platform.note}`),
       urgentTasks: state.tasks.filter((task) => task.level > 1 && task.department === "operations" && !["done", "rejected", "executed"].includes(task.status)).length,

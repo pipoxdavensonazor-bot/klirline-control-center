@@ -2,11 +2,12 @@ import { actionsFor, briefing } from "./engine.js";
 import { DEPARTMENTS, agents, skillDocument } from "./org/index.js";
 import { COMPANY, PLATFORMS } from "./policy.js";
 
-export function present(state, actorId, playbookList) {
+export function present(state, actorId, playbookList, accessMode = "demonstration") {
   return {
     company: COMPANY,
     generatedAt: new Date().toISOString(),
     actorId,
+    accessMode,
     departments: DEPARTMENTS,
     agents: agents.map((agent) => ({
       ...agent,

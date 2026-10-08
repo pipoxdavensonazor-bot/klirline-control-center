@@ -1,9 +1,12 @@
 import fs from "node:fs";
+import { generateKeyPairSync, createSign } from "node:crypto";
 import { buildDay, decide, execute, issueCommand, logCall, briefing } from "./engine.js";
 import { agents, assertOrganization, skillDocument } from "./org/index.js";
 import { THRESHOLDS } from "./policy.js";
 import { activeProspects, seedWorld } from "./seed.js";
 import { dataPath } from "./store.js";
+import { accessSettings, bindIdentity, orgObjectName, verifyAccessJwt } from "./access.js";
+import { API_LIMITS, rateKey, take } from "./limits.js";
 
 const failures = [];
 const check = (condition, message) => {
@@ -34,6 +37,11 @@ check(!ranked.some((item) => item.id === "p-clinique-doublon"), "Le doublon ne d
 const state = { ...world, tasks: buildDay(world), audit: [], outbox: [], calls: [] };
 check(state.tasks.every((task) => task.ownerId && task.supervisorId), "Tâche sans propriétaire ou sans supérieur");
 check(state.tasks.filter((task) => task.level === 1).every((task) => task.status === "done"), "Le niveau 1 doit être terminé sans validation");
+const opening = briefing(state);
+check(opening.finance.revenue === 18400 && opening.finance.receivables === 1210, "Les revenus et les factures ouvertes restent distincts");
+check(opening.finance.proposalTotal === 6300 && opening.finance.proposalCount === 2, "Seules les propositions déjà chiffrées sont additionnées");
+const outreachLoad = opening.agentLoad.find((item) => item.ownerId === "outreach");
+check(outreachLoad?.open >= 1 && outreachLoad.blocked >= 1, "La charge sépare les tâches ouvertes et les tâches bloquées");
 
 const proposal = state.tasks.find((task) => task.action?.type === "commit_proposal" && task.action.amount >= THRESHOLDS.contractCeoCad);
 const expense = state.tasks.find((task) => task.action?.type === "payment_order" && task.action.amount === 850);
@@ -153,6 +161,68 @@ try {
   check(false, "Un ordre trop long est refusé");
 } catch (error) {
   check(error.status === 400, "Un ordre trop long est refusé");
+}
+
+check(!accessSettings({}).ready, "Sans configuration Access, aucun compte n'est prêt");
+const trial = accessSettings({
+  ACCESS_TEAM_DOMAIN: "equipe.cloudflareaccess.com",
+  ACCESS_AUD: "aud-essai",
+  ACCESS_ACCOUNTS: JSON.stringify([{ email: "ada@example.com", role: "ceo", orgId: "klirline" }]),
+});
+check(trial.ready, "Une configuration d'essai complète est reconnaissable");
+check(!accessSettings({ ...{ ACCESS_TEAM_DOMAIN: trial.teamDomain, ACCESS_AUD: trial.aud, ACCESS_ACCOUNTS: JSON.stringify([{ email: "ada@example.com", role: "inconnu", orgId: "klirline" }]) } }).ready, "Un rôle hors organigramme est refusé");
+const identity = bindIdentity(trial.accounts[0]);
+check(identity.actorId === "ceo" && identity.orgId === "klirline", "Le rôle et l'organisation viennent du compte");
+check(orgObjectName("autre-societe") !== identity.orgId, "Une autre organisation ne partage pas cet objet");
+try {
+  orgObjectName("api-rate");
+  check(false, "Le nom du limiteur n'est pas une organisation");
+} catch (error) {
+  check(error.status === 500, "Le nom du limiteur n'est pas une organisation");
+}
+const samePerson = rateKey({ email: "Ada@example.com", ip: "203.0.113.5" });
+check(samePerson === rateKey({ email: "ada@example.com", ip: "198.51.100.8" }), "La limite suit le courriel vérifié");
+check(rateKey({ ip: "203.0.113.5" }) === "ip:203.0.113.5", "Sans courriel, la limite suit l'adresse de connexion");
+const bucket = new Map();
+const client = rateKey({ ip: "203.0.113.5" });
+for (let i = 0; i < API_LIMITS.maxRequests; i += 1) check(take(bucket, client, 1_000).allowed, "La fenêtre accepte le débit prévu");
+const blockedLimit = take(bucket, client, 1_000);
+check(!blockedLimit.allowed && blockedLimit.retryAfter >= 1, "Le dépassement répond par un refus");
+check(!take(bucket, rateKey({ ip: "203.0.113.5" }), 1_000).allowed, "Changer de rôle ne change pas la clé de limite");
+check(take(bucket, rateKey({ ip: "203.0.113.6" }), 1_000).allowed, "Une autre adresse a sa propre fenêtre");
+
+const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const jwk = publicKey.export({ format: "jwk" });
+jwk.kid = "essai";
+const nowMs = Date.parse("2026-10-08T02:00:00Z");
+const sign = (claims) => {
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "essai" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+  const data = `${header}.${payload}`;
+  const signature = createSign("RSA-SHA256").update(data).sign(privateKey).toString("base64url");
+  return `${data}.${signature}`;
+};
+const claims = { email: "Ada@example.com", aud: "aud-essai", iss: "https://equipe.cloudflareaccess.com", exp: nowMs / 1000 + 60 };
+const accepted = await verifyAccessJwt(sign(claims), { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
+check(accepted.email === "ada@example.com", "Le jeton Access valide le courriel");
+try {
+  await verifyAccessJwt(sign({ ...claims, aud: "autre" }), { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
+  check(false, "Une audience différente est refusée");
+} catch (error) {
+  check(error.status === 401, "Une audience différente est refusée");
+}
+try {
+  await verifyAccessJwt(sign({ ...claims, exp: nowMs / 1000 - 10 }), { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
+  check(false, "Un jeton expiré est refusé");
+} catch (error) {
+  check(error.status === 401, "Un jeton expiré est refusé");
+}
+try {
+  const forged = `${Buffer.from(JSON.stringify({ alg: "none", kid: "essai" })).toString("base64url")}.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.aa`;
+  await verifyAccessJwt(forged, { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
+  check(false, "Un jeton non signé est refusé");
+} catch (error) {
+  check(error.status === 401, "Un jeton non signé est refusé");
 }
 
 if (failures.length) {

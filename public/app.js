@@ -79,6 +79,7 @@ async function load() {
   const body = await response.json();
   if (!response.ok) throw new Error(body.error);
   state = body;
+  if (state.accessMode === "cloudflare-access") actorId = state.actorId;
   if (playbookId) await openPlaybook(playbookId, false);
   render();
   refreshSites();
@@ -146,6 +147,7 @@ async function post(url, payload) {
     return;
   }
   state = body;
+  if (state.accessMode === "cloudflare-access") actorId = state.actorId;
   note = "";
   if (url === "/api/command") {
     const created = state.tasks.find((task) => task.origin === "command");
@@ -238,7 +240,7 @@ function scopeHtml() {
   return `<div class="banner">Démonstration publique. Les entreprises, les montants et les états de plateformes sont un jeu. Aucun courriel, appel, paiement ou publication ne part d'ici.</div>
   <div class="scope-grid">
     <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Philippe Azor passe une commande. Le chef de cabinet la transmet au poste.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li><li>La santé de KlirBuild est lue sur sa route réelle.</li><li>Le catalogue public de Klir IA est lu sur klirline.io.</li></ul></article>
-    <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>L'identité choisie dans le menu. Ce n'est pas une connexion.</li></ul></article>
+    <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>${state.accessMode === "cloudflare-access" ? "Les chiffres restent un jeu, même quand le rôle vient de Cloudflare Access." : "L'identité choisie dans le menu. Ce n'est pas une connexion. Le serveur local est en mode démonstration."}</li></ul></article>
     <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.</li><li>KlirMarket et Klirline OS n'ont pas encore d'adresse publique.</li></ul></article>
   </div>
   <div class="actions"><button data-view="report">Ouvrir le rapport du jour</button><button class="ghost" data-view="queue">Voir la file à valider</button></div>`;
@@ -264,12 +266,21 @@ function reportHtml() {
     ${lane("Consigné localement", report.results.map((item) => `<p>${escapeHtml(item)}</p>`), "Rien n'a été exécuté à l'extérieur")}
   </div>
   <div class="grid">
-    <article class="card"><h3>Ventes</h3><p>${report.sales.prospects} prospects actifs. Démos : ${escapeHtml(report.sales.demos.join(" · ") || "aucune")}</p></article>
-    <article class="card"><h3>Finance de démonstration</h3><p>Revenus ${money(finance.revenue)} · dépenses ${money(finance.expenses)} · factures ouvertes ${money(finance.receivables)}</p><p class="muted">${escapeHtml(finance.source)}</p></article>
+    <article class="card"><h3>Ventes</h3><p>${report.sales.prospects} prospects actifs. Démos : ${escapeHtml(report.sales.demos.join(" · ") || "aucune")}</p><p class="muted">Un montant de proposition n'est pas un revenu.</p></article>
+    <article class="card"><h3>Finance de démonstration</h3><p>Revenus du mois ${money(finance.revenue)}</p><p>Dépenses du mois ${money(finance.expenses)}</p><p>Factures ouvertes ${money(finance.receivables)}</p><p>Propositions chiffrées ${money(finance.proposalTotal)} · ${finance.proposalCount} fiches. Les autres n'ont pas de montant.</p><p class="muted">${escapeHtml(finance.source)} Aucune probabilité n'est appliquée.</p></article>
+    ${loadHtml(report)}
     <article class="card"><h3>Sites réels</h3>${sitesSummaryHtml()}</article>
     <article class="card"><h3>Opérations</h3>${report.operations.degraded.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Toutes les plateformes sont opérationnelles dans l'état local.</p>"}<p class="muted">Ces notes viennent du jeu de démonstration.</p></article>
     <article class="card"><h3>Clients</h3>${report.customers.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Aucune alerte à deux signaux.</p>"}</article>
   </div>`;
+}
+
+function loadHtml(report) {
+  const rows = (report.agentLoad || []).map((item) => {
+    const name = agent(item.ownerId)?.name || item.ownerId;
+    return `<div class="row-line"><span>${escapeHtml(name)}</span><span>ouvertes ${item.open} · bloquées ${item.blocked}</span></div>`;
+  }).join("");
+  return `<article class="card"><h3>Charge des tâches</h3><p class="muted">Dossiers encore ouverts ou gelés. Ceci mesure la charge des tâches, pas la disponibilité technique de l'agent.</p>${rows || "<p class=\"muted\">Aucune tâche ouverte.</p>"}</article>`;
 }
 
 function deskPapersHtml() {
@@ -388,9 +399,9 @@ function render() {
       <header class="top">
         <div><p class="eyebrow">Klirline Inc.</p><h1>${views.find(([id]) => id === view)[1]}</h1></div>
         <div class="session">
-          <label for="actor">Identité de démonstration</label>
-          <select id="actor">${options}</select>
-          <p class="hint">Mode démonstration. Ce menu ne connecte personne. Le serveur vérifie seulement le rôle annoncé. ${actorId === "ceo" ? `<button class="ghost" id="reset">Recommencer la démonstration</button>` : ""}</p>
+          ${state.accessMode === "cloudflare-access"
+            ? `<p class="hint">Rôle attribué par Cloudflare Access : ${escapeHtml(agent(actorId)?.name || actorId)}. Un rôle envoyé par le navigateur est ignoré.</p>`
+            : `<label for="actor">Identité de démonstration</label><select id="actor">${options}</select><p class="hint">Mode démonstration. Ce menu ne connecte personne. Le serveur local vérifie seulement le rôle annoncé. ${actorId === "ceo" ? `<button class="ghost" id="reset">Recommencer la démonstration</button>` : ""}</p>`}
         </div>
       </header>
       <nav class="section-nav">${views.map(([id, label]) => `<button class="${view === id ? "active" : ""}" data-view="${id}">${label}</button>`).join("")}</nav>
@@ -416,7 +427,7 @@ function bind() {
   document.querySelectorAll("[data-task]").forEach((button) => button.addEventListener("click", () => { selectedTaskId = button.dataset.task; view = ["people", "platforms", "journal", "work"].includes(view) ? "queue" : view; error = ""; render(); }));
   document.querySelectorAll("[data-agent]").forEach((button) => button.addEventListener("click", () => { selectedAgentId = button.dataset.agent; playbookBody = ""; view = "people"; render(); }));
   document.querySelectorAll("[data-book]").forEach((button) => button.addEventListener("click", () => openPlaybook(button.dataset.book, true)));
-  document.querySelector("#actor").addEventListener("change", (event) => { actorId = event.target.value; sessionStorage.setItem("klirline-actor", actorId); load().catch(showLoadError); });
+  document.querySelector("#actor")?.addEventListener("change", (event) => { actorId = event.target.value; sessionStorage.setItem("klirline-actor", actorId); load().catch(showLoadError); });
   document.querySelector("#reset")?.addEventListener("click", () => post("/api/reset", { actorId }));
   document.querySelector("#send-command")?.addEventListener("click", () => post("/api/command", { actorId, text: document.querySelector("#command")?.value || "" }));
   document.querySelector("#note")?.addEventListener("input", (event) => { note = event.target.value; });
