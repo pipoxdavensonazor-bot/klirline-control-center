@@ -219,7 +219,7 @@ function scopeHtml() {
   <div class="scope-grid">
     <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li><li>La santé de KlirBuild est lue sur sa route réelle.</li></ul></article>
     <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>L'identité choisie dans le menu. Ce n'est pas une connexion.</li></ul></article>
-    <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.</li><li>KlirLead, KlirMarket et Klirline OS n'ont pas encore d'adresse publique.</li></ul></article>
+    <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.</li><li>KlirMarket et Klirline OS n'ont pas encore d'adresse publique.</li></ul></article>
   </div>
   <div class="actions"><button data-view="report">Ouvrir le rapport du jour</button><button class="ghost" data-view="queue">Voir la file à valider</button></div>`;
 }

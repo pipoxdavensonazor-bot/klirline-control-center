@@ -1,6 +1,6 @@
 export const PRODUCT_SITES = [
   { id: "klirprospect", url: "https://klirprospect.klirline.ca" },
-  { id: "klirlead", url: null },
+  { id: "klirlead", url: "https://scintillating-croissant-147cda.netlify.app" },
   { id: "klirline-os", url: null },
   { id: "klirbuild", url: "https://klirline.app", healthUrl: "https://klirline.app/api/health" },
   { id: "klirpay", url: "https://pay.klirline.ca", note: "Bac à sable" },
