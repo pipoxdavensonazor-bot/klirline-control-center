@@ -7,6 +7,7 @@ export const PRODUCT_SITES = [
   { id: "klirmarket", url: null },
   { id: "klirsecure", url: "https://secure.klirline.ca" },
   { id: "centia", url: "https://centia.app" },
+  { id: "klir-ia", name: "Klir IA", url: "https://klirline.io", skillsUrl: "https://klirline.io/api/skills", note: "Assistant marketing" },
 ];
 
 const CACHE_MS = 60_000;
@@ -51,9 +52,26 @@ async function probeHealth(url) {
   }
 }
 
+async function probeSkills(url) {
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      headers: { Accept: "application/json", "User-Agent": "KlirlineControlCenter/0.1" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return { status: "unexpected", httpStatus: response.status, count: null };
+    const body = await response.json();
+    const count = Number.isInteger(body.count) ? body.count : Array.isArray(body.skills) ? body.skills.length : null;
+    return { status: count === null ? "unexpected" : "ok", httpStatus: response.status, count };
+  } catch {
+    return { status: "unreachable", httpStatus: null, count: null };
+  }
+}
+
 async function probeOne(site, checkedAt) {
   if (!site.url) {
-    return { id: site.id, url: null, status: "absent", httpStatus: null, title: "", note: site.note || "", health: null, checkedAt };
+    return { id: site.id, name: site.name || "", url: null, status: "absent", httpStatus: null, title: "", note: site.note || "", health: null, skills: null, checkedAt };
   }
   try {
     const response = await fetch(site.url, {
@@ -65,18 +83,21 @@ async function probeOne(site, checkedAt) {
     const html = (await response.text()).slice(0, 80_000);
     const title = decodeTitle(html.match(/<title>([^<]*)<\/title>/i)?.[1] || "");
     const health = site.healthUrl ? await probeHealth(site.healthUrl) : null;
+    const skills = site.skillsUrl ? await probeSkills(site.skillsUrl) : null;
     return {
       id: site.id,
+      name: site.name || "",
       url: site.url,
       status: response.ok ? "online" : "unexpected",
       httpStatus: response.status,
       title,
       note: site.note || "",
       health,
+      skills,
       checkedAt,
     };
   } catch {
-    return { id: site.id, url: site.url, status: "unreachable", httpStatus: null, title: "", note: site.note || "", health: null, checkedAt };
+    return { id: site.id, name: site.name || "", url: site.url, status: "unreachable", httpStatus: null, title: "", note: site.note || "", health: null, skills: null, checkedAt };
   }
 }
 
