@@ -6,6 +6,7 @@ import { freshState } from "./fresh-state.js";
 import { API_LIMITS, RATE_OBJECT_NAME, nextWindow, rateKey } from "./limits.js";
 import { present } from "./present.js";
 import { probeProductSites } from "./product-sites.js";
+import { loadProspectSource } from "./prospect-feed.js";
 
 const jsonHeaders = {
   "Content-Type": "application/json; charset=utf-8",
@@ -200,7 +201,8 @@ export default {
 
       const company = env.COMPANY.get(env.COMPANY.idFromName(identity.orgId));
       const catalog = await playbookCatalog(request, env);
-      const viewOf = (state) => present(state, identity.actorId, catalog, "cloudflare-access");
+      const prospectSource = await loadProspectSource(env);
+      const viewOf = (state) => ({ ...present(state, identity.actorId, catalog, "cloudflare-access"), prospectSource });
 
       if (request.method === "GET" && url.pathname === "/api/bootstrap") {
         return json(200, viewOf(await company.read()));

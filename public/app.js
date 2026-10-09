@@ -243,7 +243,7 @@ function scopeHtml() {
   <div class="scope-grid">
     <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Philippe Azor passe une commande. Le chef de cabinet la transmet au poste.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li><li>La santé de KlirBuild est lue sur sa route réelle.</li><li>Le catalogue public de Klir IA est lu sur klirline.io.</li></ul></article>
     <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>${state.accessMode === "cloudflare-access" ? "Les chiffres restent un jeu, même quand le rôle vient de Cloudflare Access." : "L'identité choisie dans le menu. Ce n'est pas une connexion. Le serveur local est en mode démonstration."}</li></ul></article>
-    <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.</li></ul></article>
+    <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>${prospectSourceLine()}</li></ul></article>
   </div>
   <div class="actions"><button data-view="report">Ouvrir le rapport du jour</button><button class="ghost" data-view="queue">Voir la file à valider</button></div>`;
 }
@@ -268,13 +268,31 @@ function reportHtml() {
     ${lane("Consigné localement", report.results.map((item) => `<p>${escapeHtml(item)}</p>`), "Rien n'a été exécuté à l'extérieur")}
   </div>
   <div class="grid">
-    <article class="card"><h3>Ventes</h3><p>${report.sales.prospects} prospects actifs. Démos : ${escapeHtml(report.sales.demos.join(" · ") || "aucune")}</p><p class="muted">Un montant de proposition n'est pas un revenu.</p></article>
+    <article class="card"><h3>Prospects KlirProspect</h3>${prospectSourceHtml()}</article>
+    <article class="card"><h3>Ventes</h3><p>${report.sales.prospects} prospects actifs. Démos : ${escapeHtml(report.sales.demos.join(" · ") || "aucune")}</p><p class="muted">Un montant de proposition n'est pas un revenu. Ces fiches restent le jeu de démonstration.</p></article>
     <article class="card"><h3>Finance de démonstration</h3><p>Revenus du mois ${money(finance.revenue)}</p><p>Dépenses du mois ${money(finance.expenses)}</p><p>Factures ouvertes ${money(finance.receivables)}</p><p>Propositions chiffrées ${money(finance.proposalTotal)} · ${finance.proposalCount} fiches. Les autres n'ont pas de montant.</p><p class="muted">${escapeHtml(finance.source)} Aucune probabilité n'est appliquée.</p></article>
     ${loadHtml(report)}
     <article class="card"><h3>Sites réels</h3>${sitesSummaryHtml()}</article>
     <article class="card"><h3>Opérations</h3>${report.operations.degraded.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Toutes les plateformes sont opérationnelles dans l'état local.</p>"}<p class="muted">Ces notes viennent du jeu de démonstration.</p></article>
     <article class="card"><h3>Clients</h3>${report.customers.map((item) => `<p>${escapeHtml(item)}</p>`).join("") || "<p>Aucune alerte à deux signaux.</p>"}</article>
   </div>`;
+}
+
+function prospectSourceLine() {
+  const source = state.prospectSource;
+  if (!source) return "Lecture des dossiers, prospects et factures. Seule la page d'accueil est lue.";
+  if (source.status === "ready") return "Les fiches KlirProspect sont lues. Le courriel, le téléphone, les factures et les paiements restent fermés.";
+  if (source.status === "empty") return "KlirProspect répond. Aucune fiche réelle n'est enregistrée. Les factures restent fermées.";
+  return "La lecture KlirProspect n'est pas disponible sur cette session. Les factures restent fermées.";
+}
+
+function prospectSourceHtml() {
+  const source = state.prospectSource;
+  if (!source || source.status === "unconfigured") return "<p>La lecture n'est pas configurée sur ce serveur. Les entreprises affichées ailleurs restent le jeu de démonstration.</p>";
+  if (source.status === "unavailable" || source.status === "invalid") return "<p>KlirProspect n'a pas renvoyé de liste lisible. Les entreprises du rapport restent le jeu de démonstration.</p>";
+  if (source.status === "empty" || !source.prospects.length) return "<p>KlirProspect est connecté. Aucune fiche réelle n'est enregistrée. Les entreprises du rapport restent le jeu de démonstration.</p>";
+  const rows = source.prospects.map((item) => `<p>${escapeHtml(item.company)} · ${escapeHtml(item.product || "produit non précisé")} · ${item.score == null ? "score absent" : `score ${item.score}/100`} · ${escapeHtml(item.action || "suite non précisée")}</p>`).join("");
+  return `<p class="muted">Lecture réelle. Le courriel et le téléphone ne sont pas demandés.</p>${rows}`;
 }
 
 function loadHtml(report) {

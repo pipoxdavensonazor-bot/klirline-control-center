@@ -7,6 +7,7 @@ import { activeProspects, seedWorld } from "./seed.js";
 import { dataPath } from "./store.js";
 import { accessSettings, bindIdentity, orgObjectName, verifyAccessJwt } from "./access.js";
 import { API_LIMITS, rateKey, take } from "./limits.js";
+import { readProspectFeed } from "./prospect-feed.js";
 
 const failures = [];
 const check = (condition, message) => {
@@ -224,6 +225,15 @@ try {
 } catch (error) {
   check(error.status === 401, "Un jeton non signé est refusé");
 }
+
+const liveFeed = readProspectFeed({
+  prospects: [{ company: "Atelier Nord", product: "Construction", score: 80, action: "Visite", public_email: "secret@example.com" }],
+});
+check(liveFeed.status === "ready" && liveFeed.prospects.length === 1, "Une fiche réelle est conservée");
+check(liveFeed.prospects[0].company === "Atelier Nord" && liveFeed.prospects[0].score === 80, "La fiche garde l'entreprise, le produit et le score");
+check(!Object.hasOwn(liveFeed.prospects[0], "public_email") && !JSON.stringify(liveFeed).includes("@"), "La lecture retire le courriel");
+check(readProspectFeed({ prospects: [] }).status === "empty", "Une liste vide reste vide");
+check(readProspectFeed(null).status === "invalid", "Une réponse illisible est refusée");
 
 if (failures.length) {
   console.error(failures.join("\n"));
