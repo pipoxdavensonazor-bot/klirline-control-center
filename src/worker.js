@@ -150,7 +150,7 @@ export class CompanyState extends DurableObject {
       if (kind === "decision") decide(state, payload.taskId, payload.actorId, payload.decision, payload.note);
       else if (kind === "execute") execute(state, payload.taskId, payload.actorId);
       else if (kind === "call") logCall(state, payload.taskId, payload.actorId, payload.outcome, payload.note);
-      else if (kind === "command") issueCommand(state, payload.actorId, payload.text);
+      else if (kind === "command") issueCommand(state, payload.actorId, payload.text, payload.liveProspects);
       else return { status: 400, error: "Action inconnue" };
       this.write(state);
       return { state };
@@ -218,6 +218,7 @@ export default {
 
       const payload = await readJson(request);
       payload.actorId = identity.actorId;
+      if (kind === "command") payload.liveProspects = prospectSource.prospects;
       const result = await company.apply(kind, payload);
       if (result.error) return json(result.status || 500, { error: result.error });
       return json(200, viewOf(result.state));

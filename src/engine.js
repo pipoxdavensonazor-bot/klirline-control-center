@@ -1140,27 +1140,56 @@ function writingArtifact(state, order, kind) {
   };
 }
 
-function orderItems(state, text, owner) {
-  const asked = Number(text.match(/\d+/)?.[0] || 0);
-  const lines = [`Ordre de Philippe Azor : ${text}`, `Chef de cabinet → ${owner.name}.`];
-  if (owner.id === "prospecting") {
-    const known = activeProspects(state.prospects);
-    lines.push(`Demandé : ${asked || "non précisé"}. Fiches présentes dans le jeu local : ${known.length}.`);
-    lines.push("KlirProspect répond, sans route de lecture. Aucun prospect réel n'est ajouté.");
-    known.slice(0, asked || known.length).forEach((prospect) => {
-      lines.push(`${prospect.company} · ${prospect.contact} · score ${prospect.score} · ${prospect.action}`);
-    });
-    if (asked > known.length) {
-      const missing = asked - known.length;
-      lines.push(missing > 1 ? `Il manque ${missing} fiches réelles.` : "Il manque 1 fiche réelle.");
-    }
-    return lines;
-  }
-  lines.push("Rien n'est envoyé, appelé ou payé. L'acceptation du supérieur reste en place quand l'ordre sort du centre.");
-  return lines;
+function clip(value, max = 160) {
+  return String(value ?? "").replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, max);
 }
 
-export function issueCommand(state, actorId, text) {
+function liveProspectRows(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 100).map((item) => ({
+    company: clip(item?.company),
+    product: clip(item?.product),
+    score: Number.isInteger(item?.score) && item.score >= 0 && item.score <= 100 ? item.score : null,
+    action: clip(item?.action),
+  })).filter((item) => item.company && !item.company.includes("@"));
+}
+
+function localDossier(prospect) {
+  return {
+    company: prospect.company,
+    contact: prospect.contact || "",
+    role: prospect.role || "",
+    industry: prospect.industry || "",
+    product: platformName(prospect.product),
+    score: prospect.score,
+    reasons: prospect.reasons || [],
+    action: prospect.action,
+    need: prospect.need || "",
+    consent: prospect.consentLabel || "",
+    proposalAmount: Number.isInteger(prospect.proposalAmount) ? prospect.proposalAmount : null,
+    demoAt: prospect.demoAt || "",
+    email: prospect.email || "",
+    phone: prospect.phone || "",
+  };
+}
+
+function prospectSearchArtifact(state, text, liveProspects) {
+  const asked = Number(text.match(/\d+/)?.[0] || 0);
+  const live = liveProspectRows(liveProspects);
+  const known = activeProspects(state.prospects).map(localDossier);
+  const missing = asked > live.length ? asked - live.length : 0;
+  return { kind: "prospect-search", asked, missing, live, local: known };
+}
+
+function orderItems(state, text, owner) {
+  return [
+    `Ordre de Philippe Azor : ${text}`,
+    `Chef de cabinet → ${owner.name}.`,
+    "Rien n'est envoyé, appelé ou payé. L'acceptation du supérieur reste en place quand l'ordre sort du centre.",
+  ];
+}
+
+export function issueCommand(state, actorId, text, liveProspects = []) {
   requireActor(actorId);
   const order = String(text ?? "").trim().replace(/\s+/g, " ");
   if (actorId !== "ceo") {
@@ -1207,7 +1236,9 @@ export function issueCommand(state, actorId, text) {
     action: null,
     origin: "command",
     security: { state: "clear", by: null, reason: "", hard: false },
-    artifact: document || { kind: "worklist", items: orderItems(state, order, owner) },
+    artifact: document || (owner.id === "prospecting"
+      ? prospectSearchArtifact(state, order, liveProspects)
+      : { kind: "worklist", items: orderItems(state, order, owner) }),
   };
   state.tasks.unshift(task);
   audit(state, "ceo", "command", order, task.id);

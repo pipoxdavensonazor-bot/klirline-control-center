@@ -204,6 +204,7 @@ function artifactHtml(task) {
   if (artifact.kind === "campaign") return `<p>${escapeHtml(artifact.channel)} · ${money(artifact.budget)} · ${artifact.days} jours</p><p>${escapeHtml(artifact.audience)}</p><p>${escapeHtml(artifact.stopRule)}</p>`;
   if (artifact.kind === "platform") return `<p>${escapeHtml(artifact.platform)} · ${escapeHtml(platformStatusLabel[artifact.status] || artifact.status)}</p><p>${escapeHtml(artifact.note)}</p>`;
   if (artifact.kind === "worklist") return `<ul>${artifact.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+  if (artifact.kind === "prospect-search") return prospectSearchHtml(artifact);
   return `<pre>${escapeHtml(artifact.text || "")}</pre>`;
 }
 
@@ -256,7 +257,7 @@ function reportHtml() {
     : "Rien";
   const finance = state.briefing.finance;
   const desk = actorId === "ceo"
-    ? `<article class="card"><h3>Place de commande</h3><p>Écrivez l'ordre. Une lettre ou un courriel est rédigé et déposé ici.</p><textarea id="command" placeholder="Exemple : faire une lettre pour Construction ABC"></textarea><div class="actions"><button id="send-command">Passer la commande</button></div></article>${deskPapersHtml()}`
+    ? `<article class="card"><h3>Place de commande</h3><p>Écrivez l'ordre. La commande reste sur ce bureau, avec le détail complet.</p><textarea id="command" placeholder="Exemple : trouver 10 prospects"></textarea><div class="actions"><button id="send-command">Passer la commande</button></div></article>${deskPapersHtml()}`
     : "";
   return `<div class="banner">Les agents préparent les dossiers. Une action approuvée est consignée ici : elle n'envoie rien, n'appelle personne et ne déplace pas d'argent.</div>
   ${desk}
@@ -303,10 +304,26 @@ function loadHtml(report) {
   return `<article class="card"><h3>Charge des tâches</h3><p class="muted">Dossiers encore ouverts ou gelés. Ceci mesure la charge des tâches, pas la disponibilité technique de l'agent.</p>${rows || "<p class=\"muted\">Aucune tâche ouverte.</p>"}</article>`;
 }
 
+function prospectField(label, value) {
+  return `<div class="row-line"><span>${escapeHtml(label)}</span><span>${escapeHtml(value || "non précisé")}</span></div>`;
+}
+
+function prospectSearchHtml(artifact) {
+  const asked = artifact.asked ? `${artifact.asked} demandé${artifact.asked > 1 ? "s" : ""}` : "Nombre non précisé";
+  const missing = artifact.missing
+    ? `<p>${artifact.missing} fiche${artifact.missing > 1 ? "s" : ""} réelle${artifact.missing > 1 ? "s" : ""} manquante${artifact.missing > 1 ? "s" : ""}. Aucune entreprise n'est ajoutée pour compléter le compte.</p>`
+    : "<p>La demande est couverte par les fiches réelles.</p>";
+  const live = artifact.live?.length
+    ? artifact.live.map((item) => `<article class="card"><h3>${escapeHtml(item.company)}</h3>${prospectField("Produit", item.product)}${prospectField("Score", item.score == null ? "" : `${item.score}/100`)}${prospectField("Prochaine action", item.action)}<p class="muted">Lecture KlirProspect. Le courriel et le téléphone ne sont pas dans cette lecture.</p></article>`).join("")
+    : "<p>KlirProspect n'a aucune fiche réelle enregistrée.</p>";
+  const local = (artifact.local || []).map((item) => `<article class="card"><h3>${escapeHtml(item.company)}</h3>${prospectField("Contact", item.contact)}${prospectField("Rôle", item.role)}${prospectField("Secteur", item.industry)}${prospectField("Produit", item.product)}${prospectField("Score", item.score == null ? "" : `${item.score}/100`)}${prospectField("Raisons", (item.reasons || []).join(", "))}${prospectField("Prochaine action", item.action)}${prospectField("Besoin", item.need)}${prospectField("Base", item.consent)}${prospectField("Proposition", item.proposalAmount == null ? "non chiffré" : money(item.proposalAmount))}${prospectField("Démo", item.demoAt || "aucune")}${prospectField("Courriel", item.email)}${prospectField("Téléphone", item.phone)}</article>`).join("");
+  return `<p><strong>${escapeHtml(asked)}.</strong> Fiches réelles : ${artifact.live?.length || 0}. Fiches du jeu local : ${artifact.local?.length || 0}.</p>${missing}<h3>Fiches réelles</h3>${live}<h3>Jeu local, dossier complet</h3>${local || "<p>Aucune fiche locale.</p>"}`;
+}
+
 function deskPapersHtml() {
-  const papers = state.tasks.filter((task) => task.origin === "command" && (task.artifact?.kind === "letter" || task.artifact?.kind === "email"));
-  if (!papers.length) return `<article class="card"><h3>Sur le bureau</h3><p class="muted">Les lettres et les courriels commandés apparaissent ici, avant tout envoi.</p></article>`;
-  return `<h2 class="section-title">Sur le bureau</h2>${papers.map((task) => `<article class="card"><div class="chips">${chip(`l${task.level}`, levelLabel[task.level])}${chip(task.status, statusLabel[task.status])}</div><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.summary)}</p>${artifactHtml(task)}</article>`).join("")}`;
+  const papers = state.tasks.filter((task) => task.origin === "command");
+  if (!papers.length) return `<article class="card"><h3>Vos commandes</h3><p class="muted">Chaque ordre passé ici reste affiché avec son détail.</p></article>`;
+  return `<h2 class="section-title">Vos commandes</h2>${papers.map((task) => `<article class="card"><div class="chips">${chip(`l${task.level}`, levelLabel[task.level])}${chip(task.status, statusLabel[task.status])}</div><h3>${escapeHtml(task.title)}</h3><p class="muted">${escapeHtml(when(task.createdAt))}</p><p>${escapeHtml(task.summary)}</p>${artifactHtml(task)}<button class="ghost" data-task="${task.id}">Ouvrir le dossier</button></article>`).join("")}`;
 }
 
 function listHtml(tasks) {

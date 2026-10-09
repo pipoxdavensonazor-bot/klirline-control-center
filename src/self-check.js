@@ -135,7 +135,10 @@ check(report.customers.some((item) => item.includes("Café Rivière")), "Le rapp
 
 const ordered = issueCommand(state, "ceo", "trouver 10 prospects");
 check(ordered.ownerId === "prospecting", "Un ordre de prospects va au prospecteur");
-check(ordered.artifact.items.some((line) => line.includes("Construction ABC")), "Le prospecteur cite les fiches connues");
+check(ordered.artifact.kind === "prospect-search" && ordered.artifact.local.length === 5, "Le prospecteur remet les cinq fiches connues");
+check(ordered.artifact.missing === 10 && ordered.artifact.live.length === 0, "Les fiches réelles manquantes ne sont pas inventées");
+const abcOrder = ordered.artifact.local.find((item) => item.company === "Construction ABC");
+check(abcOrder?.contact === "Marc Béland" && abcOrder.need && abcOrder.email && abcOrder.reasons.length, "La fiche commandée contient le contact, le besoin et les raisons");
 check(state.audit[0].actorId === "chief-of-staff" && state.audit[0].action === "assign", "Le chef de cabinet transmet l'ordre");
 check(state.audit[1].actorId === "ceo" && state.audit[1].action === "command", "Le CEO passe la commande");
 try {
