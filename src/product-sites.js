@@ -1,14 +1,31 @@
+export const ACCESS_VALUES = new Set(["public-login", "cf-access", "cf-challenge", "none"]);
+
 export const PRODUCT_SITES = [
-  { id: "klirprospect", url: "https://klirprospect.klirline.ca" },
-  { id: "klirlead", url: "https://scintillating-croissant-147cda.netlify.app" },
-  { id: "klirline-os", url: "https://klirline.ca" },
-  { id: "klirbuild", url: "https://klirline.app", healthUrl: "https://klirline.app/api/health" },
-  { id: "klirpay", url: "https://pay.klirline.ca", note: "Bac à sable" },
-  { id: "klirmarket", url: "https://klirline.com", note: "Vitrine publique" },
-  { id: "klirsecure", url: "https://secure.klirline.ca" },
-  { id: "centia", url: "https://centia.app" },
-  { id: "klir-ia", name: "Klir IA", url: "https://klirline.io", skillsUrl: "https://klirline.io/api/skills", note: "Assistant marketing" },
+  { id: "klirprospect", url: "https://klirprospect.klirline.ca", adminUrl: null, access: "cf-challenge" },
+  { id: "klirlead", url: "https://scintillating-croissant-147cda.netlify.app", adminUrl: null, access: "none" },
+  { id: "klirline-os", url: "https://klirline.ca", adminUrl: null, access: "cf-challenge" },
+  { id: "klirbuild", url: "https://klirline.app", healthUrl: "https://klirline.app/api/health", adminUrl: "https://klirline.app/login", access: "public-login" },
+  { id: "klirpay", url: "https://pay.klirline.ca", note: "Bac à sable", adminUrl: "https://pay.klirline.ca/login", access: "public-login" },
+  { id: "klirmarket", url: "https://klirline.com", note: "Vitrine publique", adminUrl: null, access: "none" },
+  { id: "klirsecure", url: "https://secure.klirline.ca", adminUrl: null, access: "cf-challenge" },
+  { id: "centia", url: "https://centia.app", adminUrl: null, access: "none" },
+  { id: "klir-ia", name: "Klir IA", url: "https://klirline.io", skillsUrl: "https://klirline.io/api/skills", note: "Assistant marketing", adminUrl: null, access: "none" },
+  { id: "black-wall-news", name: "Black Wall News", url: "https://www.blackwallnews.com", adminUrl: "https://www.blackwallnews.com/admin", access: "public-login" },
 ];
+
+export function productSiteFields(site) {
+  const access = site.access;
+  if (!ACCESS_VALUES.has(access)) throw new Error(`Mode d'accès inconnu pour ${site.id || "un site"}`);
+  const adminUrl = site.adminUrl ?? null;
+  if (adminUrl !== null && (typeof adminUrl !== "string" || !adminUrl.startsWith("https://"))) {
+    throw new Error(`adminUrl invalide pour ${site.id}`);
+  }
+  if (access === "public-login" && !adminUrl) throw new Error(`${site.id} : public-login sans adminUrl`);
+  if (access !== "public-login" && adminUrl) throw new Error(`${site.id} : un lien admin exige public-login`);
+  return { adminUrl, access };
+}
+
+for (const site of PRODUCT_SITES) productSiteFields(site);
 
 const CACHE_MS = 60_000;
 let cache = { at: 0, body: null };
@@ -69,12 +86,28 @@ async function probeSkills(url) {
   }
 }
 
+function probedSite(site, checkedAt, extra) {
+  return {
+    id: site.id,
+    name: site.name || "",
+    url: site.url || null,
+    status: extra.status,
+    httpStatus: extra.httpStatus,
+    title: extra.title || "",
+    note: site.note || "",
+    health: extra.health ?? null,
+    skills: extra.skills ?? null,
+    ...productSiteFields(site),
+    checkedAt,
+  };
+}
+
 async function probeOne(site, checkedAt) {
   if (!site.url) {
-    return { id: site.id, name: site.name || "", url: null, status: "absent", httpStatus: null, title: "", note: site.note || "", health: null, skills: null, checkedAt };
+    return probedSite(site, checkedAt, { status: "absent", httpStatus: null });
   }
   if (site.private) {
-    return { id: site.id, name: site.name || "", url: site.url, status: "private", httpStatus: null, title: "", note: site.note || "", health: null, skills: null, checkedAt };
+    return probedSite(site, checkedAt, { status: "private", httpStatus: null });
   }
   try {
     const response = await fetch(site.url, {
@@ -87,20 +120,15 @@ async function probeOne(site, checkedAt) {
     const title = decodeTitle(html.match(/<title>([^<]*)<\/title>/i)?.[1] || "");
     const health = site.healthUrl ? await probeHealth(site.healthUrl) : null;
     const skills = site.skillsUrl ? await probeSkills(site.skillsUrl) : null;
-    return {
-      id: site.id,
-      name: site.name || "",
-      url: site.url,
+    return probedSite(site, checkedAt, {
       status: response.ok ? "online" : "unexpected",
       httpStatus: response.status,
       title,
-      note: site.note || "",
       health,
       skills,
-      checkedAt,
-    };
+    });
   } catch {
-    return { id: site.id, name: site.name || "", url: site.url, status: "unreachable", httpStatus: null, title: "", note: site.note || "", health: null, skills: null, checkedAt };
+    return probedSite(site, checkedAt, { status: "unreachable", httpStatus: null });
   }
 }
 

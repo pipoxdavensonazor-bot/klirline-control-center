@@ -242,7 +242,7 @@ function when(value) {
 function scopeHtml() {
   return `<div class="banner">Démonstration publique. Les entreprises, les montants et les états de plateformes sont un jeu. Aucun courriel, appel, paiement ou publication ne part d'ici.</div>
   <div class="scope-grid">
-    <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Philippe Azor passe une commande. Le chef de cabinet la transmet au poste.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li><li>La santé de KlirBuild est lue sur sa route réelle.</li><li>Le catalogue public de Klir IA est lu sur klirline.io.</li></ul></article>
+    <article class="card"><h3>Ce qui fonctionne</h3><ul><li>Chaque poste prépare un dossier à partir de ses compétences.</li><li>Philippe Azor passe une commande. Le chef de cabinet la transmet au poste.</li><li>Le supérieur recommande ou approuve. Philippe Azor ne signe qu'ensuite.</li><li>La sécurité peut geler un dossier. Un appel sans base enregistrée reste bloqué.</li><li>La page d'accueil de chaque site connu est vérifiée en direct.</li><li>La santé de KlirBuild est lue sur sa route réelle.</li><li>Le catalogue public de Klir IA est lu sur klirline.io.</li><li>Le CEO voit le hub des panneaux admin déjà connus.</li></ul></article>
     <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>${state.accessMode === "cloudflare-access" ? "Les chiffres restent un jeu, même quand le rôle vient de Cloudflare Access." : "L'identité choisie dans le menu. Ce n'est pas une connexion. Le serveur local est en mode démonstration."}</li></ul></article>
     <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>${prospectSourceLine()}</li></ul></article>
   </div>
@@ -362,6 +362,50 @@ function sitesSummaryHtml() {
   return `<p>${online} pages joignables, ${absent} sans adresse${consoles ? `, ${consoles} console privée` : ""}. Une page qui répond n'est pas la santé de l'application.</p>${rows}`;
 }
 
+function httpsUrl(value) {
+  if (typeof value !== "string" || !value.startsWith("https://")) return "";
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function adminAccessChip(access) {
+  if (access === "cf-access") return chip("pending_supervisor", "Protégé · Cloudflare Access");
+  if (access === "cf-challenge") return chip("pending_supervisor", "Protégé · défi Cloudflare");
+  if (access === "public-login") return chip("done", "Connexion publique");
+  return chip("", "Pas d'admin");
+}
+
+function adminAccessText(access) {
+  if (access === "cf-access") return "Derrière Cloudflare Access. Pas de lien externe.";
+  if (access === "cf-challenge") return "Page publique derrière un défi Cloudflare. Panneau non retenu.";
+  if (access === "public-login") return "Panneau de connexion déjà connu.";
+  return "Aucun panneau web retenu.";
+}
+
+function adminHubHtml() {
+  if (!state.adminHub) {
+    return `<h2 class="section-title">Admin produits</h2><article class="card"><p>Réservé au CEO.</p></article>`;
+  }
+  if (!liveSites.length) {
+    return `<h2 class="section-title">Admin produits</h2><article class="card"><p class="muted">Vérification des adresses en cours.</p></article>`;
+  }
+  const cards = liveSites.map((site) => {
+    const access = site.access || "none";
+    const admin = access === "public-login" ? httpsUrl(site.adminUrl) : "";
+    const link = admin
+      ? `<div class="actions"><a class="admin-link" href="${escapeHtml(admin)}" target="_blank" rel="noopener noreferrer">Ouvrir l'admin</a></div>`
+      : "";
+    const note = site.note ? `<p class="muted">${escapeHtml(site.note)}</p>` : "";
+    return `<article class="card"><div class="chips">${siteChip(site)}${adminAccessChip(access)}</div><h3>${escapeHtml(siteName(site))}</h3><p>${escapeHtml(adminAccessText(access))}</p>${note}${link}</article>`;
+  }).join("");
+  const here = `<article class="card"><div class="chips">${chip("pending_supervisor", "Ce poste")}${adminAccessChip("cf-access")}</div><h3>Klirline Office</h3><p>Ce centre, déjà ouvert dans ce navigateur. Pas de lien externe.</p></article>`;
+  return `<h2 class="section-title">Admin produits</h2><p class="muted">Panneaux des logiciels. Le bouton n'apparaît que lorsqu'une adresse d'admin est retenue. Black Wall News est sondé avec les sites ; il ne fait pas partie du jeu des huit plateformes.</p><div class="scope-grid">${cards}${here}</div>`;
+}
+
 function sitesHtml() {
   if (!liveSites.length) return `<article class="card"><h3>Sites réels</h3><p class="muted">Vérification des adresses en cours.</p></article>`;
   const checked = liveSites.find((site) => site.checkedAt)?.checkedAt;
@@ -383,7 +427,7 @@ function platformsHtml() {
     const write = current.writePlatforms.includes(platform.id) ? "Écriture prévue" : "Lecture seule";
     return `<tr><td>${escapeHtml(name.name)}</td><td>${escapeHtml(name.domain)}</td><td>${escapeHtml(platformStatusLabel[platform.status] || platform.status)}</td><td>${write}</td><td>${escapeHtml(platform.note)}</td></tr>`;
   }).join("");
-  return `${sitesHtml()}<div class="banner">Le tableau suivant reste un jeu de démonstration, relu à ${escapeHtml(when(state.generatedAt))}. L'écriture réelle reste fermée.</div><article class="card"><h3>Un seul accès</h3><p>${escapeHtml(current.name)} voit les huit plateformes dans ce centre. Écriture réelle : aucune. Périmètre prévu : ${current.writePlatforms.length ? escapeHtml(current.writePlatforms.map((id) => state.platformCatalog.find((item) => item.id === id)?.name || id).join(", ")) : "aucun"}.</p><div class="table-wrap"><table><thead><tr><th>Plateforme</th><th>Domaine</th><th>État simulé</th><th>Droit</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
+  return `${sitesHtml()}${adminHubHtml()}<div class="banner">Le tableau suivant reste un jeu de démonstration, relu à ${escapeHtml(when(state.generatedAt))}. L'écriture réelle reste fermée.</div><article class="card"><h3>Un seul accès</h3><p>${escapeHtml(current.name)} voit les huit plateformes dans ce centre. Écriture réelle : aucune. Périmètre prévu : ${current.writePlatforms.length ? escapeHtml(current.writePlatforms.map((id) => state.platformCatalog.find((item) => item.id === id)?.name || id).join(", ")) : "aucun"}.</p><div class="table-wrap"><table><thead><tr><th>Plateforme</th><th>Domaine</th><th>État simulé</th><th>Droit</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
 }
 
 function peopleHtml() {

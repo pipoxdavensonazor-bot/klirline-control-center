@@ -1,6 +1,6 @@
 import { actionsFor, briefing } from "./engine.js";
 import { DEPARTMENTS, agents, skillDocument } from "./org/index.js";
-import { COMPANY, PLATFORMS } from "./policy.js";
+import { COMPANY, PLATFORMS, canViewAdminHub } from "./policy.js";
 
 export function present(state, actorId, playbookList, accessMode = "demonstration") {
   return {
@@ -16,6 +16,7 @@ export function present(state, actorId, playbookList, accessMode = "demonstratio
     })),
     platformCatalog: PLATFORMS,
     platforms: state.platforms,
+    adminHub: canViewAdminHub(actorId),
     tasks: state.tasks.map((task) => ({ ...task, actions: actionsFor(actorId, task) })),
     briefing: briefing(state),
     audit: state.audit.slice(0, 50),

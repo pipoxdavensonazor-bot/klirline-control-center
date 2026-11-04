@@ -70,7 +70,8 @@ Chaque route `/api/*` compte dans une fenêtre de 60 secondes et de 60 requêtes
 - Une action « consignée » est une simulation. Aucun courriel, appel, paiement ou publication ne part.
 - Les revenus, les dépenses, les factures ouvertes et les montants de propositions sont des colonnes distinctes d'un jeu. Aucune probabilité n'est inventée. Une proposition n'est pas un revenu.
 - La charge des tâches compte les dossiers ouverts et gelés. Elle ne dit pas si un agent ou un serveur est disponible.
-- « Page joignable » veut dire que la page d'accueil a répondu. Seuls KlirBuild (`/api/health`) et Klir IA (`/api/skills`, nombre seulement) ont une lecture plus précise.
+- « Page joignable » veut dire que la page d'accueil a répondu. Seuls KlirBuild (`/api/health`) et Klir IA (`/api/skills`, nombre seulement) ont une lecture plus précise. Black Wall News est sondé comme les autres sites.
+- L'écran Plateformes contient un hub Admin produits, réservé au CEO. Trois boutons : KlirBuild, KlirPay, Black Wall News. Les autres cartes disent « Pas d'admin » ou « Protégé », sans lien. Le champ `access` (`public-login`, `cf-access`, `cf-challenge`, `none`) prépare l'affichage. Aucune application Access supplémentaire n'est créée ici.
 - Klirline OS est lu sur https://klirline.ca, page d'accueil seulement. KlirMarket est lu sur https://klirline.com, page d'accueil seulement.
 - Le compteur de requêtes vit dans l'objet `api-rate`. Il ne suit pas un changement de rôle ou d'organisation. Une autre adresse de connexion a sa propre fenêtre.
 

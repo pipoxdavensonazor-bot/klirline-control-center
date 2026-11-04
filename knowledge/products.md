@@ -26,5 +26,19 @@ Sert à consigner un périmètre, une date et des constats. Pas de constat sans 
 ## Centia
 Ligne de services de Klirline. On suit les livraisons déjà enregistrées. L'offre se complète quand le CEO la fixe.
 
+## Panneaux d'administration
+
+Adresses retenues, sans fonction nouvelle :
+
+- KlirBuild : https://klirline.app/login
+- KlirPay : https://pay.klirline.ca/login. Les chemins `/admin` et `/dashboard` répondent 500 ; ils ne sont pas des panneaux.
+- Black Wall News : https://www.blackwallnews.com/admin. Site public : https://www.blackwallnews.com.
+
+Pas de panneau web retenu : Klir IA (https://klirline.io), Centia (https://centia.app), KlirLead (déploiement Netlify actuel), KlirMarket (https://klirline.com, vitrine, pas de panneau distinct).
+
+Page publique derrière un défi Cloudflare, panneau non retenu : Klirline OS (https://klirline.ca), KlirProspect (https://klirprospect.klirline.ca), KlirSecure (https://secure.klirline.ca).
+
+Le centre https://centre.klirline.com est déjà derrière Cloudflare Access. Il n'a pas de second lien.
+
 ## Prix
 Le MVP contient un barème de travail pour préparer des dossiers. Ce n'est pas un prix public. Avant un usage réel, le CEO confirme le barème. Les marges 32 % (KlirBuild) et 71 % (Klirline OS) sont un jeu de démonstration, pas un audit.
