@@ -57,3 +57,7 @@ export function money(amount) {
 export function platformName(id) {
   return PLATFORMS.find((item) => item.id === id)?.name ?? id;
 }
+
+export function canViewAdminHub(actorId) {
+  return actorId === "ceo";
+}

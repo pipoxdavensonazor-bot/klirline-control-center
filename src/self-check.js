@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import { generateKeyPairSync, createSign } from "node:crypto";
 import { buildDay, decide, execute, issueCommand, logCall, briefing } from "./engine.js";
+import { present } from "./present.js";
 import { agents, assertOrganization, skillDocument } from "./org/index.js";
-import { THRESHOLDS } from "./policy.js";
+import { THRESHOLDS, canViewAdminHub } from "./policy.js";
+import { ACCESS_VALUES, PRODUCT_SITES, productSiteFields } from "./product-sites.js";
 import { activeProspects, seedWorld } from "./seed.js";
 import { dataPath } from "./store.js";
 import { accessSettings, bindIdentity, orgObjectName, verifyAccessJwt } from "./access.js";
@@ -237,6 +239,31 @@ check(liveFeed.prospects[0].company === "Atelier Nord" && liveFeed.prospects[0].
 check(!Object.hasOwn(liveFeed.prospects[0], "public_email") && !JSON.stringify(liveFeed).includes("@"), "La lecture retire le courriel");
 check(readProspectFeed({ prospects: [] }).status === "empty", "Une liste vide reste vide");
 check(readProspectFeed(null).status === "invalid", "Une réponse illisible est refusée");
+
+check(PRODUCT_SITES.length === 10, "Dix sites produits, Black Wall News compris");
+check(new Set(PRODUCT_SITES.map((site) => site.id)).size === PRODUCT_SITES.length, "Les identifiants de sites sont uniques");
+const sitesById = Object.fromEntries(PRODUCT_SITES.map((site) => [site.id, site]));
+for (const site of PRODUCT_SITES) {
+  const fields = productSiteFields(site);
+  check(ACCESS_VALUES.has(fields.access), `${site.id} : mode d'accès hors liste`);
+  check(Object.hasOwn(site, "adminUrl") && Object.hasOwn(site, "access"), `${site.id} sans adminUrl ou access`);
+}
+check(sitesById.klirbuild.adminUrl === "https://klirline.app/login" && sitesById.klirbuild.healthUrl === "https://klirline.app/api/health" && sitesById.klirbuild.access === "public-login", "KlirBuild garde sa santé et son login");
+check(sitesById.klirpay.adminUrl === "https://pay.klirline.ca/login" && sitesById.klirpay.access === "public-login", "KlirPay pointe vers /login");
+check(sitesById["black-wall-news"].name === "Black Wall News" && sitesById["black-wall-news"].url === "https://www.blackwallnews.com" && sitesById["black-wall-news"].adminUrl === "https://www.blackwallnews.com/admin" && sitesById["black-wall-news"].access === "public-login", "Black Wall News a son site et son admin");
+check(sitesById["klir-ia"].skillsUrl === "https://klirline.io/api/skills" && sitesById["klir-ia"].adminUrl === null && sitesById["klir-ia"].access === "none", "Klir IA garde son catalogue et n'a pas d'admin");
+for (const id of ["centia", "klirlead", "klirmarket"]) {
+  check(sitesById[id].adminUrl === null && sitesById[id].access === "none", `${id} sans admin`);
+}
+check(sitesById.klirlead.url === "https://scintillating-croissant-147cda.netlify.app", "KlirLead garde l'adresse Netlify");
+for (const id of ["klirline-os", "klirprospect", "klirsecure"]) {
+  check(sitesById[id].adminUrl === null && sitesById[id].access === "cf-challenge", `${id} est protégé par un défi, sans lien admin`);
+}
+check(canViewAdminHub("ceo"), "Le CEO voit le hub admin");
+check(!canViewAdminHub("coo") && !canViewAdminHub("pm-klirbuild") && !canViewAdminHub("chief-of-staff"), "Le hub admin n'est pas ouvert aux autres postes");
+check(present(state, "ceo", []).adminHub === true, "Le bootstrap CEO ouvre le hub admin");
+check(present(state, "coo", []).adminHub === false, "Le bootstrap des autres postes ferme le hub admin");
+check(present(state, "ceo", []).platforms.length === 8, "Les huit plateformes simulées restent dans le bootstrap");
 
 if (failures.length) {
   console.error(failures.join("\n"));

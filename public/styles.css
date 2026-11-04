@@ -69,7 +69,7 @@ h1 { margin: 0; font-size: 40px; line-height: 1; }
 .row-line { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
 .detail { padding: 18px; position: sticky; top: 16px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.actions button, .ghost { border-radius: 999px; padding: 8px 14px; border: 1px solid var(--copper); background: var(--copper); color: white; }
+.actions button, .actions a.admin-link, .ghost { border-radius: 999px; padding: 8px 14px; border: 1px solid var(--copper); background: var(--copper); color: white; text-decoration: none; }
 .ghost { background: transparent; color: var(--copper); }
 .danger { background: var(--danger); border-color: var(--danger); }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
