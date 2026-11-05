@@ -252,12 +252,13 @@ check(sitesById.klirbuild.adminUrl === "https://klirline.app/login" && sitesById
 check(sitesById.klirpay.adminUrl === "https://pay.klirline.ca/login" && sitesById.klirpay.access === "public-login", "KlirPay pointe vers /login");
 check(sitesById["black-wall-news"].name === "Black Wall News" && sitesById["black-wall-news"].url === "https://www.blackwallnews.com" && sitesById["black-wall-news"].adminUrl === "https://www.blackwallnews.com/admin" && sitesById["black-wall-news"].access === "public-login", "Black Wall News a son site et son admin");
 check(sitesById.noria.name === "NORIA" && sitesById.noria.url === "https://noriaedu.com" && sitesById.noria.adminUrl === "https://noriaedu.com/app#admin" && sitesById.noria.access === "public-login" && new URL(sitesById.noria.adminUrl).hash === "#admin", "NORIA garde le lien admin avec le fragment #admin");
+check(sitesById.klirprospect.url === "https://klirprospect.klirline.ca" && sitesById.klirprospect.adminUrl === "https://klirprospect.klirline.ca/#/login" && sitesById.klirprospect.access === "public-login" && new URL(sitesById.klirprospect.adminUrl).hash === "#/login", "KlirProspect pointe vers la connexion publique #/login");
 check(sitesById["klir-ia"].skillsUrl === "https://klirline.io/api/skills" && sitesById["klir-ia"].adminUrl === null && sitesById["klir-ia"].access === "none", "Klir IA garde son catalogue et n'a pas d'admin");
 for (const id of ["centia", "klirlead", "klirmarket"]) {
   check(sitesById[id].adminUrl === null && sitesById[id].access === "none", `${id} sans admin`);
 }
 check(sitesById.klirlead.url === "https://scintillating-croissant-147cda.netlify.app", "KlirLead garde l'adresse Netlify");
-for (const id of ["klirline-os", "klirprospect", "klirsecure"]) {
+for (const id of ["klirline-os", "klirsecure"]) {
   check(sitesById[id].adminUrl === null && sitesById[id].access === "cf-challenge", `${id} est protégé par un défi, sans lien admin`);
 }
 check(canViewAdminHub("ceo"), "Le CEO voit le hub admin");
