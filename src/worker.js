@@ -185,9 +185,9 @@ export class CompanyState extends DurableObject {
     return mission;
   }
 
-  hqMissionOperate(id, operation, input, actorId) {
+  hqMissionOperate(id, operation, input, actorId, options = {}) {
     try {
-      const result = runMissionOperation(this.hqMissionGet(id), this.hqList({}), operation, input || {}, { actorId });
+      const result = runMissionOperation(this.hqMissionGet(id), this.hqList({}), operation, input || {}, { ...options, actorId });
       if (result.insertCommand) this.hqInsert(result.command);
       else if (result.replaceCommand && result.command) this.hqReplace(result.command);
       if (result.changed && result.mission) this.hqMissionReplace(result.mission);
@@ -261,6 +261,30 @@ async function playbookCatalog(request, env) {
   return response.json();
 }
 
+export function hqDurableStore(company) {
+  return {
+    list: (filter) => company.hqList(filter),
+    get: (id) => company.hqGet(id),
+    insert: (command) => company.hqInsert(command),
+    replace: (command) => company.hqReplace(command),
+    claim: (id, options) => company.hqClaim(id, options),
+    interrupt: (id, options) => company.hqInterrupt(id, options),
+    complete: (id, input, options) => company.hqComplete(id, input, options),
+    missionList: () => company.hqMissionList(),
+    missionGet: (id) => company.hqMissionGet(id),
+    missionInsert: (mission) => company.hqMissionInsert(mission),
+    missionOperate: async (id, operation, input, actorId, options) => {
+      const stored = await company.hqMissionOperate(id, operation, input, actorId, options || {});
+      if (!stored?.ok) {
+        const error = new Error(stored?.error || "Erreur");
+        error.status = stored?.status || 500;
+        throw error;
+      }
+      return stored.result;
+    },
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -301,27 +325,7 @@ export default {
       if (url.pathname.startsWith("/api/hq/")) {
         const payload = request.method === "GET" ? {} : await readJson(request);
         const result = await dispatchHq(
-          {
-            list: (filter) => company.hqList(filter),
-            get: (id) => company.hqGet(id),
-            insert: (command) => company.hqInsert(command),
-            replace: (command) => company.hqReplace(command),
-            claim: (id, options) => company.hqClaim(id, options),
-            interrupt: (id, options) => company.hqInterrupt(id, options),
-            complete: (id, input, options) => company.hqComplete(id, input, options),
-            missionList: () => company.hqMissionList(),
-            missionGet: (id) => company.hqMissionGet(id),
-            missionInsert: (mission) => company.hqMissionInsert(mission),
-            missionOperate: async (id, operation, input, actorId) => {
-              const stored = await company.hqMissionOperate(id, operation, input, actorId);
-              if (!stored?.ok) {
-                const error = new Error(stored?.error || "Erreur");
-                error.status = stored?.status || 500;
-                throw error;
-              }
-              return stored.result;
-            },
-          },
+          hqDurableStore(company),
           {
             method: request.method,
             pathname: url.pathname,

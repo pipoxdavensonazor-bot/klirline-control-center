@@ -28,7 +28,9 @@ function fail(status, message) {
 }
 
 function clock(options = {}) {
-  return options.now instanceof Date ? options.now : new Date();
+  const now = options.now instanceof Date ? options.now : options.now ? new Date(options.now) : new Date();
+  if (Number.isNaN(now.getTime())) fail(400, "Horloge illisible.");
+  return now;
 }
 
 function rejectElevation(input) {
@@ -416,7 +418,7 @@ export function prepareExternalAction(mission, input, options = {}) {
 export function runMissionOperation(mission, commands, operation, input, options = {}) {
   if (operation === "transition") return { mission: transitionMission(mission, input, options), changed: true, httpStatus: 200 };
   if (operation === "start") return { ...startMissionTask(mission, commands, input?.taskId, { ...options, costCents: input?.costCents, input }), httpStatus: 200 };
-  if (operation === "deliver") return { ...addDeliverable(mission, commands, input, options), changed: true, replaceCommand: true, httpStatus: 200 };
+  if (operation === "deliver") return { httpStatus: 200, changed: true, replaceCommand: true, ...addDeliverable(mission, commands, input, options) };
   if (operation === "decide") return { mission: decideMission(mission, input, options), changed: true, httpStatus: 200 };
   if (operation === "act") return { ...prepareExternalAction(mission, input, options), changed: true };
   fail(400, "Opération inconnue.");

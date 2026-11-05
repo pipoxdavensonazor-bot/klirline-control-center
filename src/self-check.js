@@ -225,6 +225,20 @@ try {
   check(error.status === 401, "Une audience différente est refusée");
 }
 try {
+  await verifyAccessJwt(sign({ ...claims, iss: "https://autre.cloudflareaccess.com" }), { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
+  check(false, "Un émetteur différent est refusé");
+} catch (error) {
+  check(error.status === 401, "Un émetteur différent est refusé");
+}
+try {
+  const pieces = sign(claims).split(".");
+  pieces[2] = pieces[2].slice(0, -4) + (pieces[2].endsWith("aaaa") ? "bbbb" : "aaaa");
+  await verifyAccessJwt(pieces.join("."), { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
+  check(false, "Une signature fausse est refusée");
+} catch (error) {
+  check(error.status === 401, "Une signature fausse est refusée");
+}
+try {
   await verifyAccessJwt(sign({ ...claims, exp: nowMs / 1000 - 10 }), { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
   check(false, "Un jeton expiré est refusé");
 } catch (error) {
@@ -259,6 +273,12 @@ check(machineIdentity.human === false && machineIdentity.scopes.join() === "work
 check(machineIdentity.orgId === "klirline" && machineIdentity.email === "machine:executor-klirprospect", "La machine reste dans l'organisation déclarée");
 const humanIdentity = identifyAccess(accepted, machineEnv).identity;
 check(humanIdentity.human === true && humanIdentity.scopes.includes("review") && humanIdentity.actorId === "ceo", "Le SSO humain garde ses permissions applicatives");
+const mixed = await verifyAccessJwt(
+  sign({ ...claims, type: "app", sub: "", common_name: serviceName }),
+  { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs },
+);
+const mixedIdentity = identifyAccess(mixed, machineEnv).identity;
+check(mixedIdentity.human === true && mixedIdentity.email === "ada@example.com" && mixedIdentity.scopes.includes("review"), "Un courriel Access prime sur le nom de service");
 check(identifyAccess(serviceClaims, accessEnv).status === 403, "Un jeton de service sans fiche machine est refusé");
 try {
   await verifyAccessJwt(sign({ type: "app", sub: "", common_name: "pas-un-client", aud: "aud-essai", iss: "https://equipe.cloudflareaccess.com", exp: nowMs / 1000 + 60 }), { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
