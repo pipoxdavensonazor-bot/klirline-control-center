@@ -8,6 +8,8 @@ Office Klirline interroge le centre, choisit l'agent Grok indiqué par `grokAgen
 
 Sur `https://centre.klirline.com`, ces routes exigent le même jeton Cloudflare Access que les autres routes du dossier. Sans `Cf-Access-Jwt-Assertion`, la réponse est `401`. Le cookie seul ne suffit pas au Worker. Ne pas écrire le jeton dans le dépôt.
 
+Le poll headless envoie `CF-Access-Client-Id` et `CF-Access-Client-Secret` à Access. Access accepte le jeton de service et transmet `Cf-Access-Jwt-Assertion`. Ce JWT n'a pas de courriel : `common_name` est le Client ID (suffixe `.access`). Le Worker l'accepte si ce Client ID est dans `ACCESS_SERVICE_CLIENT_IDS`, puis ouvre le bureau comme la machine `service:hq-poll`. Cette machine ne passe pas sur les autres routes `/api`. Un Client ID hors liste reste `401`. Ne pas écrire le Client Secret dans le dépôt, ni dans la variable : seul le Client ID public y entre. Le Client ID du poll commence par `9e6fc590` et finit par `.access`.
+
 En local, `node src/server.js` reste une démonstration : le bureau répond sans Access.
 
 ## Lire la file

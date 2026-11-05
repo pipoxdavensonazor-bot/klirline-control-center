@@ -46,6 +46,19 @@ export function parseAccessAccounts(raw) {
   return { accounts, error: null };
 }
 
+const SERVICE_CLIENT_ID = /^[0-9a-f]{32}\.access$/;
+
+export const HQ_SERVICE_ACTOR = "service:hq-poll";
+
+export function parseServiceClientIds(raw) {
+  const ids = new Set();
+  for (const part of String(raw ?? "").split(",")) {
+    const id = part.trim().toLowerCase();
+    if (SERVICE_CLIENT_ID.test(id)) ids.add(id);
+  }
+  return [...ids];
+}
+
 export function accessSettings(env = {}) {
   const teamDomain = String(env.ACCESS_TEAM_DOMAIN || "").trim().toLowerCase().replace(/\.$/, "");
   const aud = String(env.ACCESS_AUD || "").trim();
@@ -58,7 +71,14 @@ export function accessSettings(env = {}) {
     if (!domainOk || !audOk) error = "ACCESS_TEAM_DOMAIN ou ACCESS_AUD manquant";
     else error = parsed.error;
   }
-  return { teamDomain, aud, accounts: parsed.accounts, ready, error };
+  return {
+    teamDomain,
+    aud,
+    accounts: parsed.accounts,
+    serviceClientIds: parseServiceClientIds(env.ACCESS_SERVICE_CLIENT_IDS),
+    ready,
+    error,
+  };
 }
 
 export function bindIdentity(account) {
@@ -66,7 +86,41 @@ export function bindIdentity(account) {
     actorId: account.role,
     orgId: orgObjectName(account.orgId),
     email: account.email,
+    service: false,
   };
+}
+
+export function bindServiceIdentity(orgId) {
+  return {
+    actorId: HQ_SERVICE_ACTOR,
+    orgId: orgObjectName(orgId),
+    email: HQ_SERVICE_ACTOR,
+    service: true,
+  };
+}
+
+export function identityFromAccess(verified, accounts) {
+  if (verified?.kind === "service") {
+    const orgIds = [...new Set((accounts || []).map((item) => item.orgId))];
+    if (orgIds.length !== 1) rejected();
+    return bindServiceIdentity(orgIds[0]);
+  }
+  const account = (accounts || []).find((item) => item.email === verified?.email);
+  if (!account) {
+    const error = new Error("Ce compte n'est pas autorisé pour ce centre.");
+    error.status = 403;
+    throw error;
+  }
+  return bindIdentity(account);
+}
+
+export function assertServiceRoute(identity, pathname) {
+  if (!identity?.service) return;
+  const path = String(pathname || "");
+  if (path.startsWith("/api/hq/") && !path.includes("..") && !path.includes("\\")) return;
+  const error = new Error("Ce jeton de service n'ouvre que le bureau.");
+  error.status = 403;
+  throw error;
 }
 
 function bytesOf(part) {
@@ -88,7 +142,12 @@ function rejected(message = "Jeton refusé.") {
   throw error;
 }
 
-export async function verifyAccessJwt(token, { teamDomain, aud, keys, nowMs }) {
+function serviceAllowlist(serviceClientIds) {
+  const raw = Array.isArray(serviceClientIds) ? serviceClientIds.join(",") : serviceClientIds;
+  return new Set(parseServiceClientIds(raw));
+}
+
+export async function verifyAccessJwt(token, { teamDomain, aud, keys, nowMs, serviceClientIds }) {
   const parts = String(token || "").split(".");
   if (parts.length !== 3 || parts.some((part) => !part)) rejected();
   let header;
@@ -121,6 +180,18 @@ export async function verifyAccessJwt(token, { teamDomain, aud, keys, nowMs }) {
   if (!audiences.includes(aud)) rejected();
   if (typeof claims.exp !== "number" || claims.exp * 1000 <= nowMs) rejected();
   if (typeof claims.nbf === "number" && claims.nbf * 1000 > nowMs) rejected();
-  if (typeof claims.email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(claims.email)) rejected();
-  return { email: claims.email.toLowerCase() };
+  if (typeof claims.email === "string" && claims.email !== "") {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(claims.email)) rejected();
+    return { kind: "user", email: claims.email.toLowerCase() };
+  }
+  const clientId = typeof claims.common_name === "string" ? claims.common_name.trim().toLowerCase() : "";
+  if (
+    claims.type === "app" &&
+    claims.sub === "" &&
+    SERVICE_CLIENT_ID.test(clientId) &&
+    serviceAllowlist(serviceClientIds).has(clientId)
+  ) {
+    return { kind: "service", clientId };
+  }
+  rejected();
 }
