@@ -1,6 +1,7 @@
 node_modules/
 data/state.json
 data/hq-commands.json
+data/hq-missions.json
 .assets/
 .tools/
 .wrangler/

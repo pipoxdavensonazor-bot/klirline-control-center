@@ -450,6 +450,116 @@ const bureauDoc = fs.readFileSync(dataPath("knowledge", "hq-bureau.md"), "utf8")
 const bureauUi = fs.readFileSync(dataPath("public", "app.js"), "utf8");
 check(bureauDoc.includes("15 minutes") && bureauDoc.includes("preuve") && bureauDoc.includes("claimToken"), "Le playbook décrit le bail, le claim et la preuve");
 check(bureauUi.includes("<strong>Preuve.</strong>") && bureauUi.includes('awaiting_validation: "À valider"') && bureauUi.includes('failed: "Échoué"'), "La colonne Fait peut afficher la preuve et les statuts ajoutés");
+const office = memoryHqStore();
+const missionCall = (method, pathname, body, actor = "sales-director", at = new Date("2026-11-05T18:00:00.000Z")) => dispatchHq(office, {
+  method,
+  pathname,
+  searchParams: new URLSearchParams(),
+  body,
+  actorId: actor,
+  now: at,
+  leaseMs: 1000,
+});
+const hidden = await missionCall("GET", "/api/hq/clients", {}, "accounting");
+const seen = await missionCall("GET", "/api/hq/clients", {}, "ceo");
+check(hidden.body.clients.length === 0, "Un rôle hors liste ne lit pas les dossiers");
+check(seen.body.clients.length === 2 && !(await missionCall("GET", "/api/hq/clients/cli-reserve", {}, "accounting")).body.client, "Le dossier réservé reste invisible");
+try {
+  await missionCall("POST", "/api/hq/missions", { template: "klirprospect-demos", role: "ceo" });
+  check(false, "Un champ de droit est ignoré");
+} catch (error) {
+  check(error.status === 400, "Un champ de droit est refusé");
+}
+const skillEnable = await missionCall("POST", "/api/hq/skills/klir-coordination/enable", {});
+check(skillEnable.status === 403, "Une compétence ne s'active pas elle-même");
+const opened = await missionCall("POST", "/api/hq/missions", { template: "klirprospect-demos" });
+check(opened.status === 201 && opened.body.mission.status === "qualify" && opened.body.mission.validatorId === "ceo" && opened.body.mission.outcomes.demosBooked === 0, "La campagne naît à qualifier, sans démonstration réservée");
+check(opened.body.mission.tasks.every((task) => !task.claimToken), "Le jeton de tâche ne sort pas");
+const missionId = opened.body.mission.id;
+const tasks = opened.body.mission.tasks;
+const ready = await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "ready" });
+check(ready.body.mission.status === "ready", "La campagne peut passer prêt");
+try {
+  await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[1].id}/start`, {});
+  check(false, "Une tâche dépendante démarre trop tôt");
+} catch (error) {
+  check(error.status === 409, "Une tâche dépendante démarre trop tôt");
+}
+try {
+  await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[0].id}/start`, { costCents: 1 });
+  check(false, "Une dépense au-dessus du plafond passe");
+} catch (error) {
+  check(error.status === 409, "Une dépense au-dessus du plafond est refusée");
+}
+const limitStore = memoryHqStore();
+const limitOpen = await dispatchHq(limitStore, { method: "POST", pathname: "/api/hq/missions", searchParams: new URLSearchParams(), body: { template: "klirprospect-demos" }, actorId: "sales-director", now: new Date("2026-11-05T18:00:00.000Z"), leaseMs: 1000 });
+const limitId = limitOpen.body.mission.id;
+const limitTask = limitOpen.body.mission.tasks[0].id;
+await dispatchHq(limitStore, { method: "POST", pathname: `/api/hq/missions/${limitId}/transition`, searchParams: new URLSearchParams(), body: { status: "ready" }, actorId: "sales-director", now: new Date("2026-11-05T18:00:00.000Z"), leaseMs: 1000 });
+for (let attempt = 0; attempt < 3; attempt += 1) {
+  const at = new Date(Date.parse("2026-11-05T18:00:00.000Z") + attempt * 1000);
+  const started = await dispatchHq(limitStore, { method: "POST", pathname: `/api/hq/missions/${limitId}/tasks/${limitTask}/start`, searchParams: new URLSearchParams(), body: {}, actorId: "sales-director", now: at, leaseMs: 1000 });
+  check(started.body.started === true, `Tentative ${attempt + 1} refusée`);
+}
+const stopped = await dispatchHq(limitStore, { method: "POST", pathname: `/api/hq/missions/${limitId}/tasks/${limitTask}/start`, searchParams: new URLSearchParams(), body: {}, actorId: "sales-director", now: new Date("2026-11-05T18:00:04.000Z"), leaseMs: 1000 });
+check(stopped.body.reason === "attempt_limit" && stopped.body.mission.status === "blocked", "La quatrième tentative bloque la mission");
+const firstStart = await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[0].id}/start`, {});
+const secondStart = await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[0].id}/start`, {}, "sales-director", new Date("2026-11-05T18:00:00.400Z"));
+check(firstStart.body.started === true && secondStart.body.started === false && secondStart.body.mission.tasks[0].attempts === 1, "Reprendre la même tâche ne lance pas une seconde exécution");
+const proofs = [
+  "Cadrage : cinq démonstrations à préparer, aucune à réserver.",
+  "Liste fictive : Atelier Nord, personne fictive, aucun contact.",
+  "Brouillon : invitation à une démonstration, sans envoi.",
+  "Contrôle : aucun prix inventé, aucun lien externe affirmé.",
+];
+for (let index = 0; index < tasks.length; index += 1) {
+  if (index > 0) await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[index].id}/start`, {});
+  await missionCall("POST", `/api/hq/missions/${missionId}/deliverables`, { taskId: tasks[index].id, body: proofs[index] });
+}
+const review = await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "in_review" });
+check(review.body.mission.status === "in_review" && review.body.mission.outcomes.demosBooked === 0, "Le dossier passe en validation sans compter de réservation");
+try {
+  await missionCall("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, "sales-director");
+  check(false, "L'auteur valide son dossier");
+} catch (error) {
+  check(error.status === 403, "L'auteur ne valide pas son dossier");
+}
+try {
+  await missionCall("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, "content");
+  check(false, "Un rôle standard valide le dossier");
+} catch (error) {
+  check(error.status === 403, "Un rôle standard ne valide pas le dossier");
+}
+const premature = await missionCall("POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Invitation" }, "ceo");
+check(premature.status === 403 && premature.body.error === "Approbation manquante.", "Un envoi sans approbation est refusé");
+const approved = await missionCall("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Dossier de préparation conforme." }, "ceo");
+check(approved.body.mission.approvalValid === true, "Le CEO valide le dossier préparé");
+const blockedSend = await missionCall("POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Invitation" }, "ceo");
+check(blockedSend.status === 403 && /Envoi désactivé/.test(blockedSend.body.error) && blockedSend.body.mission.drafts.every((draft) => draft.sent === false), "Même approuvé, l'envoi reste fermé");
+const corrected = await missionCall("POST", `/api/hq/missions/${missionId}/deliverables`, { taskId: tasks[3].id, body: "Contrôle révisé : toujours aucun envoi et aucun prix." }, "ceo");
+check(corrected.body.mission.approvalValid === false && corrected.body.mission.status === "rework", "Un livrable modifié invalide l'approbation");
+try {
+  await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "done", result: "Cinq démonstrations réservées." }, "ceo");
+  check(false, "La mission se clôt en contournant la validation");
+} catch (error) {
+  check(error.status === 409 || error.status === 400, "La mission ne se clôt pas sans validation valide");
+}
+await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "running" }, "ceo");
+await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "in_review" }, "ceo");
+await missionCall("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, "ceo");
+try {
+  await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "done", result: "Cinq démonstrations réservées." }, "ceo");
+  check(false, "Des démonstrations réservées sont acceptées");
+} catch (error) {
+  check(error.status === 400, "Des démonstrations non réservées ne sont pas comptées");
+}
+const closed = await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "done", result: "Dossier préparé. Aucune démonstration n'est réservée." }, "ceo");
+check(closed.body.mission.status === "done" && closed.body.mission.outcomes.demosBooked === 0 && closed.body.mission.deliverables.length === 5, "Le dossier se clôt sur la préparation, pas sur des réservations");
+const reread = await missionCall("GET", `/api/hq/missions/${missionId}`, {}, "accounting");
+check(reread.body.mission.status === "done" && reread.body.mission.client === null && reread.body.mission.deliverables.length === 5, "Le dossier relu après coup ne révèle pas le client interdit");
+const rosterNow = await missionCall("GET", "/api/hq/roster", {}, "ceo");
+check(rosterNow.body.roster.every((agent) => agent.executable === false && agent.engine === null), "Aucune carte d'agent n'est présentée comme exécutable");
+check(rosterNow.body.roster.filter((agent) => agent.division === "Trading").every((agent) => agent.operationalPath === false), "Le trading reste hors du premier parcours");
 const demoUntouched = issueCommand(state, "ceo", "trouver 10 prospects");
 check(demoUntouched.origin === "command" && demoUntouched.ownerId === "prospecting", "La commande de démonstration reste sur les 34 postes");
 

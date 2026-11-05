@@ -127,7 +127,7 @@ const server = http.createServer(async (req, res) => {
         pathname: url.pathname,
         searchParams: url.searchParams,
         body: payload,
-        actorId: payload.actorId || "ceo",
+        actorId: payload.actorId || url.searchParams.get("actor") || "ceo",
       });
       return send(res, result.status, result.body);
     }

@@ -1,3 +1,5 @@
+import { skillsForAgent } from "./skills.js";
+
 export const DIVISIONS = ["Ops", "Produits", "Média", "Trading", "Autres"];
 
 const OFFICE_COVERS = [
@@ -191,11 +193,48 @@ export function routeCommand(text) {
   return { agent: rosterAgent(match.slug), routedBy: "keyword" };
 }
 
+const OFFICE_PROFILE = {
+  "office-klirline": { officeRole: "secretariat", reportsTo: "ceo", skills: ["klir-coordination", "klir-draft-message"] },
+  "ops-klirline": { officeRole: "operations", reportsTo: "ceo", skills: ["klir-quality-claims", "klir-coordination"] },
+  "klirprospect": { officeRole: "commercial", reportsTo: "office-klirline", skills: ["klir-prospect-qualification"] },
+  "klirline-social": { officeRole: "marketing", reportsTo: "office-klirline", skills: ["klir-draft-message"] },
+  "bwn-redaction": { officeRole: "marketing", reportsTo: "office-klirline", skills: ["klir-draft-message"] },
+  "klirbuild": { officeRole: "product", reportsTo: "ops-klirline", skills: [] },
+  "klirmarket": { officeRole: "product", reportsTo: "ops-klirline", skills: [] },
+  "klirline-ai": { officeRole: "product", reportsTo: "ops-klirline", skills: [] },
+  "noria": { officeRole: "product", reportsTo: "ops-klirline", skills: [] },
+  "black-wall-news": { officeRole: "product", reportsTo: "ops-klirline", skills: [] },
+  "youtube-channel": { officeRole: "marketing", reportsTo: "office-klirline", skills: [] },
+  "ic-market": { officeRole: "trading", reportsTo: "ceo", skills: [], operationalPath: false },
+  "cmcmarkets": { officeRole: "trading", reportsTo: "ceo", skills: [], operationalPath: false },
+  "all-question": { officeRole: "secretariat", reportsTo: "office-klirline", skills: ["klir-coordination"] },
+  "sandbox-klirline": { officeRole: "quality", reportsTo: "ops-klirline", skills: ["klir-quality-claims"] },
+};
+
+const OPEN_COMMANDS = new Set(["pending", "queued", "dispatched", "running", "awaiting_validation"]);
+
+export function officeProfile(agent) {
+  const extra = OFFICE_PROFILE[agent.id] || {};
+  const trading = agent.division === "Trading";
+  return {
+    officeRole: extra.officeRole || "product",
+    reportsTo: extra.reportsTo || "office-klirline",
+    escalation: extra.reportsTo || "office-klirline",
+    skills: skillsForAgent(extra.skills || []),
+    executable: false,
+    engine: null,
+    engineNote: "Aucun moteur n'est branché. Une carte n'est pas une exécution.",
+    operationalPath: trading ? false : extra.operationalPath !== false,
+    success: "Un livrable relu, avec preuve, sans envoi externe.",
+    costCapCents: 0,
+    lease: "15 minutes",
+  };
+}
+
 export function rosterView(commands = []) {
   return HQ_ROSTER.map((agent) => {
-    const last = commands
-      .filter((command) => command.ownerSlug === agent.id)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    const owned = commands.filter((command) => command.ownerSlug === agent.id);
+    const last = owned.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     return {
       id: agent.id,
       name: agent.name,
@@ -204,7 +243,10 @@ export function rosterView(commands = []) {
       productUrl: agent.productUrl,
       grokAgentName: agent.grokAgentName,
       covers: agent.covers,
-      lastCommand: last ? { id: last.id, status: last.status, createdAt: last.createdAt } : null,
+      ...officeProfile(agent),
+      workload: owned.filter((command) => OPEN_COMMANDS.has(command.status)).length,
+      lastActivity: last?.updatedAt || last?.createdAt || null,
+      lastCommand: last ? { id: last.id, status: last.status, createdAt: last.createdAt, updatedAt: last.updatedAt || last.createdAt } : null,
     };
   });
 }

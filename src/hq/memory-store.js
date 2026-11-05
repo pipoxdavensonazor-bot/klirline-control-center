@@ -1,7 +1,21 @@
 import { applyHqPatch, claimHqCommand, matchesFilter, sortCommands } from "./commands.js";
+import { runMissionOperation } from "./missions.js";
 
-export function memoryHqStore(seed = []) {
+export function memoryHqStore(seed = [], missionSeed = []) {
   const commands = seed.map((command) => ({ ...command }));
+  const missions = missionSeed.map((mission) => ({ ...mission }));
+  function persistOperation(id, operation, input, actorId, options = {}) {
+    const index = missions.findIndex((mission) => mission.id === id);
+    const current = index < 0 ? null : missions[index];
+    const result = runMissionOperation(current, commands, operation, input, { ...options, actorId });
+    if (result.insertCommand) commands.push({ ...result.command });
+    else if (result.replaceCommand && result.command) {
+      const commandIndex = commands.findIndex((command) => command.id === result.command.id);
+      if (commandIndex >= 0) commands[commandIndex] = { ...result.command };
+    }
+    if (result.changed && index >= 0) missions[index] = { ...result.mission };
+    return result;
+  }
   return {
     async list(filter) {
       return sortCommands(commands.filter((command) => matchesFilter(command, filter)));
@@ -33,6 +47,19 @@ export function memoryHqStore(seed = []) {
       const outcome = claimHqCommand(index < 0 ? null : commands[index], input, { ...options, actorId });
       if (outcome.changed) commands[index] = { ...outcome.command };
       return { ...outcome, command: { ...outcome.command } };
+    },
+    async missionList() {
+      return missions.map((mission) => ({ ...mission, tasks: mission.tasks.map((task) => ({ ...task })) }));
+    },
+    async missionGet(id) {
+      const found = missions.find((mission) => mission.id === id);
+      return found ? JSON.parse(JSON.stringify(found)) : null;
+    },
+    async missionInsert(mission) {
+      missions.push(JSON.parse(JSON.stringify(mission)));
+    },
+    async missionOperate(id, operation, input, actorId, options = {}) {
+      return persistOperation(id, operation, input, actorId, options);
     },
   };
 }

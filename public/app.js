@@ -1,6 +1,7 @@
 const views = [
   ["scope", "Ce centre"],
   ["bureau", "Bureau"],
+  ["missions", "Missions"],
   ["report", "Rapport du jour"],
   ["queue", "À valider"],
   ["work", "Travaux"],
@@ -76,6 +77,12 @@ let hqDraft = "";
 let hqOwner = "";
 let hqPriority = "normale";
 let hqLoad = 0;
+let hqMissions = [];
+let hqClients = [];
+let hqConnections = [];
+let missionError = "";
+let missionResult = "";
+let missionSyncedAt = "";
 
 const hqStatusLabel = {
   pending: "En attente",
@@ -108,6 +115,7 @@ async function load() {
   render();
   refreshSites();
   if (view === "bureau") refreshHq({ force: true });
+  if (view === "missions") refreshMissions();
   ensureHqPoll();
 }
 
@@ -510,7 +518,10 @@ function bureauHtml() {
       ? `<p class="muted">Sans agent dédié : ${agent.covers.map((item) => escapeHtml(item.name)).join(", ")}.</p>`
       : "";
     const status = last ? chip(hqTone(last.status), hqStatusLabel[last.status] || last.status) : chip("", "Aucune commande");
-    return `<article class="card" data-hq-agent="${escapeHtml(agent.id)}"><div class="chips">${chip("", agent.division)}${status}</div><h3>${escapeHtml(agent.name)}</h3><p>${escapeHtml(agent.mission)}</p>${link}${covers}</article>`;
+    const engine = agent.executable === false ? chip("blocked", "Non exécutable") : "";
+    const aside = agent.operationalPath === false ? chip("", "Hors parcours") : "";
+    const activity = agent.lastActivity ? `<p class="muted">Dernière activité réelle : ${escapeHtml(when(agent.lastActivity))}. Charge : ${Number(agent.workload) || 0}.</p>` : `<p class="muted">Aucune activité réelle. Charge : ${Number(agent.workload) || 0}.</p>`;
+    return `<article class="card" data-hq-agent="${escapeHtml(agent.id)}"><div class="chips">${chip("", agent.division)}${status}${engine}${aside}</div><h3>${escapeHtml(agent.name)}</h3><p>${escapeHtml(agent.mission)}</p>${activity}<p class="muted">${escapeHtml(agent.engineNote || "")}</p>${link}${covers}</article>`;
   }).join("");
   const owners = [`<option value="">Répartition automatique</option>`].concat(hqRoster.map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === hqOwner ? "selected" : ""}>${escapeHtml(agent.name)} — ${escapeHtml(agent.division)}</option>`)).join("");
   const lane = (title, items, empty) => `<section class="lane"><h3>${title}</h3>${items.length ? items.map(hqCommandCard).join("") : `<p class="muted">${empty}</p>`}</section>`;
@@ -533,9 +544,51 @@ function bureauHtml() {
   <div class="scope-grid">${cards}</div>`;
 }
 
+const missionStatusLabel = {
+  qualify: "À qualifier",
+  ready: "Prêt",
+  running: "En cours",
+  blocked: "Bloqué",
+  in_review: "En validation",
+  rework: "À corriger",
+  done: "Terminé",
+  failed: "Échoué",
+  cancelled: "Annulé",
+};
+
+function missionDepsDone(mission, task) {
+  return (task.dependsOn || []).every((id) => mission.tasks.find((item) => item.id === id)?.status === "done");
+}
+
+function missionsHtml() {
+  const connectionCards = hqConnections.map((item) => `<article class="card"><h3>${escapeHtml(item.service)}</h3><p>${escapeHtml(item.status)}</p><p class="muted">${item.send ? "Envoi ouvert" : "Envoi désactivé"} · ${escapeHtml(item.owner || "")}</p></article>`).join("");
+  const clientCards = hqClients.length
+    ? hqClients.map((client) => `<article class="card"><h3>${escapeHtml(client.name)}</h3><p>${escapeHtml(client.need)}</p><p class="muted">${escapeHtml(client.product)} · ${escapeHtml(client.state)} · responsable ${escapeHtml(client.ownerId)}</p><p>${escapeHtml(client.nextAction || "")}</p></article>`).join("")
+    : `<article class="card"><p class="muted">Aucun dossier visible pour ce rôle.</p></article>`;
+  const missionCards = hqMissions.map((mission) => {
+    const tasks = (mission.tasks || []).map((task) => {
+      const open = ["ready", "running", "rework"].includes(mission.status) && task.status !== "done" && missionDepsDone(mission, task);
+      const field = open ? `<textarea data-task-body="${escapeHtml(task.id)}" placeholder="Livrable fictif, sans contact réel"></textarea><button data-task-save="${escapeHtml(mission.id)}" data-task="${escapeHtml(task.id)}">Enregistrer le livrable</button>` : "";
+      return `<article class="card"><div class="chips">${chip(task.status === "done" ? "done" : "pending_supervisor", task.status === "done" ? "Terminé" : task.status === "blocked" ? "Bloqué" : "À faire")}</div><h3>${escapeHtml(task.title)}</h3><p class="muted">${escapeHtml(task.ownerName)} · tentative ${task.attempts}/${task.maxAttempts}</p>${field}</article>`;
+    }).join("");
+    const deliverables = (mission.deliverables || []).map((item) => `<p><strong>Livrable.</strong> ${escapeHtml(item.body)}</p>`).join("");
+    const ready = mission.status === "qualify" ? `<button data-mission-status="${escapeHtml(mission.id)}" data-status="ready">Marquer prêt</button>` : "";
+    const review = mission.status === "running" && (mission.tasks || []).every((task) => task.status === "done") ? `<button data-mission-status="${escapeHtml(mission.id)}" data-status="in_review">Demander la validation</button>` : "";
+    const approve = mission.status === "in_review" ? `<button data-mission-approve="${escapeHtml(mission.id)}">Approuver le dossier</button>` : "";
+    const close = mission.status === "in_review" && mission.approvalValid ? `<textarea id="mission-result" placeholder="Résultat du dossier préparé, pas des démonstrations réservées">${escapeHtml(missionResult)}</textarea><button data-mission-close="${escapeHtml(mission.id)}">Clôturer le dossier</button>` : "";
+    return `<article class="card" data-mission="${escapeHtml(mission.id)}"><div class="chips">${chip(mission.status === "done" ? "done" : "pending_supervisor", missionStatusLabel[mission.status] || mission.status)}</div><h3>${escapeHtml(mission.title)}</h3><p>${escapeHtml(mission.objective)}</p><p class="muted">Critère : ${escapeHtml(mission.successCriterion)}</p><p class="muted">Validateur : ${escapeHtml(mission.validatorId)} · auteur : ${escapeHtml(mission.createdBy)} · approbation ${mission.approvalValid ? "valide" : "absente"}</p><p><strong>Démonstrations préparées :</strong> ${Number(mission.outcomes?.demosPrepared) || 0}. <strong>Démonstrations réservées :</strong> 0.</p>${deliverables}<div class="actions">${ready}${review}${approve}${close}</div></article>${tasks}`;
+  }).join("");
+  return `<div class="banner">Missions du bureau. Les agents ne s'exécutent pas tout seuls. Les envois restent fermés. Une démonstration préparée n'est pas une démonstration réservée.</div>
+  <article class="card"><h3>Campagne de démonstration</h3><p>Préparer une campagne pour obtenir cinq démonstrations de KlirProspect, avec des données fictives.</p><button id="mission-create">Ouvrir la campagne</button>${missionError ? `<p class="error">${escapeHtml(missionError)}</p>` : ""}<p class="muted">Dernière synchronisation : ${missionSyncedAt ? escapeHtml(when(missionSyncedAt)) : "pas encore"}.</p></article>
+  ${missionCards || `<article class="card"><p class="muted">Aucune mission.</p></article>`}
+  <h2 class="section-title">Dossiers visibles</h2>${clientCards}
+  <h2 class="section-title">Connexions</h2><div class="scope-grid">${connectionCards}</div>`;
+}
+
 function mainHtml() {
   if (view === "scope") return scopeHtml();
   if (view === "bureau") return bureauHtml();
+  if (view === "missions") return missionsHtml();
   if (view === "report") return reportHtml();
   if (view === "queue") return queueHtml();
   if (view === "work") return `<div class="grid">${workHtml()}</div>`;
@@ -589,6 +642,7 @@ function bind() {
     hqError = "";
     render();
     if (view === "bureau") refreshHq({ force: true });
+    if (view === "missions") refreshMissions();
   }));
   document.querySelectorAll("[data-assume]").forEach((button) => button.addEventListener("click", () => {
     actorId = button.dataset.assume;
@@ -622,6 +676,15 @@ function bind() {
     postHq({ text, priority, actorId, ...(ownerSlug ? { ownerSlug } : {}) });
   });
   document.querySelector("#hq-refresh")?.addEventListener("click", () => refreshHq({ force: true }));
+  document.querySelector("#mission-create")?.addEventListener("click", () => postMission("/api/hq/missions", { template: "klirprospect-demos", actorId }));
+  document.querySelector("#mission-result")?.addEventListener("input", (event) => { missionResult = event.target.value; });
+  document.querySelectorAll("[data-mission-status]").forEach((button) => button.addEventListener("click", () => postMission(`/api/hq/missions/${button.dataset.missionStatus}/transition`, { status: button.dataset.status, actorId })));
+  document.querySelectorAll("[data-mission-approve]").forEach((button) => button.addEventListener("click", () => postMission(`/api/hq/missions/${button.dataset.missionApprove}/approval`, { decision: "approve", actorId })));
+  document.querySelectorAll("[data-mission-close]").forEach((button) => button.addEventListener("click", () => postMission(`/api/hq/missions/${button.dataset.missionClose}/transition`, { status: "done", result: document.querySelector("#mission-result")?.value || missionResult, actorId })));
+  document.querySelectorAll("[data-task-save]").forEach((button) => button.addEventListener("click", () => {
+    const body = button.closest("article")?.querySelector("textarea")?.value || "";
+    saveDeliverable(button.dataset.taskSave, button.dataset.task, body);
+  }));
   document.querySelector("#note")?.addEventListener("input", (event) => { note = event.target.value; });
   document.querySelectorAll("[data-decision]").forEach((button) => button.addEventListener("click", () => {
     const decision = button.dataset.decision;
@@ -690,6 +753,68 @@ async function postHq(payload) {
     hqError = reason.message || "La commande n'a pas été enregistrée.";
     render();
   }
+}
+
+async function refreshMissions() {
+  try {
+    const [missionsResponse, clientsResponse, connectionsResponse] = await Promise.all([
+      fetch(`/api/hq/missions?actor=${encodeURIComponent(actorId)}`),
+      fetch(`/api/hq/clients?actor=${encodeURIComponent(actorId)}`),
+      fetch(`/api/hq/connections?actor=${encodeURIComponent(actorId)}`),
+    ]);
+    const missionsBody = await missionsResponse.json();
+    const clientsBody = await clientsResponse.json();
+    const connectionsBody = await connectionsResponse.json();
+    if (!missionsResponse.ok || !clientsResponse.ok || !connectionsResponse.ok) {
+      missionError = missionsBody.error || clientsBody.error || connectionsBody.error || "Les missions sont indisponibles.";
+      if (view === "missions") render();
+      return;
+    }
+    hqMissions = missionsBody.missions || [];
+    hqClients = clientsBody.clients || [];
+    hqConnections = connectionsBody.connections || [];
+    missionSyncedAt = new Date().toISOString();
+    missionError = "";
+    if (view === "missions") render();
+  } catch (reason) {
+    missionError = reason.message || "Les missions sont indisponibles.";
+    if (view === "missions") render();
+  }
+}
+
+async function postMission(pathname, payload) {
+  missionError = "";
+  try {
+    const response = await fetch(pathname, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const body = await response.json();
+    if (!response.ok) {
+      missionError = body.error || "Action refusée.";
+      if (body.mission) hqMissions = [body.mission, ...hqMissions.filter((mission) => mission.id !== body.mission.id)];
+      render();
+      return;
+    }
+    if (body.mission) hqMissions = [body.mission, ...hqMissions.filter((mission) => mission.id !== body.mission.id)];
+    render();
+    refreshMissions();
+  } catch (reason) {
+    missionError = reason.message || "Action refusée.";
+    render();
+  }
+}
+
+async function saveDeliverable(missionId, taskId, body) {
+  const started = await fetch(`/api/hq/missions/${missionId}/tasks/${taskId}/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actorId }),
+  });
+  const startBody = await started.json();
+  if (!started.ok) {
+    missionError = startBody.error || "La tâche ne démarre pas.";
+    render();
+    return;
+  }
+  await postMission(`/api/hq/missions/${missionId}/deliverables`, { taskId, body, actorId });
 }
 
 function ensureHqPoll() {

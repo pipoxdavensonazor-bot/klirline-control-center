@@ -3,7 +3,8 @@ import { accessSettings, bindIdentity, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
 import { applyHqPatch, claimHqCommand } from "./hq/commands.js";
 import { dispatchHq } from "./hq/dispatch.js";
-import { HQ_INDEX, HQ_INSERT, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
+import { runMissionOperation } from "./hq/missions.js";
+import { HQ_INDEX, HQ_INSERT, HQ_MISSION_INDEX, HQ_MISSION_INSERT, HQ_MISSION_SCHEMA, HQ_MISSION_SELECT, HQ_MISSION_UPDATE, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
 import { COMPANY } from "./policy.js";
 import { freshState } from "./fresh-state.js";
 import { API_LIMITS, RATE_OBJECT_NAME, nextWindow, rateKey } from "./limits.js";
@@ -106,6 +107,8 @@ export class CompanyState extends DurableObject {
     );
     this.ctx.storage.sql.exec(HQ_SCHEMA);
     this.ctx.storage.sql.exec(HQ_INDEX);
+    this.ctx.storage.sql.exec(HQ_MISSION_SCHEMA);
+    this.ctx.storage.sql.exec(HQ_MISSION_INDEX);
   }
 
   hqList(filter = {}) {
@@ -150,6 +153,39 @@ export class CompanyState extends DurableObject {
       const command = applyHqPatch(this.hqGet(id), input || {}, { actorId });
       this.hqReplace(command);
       return { ok: true, command };
+    } catch (error) {
+      return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
+    }
+  }
+
+  hqMissionList() {
+    return this.ctx.storage.sql.exec(HQ_MISSION_SELECT).toArray().map((row) => JSON.parse(row.body));
+  }
+
+  hqMissionGet(id) {
+    const rows = this.ctx.storage.sql.exec("SELECT body FROM hq_mission WHERE id = ?", id).toArray();
+    if (!rows.length) return null;
+    return JSON.parse(rows[0].body);
+  }
+
+  hqMissionInsert(mission) {
+    this.ctx.storage.sql.exec(HQ_MISSION_INSERT, mission.id, mission.status, mission.ownerSlug, mission.createdAt, JSON.stringify(mission));
+    return mission;
+  }
+
+  hqMissionReplace(mission) {
+    this.ctx.storage.sql.exec(HQ_MISSION_UPDATE, mission.status, mission.ownerSlug, JSON.stringify(mission), mission.id);
+    return mission;
+  }
+
+  // Mission et commande liées : une seule méthode, donc une seule exécution active.
+  hqMissionOperate(id, operation, input, actorId) {
+    try {
+      const result = runMissionOperation(this.hqMissionGet(id), this.hqList({}), operation, input || {}, { actorId });
+      if (result.insertCommand) this.hqInsert(result.command);
+      else if (result.replaceCommand && result.command) this.hqReplace(result.command);
+      if (result.changed && result.mission) this.hqMissionReplace(result.mission);
+      return { ok: true, result };
     } catch (error) {
       return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
     }
@@ -291,6 +327,18 @@ export default {
                 throw error;
               }
               return stored.outcome;
+            },
+            missionList: () => company.hqMissionList(),
+            missionGet: (id) => company.hqMissionGet(id),
+            missionInsert: (mission) => company.hqMissionInsert(mission),
+            missionOperate: async (id, operation, input, actorId) => {
+              const stored = await company.hqMissionOperate(id, operation, input, actorId);
+              if (!stored?.ok) {
+                const error = new Error(stored?.error || "Erreur");
+                error.status = stored?.status || 500;
+                throw error;
+              }
+              return stored.result;
             },
           },
           {

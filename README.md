@@ -95,6 +95,8 @@ curl -sS -X PATCH "https://centre.klirline.com/api/hq/commands/<id>" \
 
 Vérifier le parcours en local : `node scripts/hq-flow.mjs`.
 
+L'onglet Missions prépare un dossier de campagne. Les cartes d'agents ne sont pas exécutables. Le choix d'architecture et les limites sont dans `knowledge/bureau-architecture.md`. Rien n'est envoyé.
+
 ## Plus tard
 
 Lecture des dossiers commerciaux, envoi, appel, paiement, publication. Ces branchements attendent un accès déjà limité aux comptes autorisés.

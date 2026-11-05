@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const port = Number(process.env.HQ_FLOW_PORT || 4188);
 const hqFile = path.join(os.tmpdir(), `klirline-hq-${process.pid}.json`);
+const missionFile = path.join(os.tmpdir(), `klirline-missions-${process.pid}.json`);
 const stateFile = path.join(root, "data", "state.json");
 const stateBackup = fs.existsSync(stateFile) ? fs.readFileSync(stateFile) : null;
 const base = `http://127.0.0.1:${port}`;
@@ -41,7 +42,7 @@ async function waitForHealth(child) {
 
 const child = spawn(process.execPath, ["src/server.js"], {
   cwd: root,
-  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile },
+  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile, HQ_MISSIONS_PATH: missionFile },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
@@ -101,6 +102,16 @@ try {
   const source = await page.text();
   assert(source.includes("Bureau") && source.includes("Plateformes") && source.includes("Admin produits"), "l'interface a perdu le bureau ou les plateformes");
   assert(source.includes("<strong>Preuve.</strong>") && source.includes("awaiting_validation") && source.includes("Échoué"), "l'interface n'affiche plus la preuve ou les statuts");
+  assert(source.includes("Missions") && source.includes("Non exécutable") && source.includes("Envoi désactivé"), "l'interface perd les missions ou présente un agent comme exécutable");
+
+  const campaign = await request("POST", "/api/hq/missions", { template: "klirprospect-demos", actorId: "sales-director" });
+  assert(campaign.status === 201 && campaign.payload.mission.outcomes.demosBooked === 0 && campaign.payload.mission.tasks.length === 4, "la campagne de démonstration ne s'ouvre pas");
+  const hidden = await request("GET", "/api/hq/clients?actor=accounting");
+  assert(hidden.status === 200 && hidden.payload.clients.length === 0, "un rôle hors liste lit un dossier");
+  const denied = await request("POST", "/api/hq/skills/klir-coordination/enable", { actorId: "ceo" });
+  assert(denied.status === 403, "une compétence s'active toute seule");
+  const unsent = await request("POST", `/api/hq/missions/${campaign.payload.mission.id}/actions`, { type: "email", body: "Invitation", actorId: "sales-director" });
+  assert(unsent.status === 403 && unsent.payload.mission.drafts[0].sent === false, "un courriel part sans approbation");
 
   console.log(`OK — commande ${id} : claim idempotent, done sans preuve refusé, preuve visible. Démonstration et hub intacts.`);
 } finally {
@@ -111,6 +122,7 @@ try {
     setTimeout(resolve, 500);
   });
   fs.rmSync(hqFile, { force: true });
+  fs.rmSync(missionFile, { force: true });
   if (stateBackup) fs.writeFileSync(stateFile, stateBackup);
   else fs.rmSync(stateFile, { force: true });
 }
