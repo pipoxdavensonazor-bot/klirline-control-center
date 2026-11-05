@@ -502,7 +502,7 @@ function bureauHtml() {
       ? `<p class="muted">Sans agent dédié : ${agent.covers.map((item) => escapeHtml(item.name)).join(", ")}.</p>`
       : "";
     const status = last ? chip(hqTone(last.status), hqStatusLabel[last.status] || last.status) : chip("", "Aucune commande");
-    return `<article class="card" data-hq-agent="${escapeHtml(agent.id)}"><div class="chips">${chip("", agent.division)}${status}</div><h3>${escapeHtml(agent.name)}</h3><p>${escapeHtml(agent.mission)}</p>${link}<p class="muted">Agent Grok : ${escapeHtml(agent.grokAgentName)}</p>${covers}</article>`;
+    return `<article class="card" data-hq-agent="${escapeHtml(agent.id)}"><div class="chips">${chip("", agent.division)}${status}</div><h3>${escapeHtml(agent.name)}</h3><p>${escapeHtml(agent.mission)}</p>${link}${covers}</article>`;
   }).join("");
   const owners = [`<option value="">Répartition automatique</option>`].concat(hqRoster.map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === hqOwner ? "selected" : ""}>${escapeHtml(agent.name)} — ${escapeHtml(agent.division)}</option>`)).join("");
   const lane = (title, items, empty) => `<section class="lane"><h3>${title}</h3>${items.length ? items.map(hqCommandCard).join("") : `<p class="muted">${empty}</p>`}</section>`;
