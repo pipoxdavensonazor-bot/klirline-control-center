@@ -1,7 +1,7 @@
 export const ACCESS_VALUES = new Set(["public-login", "cf-access", "cf-challenge", "none"]);
 
 export const PRODUCT_SITES = [
-  { id: "klirprospect", url: "https://klirprospect.klirline.ca", adminUrl: null, access: "cf-challenge" },
+  { id: "klirprospect", url: "https://klirprospect.klirline.ca", adminUrl: "https://klirprospect.klirline.ca/#/login", access: "public-login" },
   { id: "klirlead", url: "https://scintillating-croissant-147cda.netlify.app", adminUrl: null, access: "none" },
   { id: "klirline-os", url: "https://klirline.ca", adminUrl: "https://www.klirline.ca/admin", access: "cf-access" },
   { id: "klirbuild", url: "https://klirline.app", healthUrl: "https://klirline.app/api/health", adminUrl: "https://klirline.app/login", access: "cf-access" },

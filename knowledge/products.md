@@ -3,7 +3,7 @@
 Chaque agent commercial, marketing ou client parle d'un produit seulement s'il peut le rattacher à cette fiche. Une fonction absente d'ici ne se promet pas.
 
 ## KlirProspect
-Sert à tenir les entreprises, les décideurs, le score et la prochaine action. Une fiche sans domaine est incomplète. Deux fiches du même domaine se fusionnent.
+Sert à tenir les entreprises, les décideurs, le score et la prochaine action. Une fiche sans domaine est incomplète. Deux fiches du même domaine se fusionnent. Le site public est https://klirprospect.klirline.ca. Le panneau retenu est https://klirprospect.klirline.ca/#/login.
 
 ## KlirLead
 Sert à recevoir une demande avec son origine. Un lead sans entreprise et sans produit plausible ne devient pas un prospect.
@@ -43,9 +43,11 @@ Adresses retenues, derrière Cloudflare Access, sans fonction nouvelle :
 - Black Wall News : https://www.blackwallnews.com/admin. Site public : https://www.blackwallnews.com.
 - NORIA : https://noriaedu.com/app#admin. Site public : https://noriaedu.com.
 
-Pas de panneau web retenu : KlirLead (déploiement Netlify actuel).
+Connexion publique en production, pas derrière Cloudflare Access. Access reste réservé aux workers de prévisualisation :
 
-Page publique derrière un défi Cloudflare, panneau non retenu : KlirProspect (https://klirprospect.klirline.ca).
+- KlirProspect : https://klirprospect.klirline.ca/#/login. Site public : https://klirprospect.klirline.ca.
+
+Pas de panneau web retenu : KlirLead (déploiement Netlify actuel).
 
 Le centre https://centre.klirline.com est déjà derrière Cloudflare Access. Il n'a pas de second lien.
 

@@ -273,7 +273,7 @@ check(sitesById.klirsecure.adminUrl === "https://secure.klirline.ca/", "KlirSecu
 check(sitesById.centia.adminUrl === "https://centia.app/connexion", "Centia pointe vers /connexion");
 check(sitesById["klir-ia"].skillsUrl === "https://klirline.io/api/skills" && sitesById["klir-ia"].adminUrl === "https://klirline.io/dashboard/admin/credits", "Klir IA garde son catalogue et son panneau crédits");
 check(sitesById.klirlead.adminUrl === null && sitesById.klirlead.access === "none" && sitesById.klirlead.url === "https://scintillating-croissant-147cda.netlify.app", "KlirLead garde l'adresse Netlify, sans admin");
-check(sitesById.klirprospect.adminUrl === null && sitesById.klirprospect.access === "cf-challenge", "klirprospect est protégé par un défi, sans lien admin");
+check(sitesById.klirprospect.url === "https://klirprospect.klirline.ca" && sitesById.klirprospect.adminUrl === "https://klirprospect.klirline.ca/#/login" && sitesById.klirprospect.access === "public-login" && new URL(sitesById.klirprospect.adminUrl).hash === "#/login", "KlirProspect pointe vers la connexion publique #/login");
 check(canViewAdminHub("ceo"), "Le CEO voit le hub admin");
 check(!canViewAdminHub("coo") && !canViewAdminHub("pm-klirbuild") && !canViewAdminHub("chief-of-staff"), "Le hub admin n'est pas ouvert aux autres postes");
 check(present(state, "ceo", []).adminHub === true, "Le bootstrap CEO ouvre le hub admin");
