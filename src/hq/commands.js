@@ -1,7 +1,19 @@
+import { createHash, randomUUID } from "node:crypto";
 import { DIVISIONS, fold, rosterAgent, routeCommand } from "./roster.js";
 
-export const HQ_STATUSES = ["pending", "queued", "dispatched", "running", "done", "blocked", "cancelled"];
+export const HQ_STATUSES = [
+  "pending",
+  "queued",
+  "dispatched",
+  "running",
+  "awaiting_validation",
+  "blocked",
+  "done",
+  "failed",
+  "cancelled",
+];
 export const HQ_LIST_LIMIT = 200;
+export const HQ_LEASE_MS = 30 * 60 * 1000;
 
 const PRIORITIES = {
   basse: "basse",
@@ -11,6 +23,10 @@ const PRIORITIES = {
   haute: "haute",
   high: "haute",
 };
+
+const OPEN_CLAIM = new Set(["pending", "queued"]);
+const LEASED = new Set(["dispatched", "running"]);
+const CLOSED = new Set(["awaiting_validation", "blocked", "done", "failed", "cancelled"]);
 
 function fail(status, message) {
   const error = new Error(message);
@@ -41,6 +57,76 @@ function cleanNote(value, tooLong) {
   return text;
 }
 
+function clock(options = {}) {
+  const now = options.now instanceof Date ? options.now : options.now ? new Date(options.now) : new Date();
+  if (Number.isNaN(now.getTime())) fail(400, "Horloge illisible.");
+  return now;
+}
+
+function joinNotes(...parts) {
+  const text = parts
+    .filter((part) => typeof part === "string" && part.trim())
+    .map((part) => part.trim())
+    .join("\n");
+  if (!text) return null;
+  if (text.length <= 4000) return text;
+  return text.slice(text.length - 4000);
+}
+
+export function hashClaimToken(token) {
+  return createHash("sha256").update(String(token)).digest("hex");
+}
+
+export function publicCommand(command) {
+  if (!command || typeof command !== "object") return command;
+  const copy = { ...command };
+  delete copy.claimToken;
+  if (command.claim && typeof command.claim === "object") {
+    copy.claim = {
+      holder: String(command.claim.holder || ""),
+      claimedAt: command.claim.claimedAt || null,
+      leaseUntil: command.claim.leaseUntil || null,
+    };
+  } else {
+    copy.claim = null;
+  }
+  return copy;
+}
+
+function hasProof(command) {
+  return [command?.result, command?.proof, command?.agentNote].some((value) => typeof value === "string" && value.trim());
+}
+
+function leaseActive(command, nowMs) {
+  if (command?.claim?.leaseUntil) {
+    const until = Date.parse(command.claim.leaseUntil);
+    return !Number.isNaN(until) && until > nowMs;
+  }
+  if (command?.status === "running") {
+    const updated = Date.parse(command.updatedAt || command.createdAt || "");
+    return !Number.isNaN(updated) && updated + HQ_LEASE_MS > nowMs;
+  }
+  return false;
+}
+
+function issueLease(command, options, now, note, systemNote) {
+  const token = randomUUID();
+  const claimedAt = now.toISOString();
+  const next = {
+    ...command,
+    status: "dispatched",
+    updatedAt: claimedAt,
+    agentNote: systemNote ? joinNotes(command.agentNote, note, systemNote) : note ? joinNotes(command.agentNote, note) : command.agentNote,
+    claim: {
+      tokenHash: hashClaimToken(token),
+      holder: String(options.actorId || ""),
+      claimedAt,
+      leaseUntil: new Date(now.getTime() + HQ_LEASE_MS).toISOString(),
+    },
+  };
+  return { token, command: next };
+}
+
 export function buildHqCommand(input, actorId, options = {}) {
   const text = String(input?.text ?? "").trim();
   if (text.length < 3) fail(400, "Écrivez la commande.");
@@ -58,7 +144,7 @@ export function buildHqCommand(input, actorId, options = {}) {
     agent = routed.agent;
     routedBy = routed.routedBy;
   }
-  const now = (options.now instanceof Date ? options.now : new Date()).toISOString();
+  const now = clock(options).toISOString();
   return {
     id: options.id || newHqId(),
     text,
@@ -70,7 +156,9 @@ export function buildHqCommand(input, actorId, options = {}) {
     priority,
     status: "pending",
     result: null,
+    proof: null,
     agentNote: null,
+    claim: null,
     routedBy,
     createdBy: String(actorId || ""),
     createdAt: now,
@@ -85,11 +173,161 @@ export function applyHqPatch(command, input, options = {}) {
   const next = {
     ...command,
     status,
-    updatedAt: (options.now instanceof Date ? options.now : new Date()).toISOString(),
+    updatedAt: clock(options).toISOString(),
   };
   if (Object.hasOwn(input || {}, "result")) next.result = cleanNote(input.result, "Le résultat est trop long.");
+  if (Object.hasOwn(input || {}, "proof")) next.proof = cleanNote(input.proof, "La preuve est trop longue.");
   if (Object.hasOwn(input || {}, "agentNote")) next.agentNote = cleanNote(input.agentNote, "La note est trop longue.");
+  if (next.status === "done" && !hasProof(next)) {
+    fail(400, "Une preuve est requise (résultat, preuve ou note) pour clore.");
+  }
+  if (!LEASED.has(next.status)) next.claim = null;
   return next;
+}
+
+export function decideClaim(command, options = {}) {
+  if (!command) {
+    return { http: 404, persist: false, body: { error: "Commande introuvable" } };
+  }
+  const now = clock(options);
+  const nowMs = now.getTime();
+  const note = options.note == null ? null : cleanNote(options.note, "La note est trop longue.");
+  const visible = publicCommand(command);
+
+  if (CLOSED.has(command.status)) {
+    return {
+      http: 409,
+      persist: false,
+      body: {
+        mode: "hq",
+        outcome: "refused",
+        error: "Cette commande n'est plus prenable.",
+        command: visible,
+      },
+    };
+  }
+
+  if (LEASED.has(command.status) && leaseActive(command, nowMs)) {
+    return {
+      http: 200,
+      persist: false,
+      body: { mode: "hq", outcome: "held", command: visible },
+    };
+  }
+
+  if (command.status === "running") {
+    const blocked = {
+      ...command,
+      status: "blocked",
+      updatedAt: now.toISOString(),
+      claim: null,
+      agentNote: joinNotes(
+        command.agentNote,
+        note,
+        `Interruption : exécution running trop ancienne (dernière mise à jour ${command.updatedAt}). Statut bloqué, bail non renouvelé.`,
+      ),
+    };
+    return {
+      http: 200,
+      persist: true,
+      command: blocked,
+      body: { mode: "hq", outcome: "blocked", command: publicCommand(blocked) },
+    };
+  }
+
+  if (command.status === "dispatched" && command.claim?.leaseUntil) {
+    const issued = issueLease(
+      command,
+      options,
+      now,
+      note,
+      `Reprise documentée : le bail du ${command.claim.claimedAt || command.updatedAt} a expiré. Nouvelle prise, une seule exécution.`,
+    );
+    return {
+      http: 200,
+      persist: true,
+      command: issued.command,
+      body: {
+        mode: "hq",
+        outcome: "reclaimed",
+        claimToken: issued.token,
+        command: publicCommand(issued.command),
+      },
+    };
+  }
+
+  if (command.status === "dispatched") {
+    const issued = issueLease(command, options, now, note, null);
+    return {
+      http: 200,
+      persist: true,
+      command: issued.command,
+      body: {
+        mode: "hq",
+        outcome: "issued",
+        claimToken: issued.token,
+        command: publicCommand(issued.command),
+      },
+    };
+  }
+
+  if (OPEN_CLAIM.has(command.status)) {
+    const issued = issueLease(command, options, now, note, null);
+    return {
+      http: 200,
+      persist: true,
+      command: issued.command,
+      body: {
+        mode: "hq",
+        outcome: "issued",
+        claimToken: issued.token,
+        command: publicCommand(issued.command),
+      },
+    };
+  }
+
+  return {
+    http: 409,
+    persist: false,
+    body: {
+      mode: "hq",
+      outcome: "refused",
+      error: "Cette commande n'est plus prenable.",
+      command: visible,
+    },
+  };
+}
+
+export function decideInterrupt(command, options = {}) {
+  if (!command) {
+    return { http: 404, persist: false, body: { error: "Commande introuvable" } };
+  }
+  if (!LEASED.has(command.status)) {
+    return {
+      http: 409,
+      persist: false,
+      body: {
+        mode: "hq",
+        outcome: "refused",
+        error: "Seule une commande transmise ou en cours peut être interrompue.",
+        command: publicCommand(command),
+      },
+    };
+  }
+  const note = cleanNote(options.note, "La note est trop longue.");
+  if (!note) fail(400, "Une note d'interruption est requise.");
+  const now = clock(options).toISOString();
+  const next = {
+    ...command,
+    updatedAt: now,
+    agentNote: joinNotes(command.agentNote, note),
+  };
+  return {
+    http: 200,
+    persist: true,
+    command: next,
+    body: { mode: "hq", outcome: "interrupted", command: publicCommand(next) },
+  };
 }
 
 export function commandFilter(searchParams) {

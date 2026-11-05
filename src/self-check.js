@@ -8,6 +8,7 @@ import { ACCESS_VALUES, PRODUCT_SITES, productSiteFields } from "./product-sites
 import { activeProspects, seedWorld } from "./seed.js";
 import { dataPath } from "./store.js";
 import { accessSettings, bindIdentity, orgObjectName, verifyAccessJwt } from "./access.js";
+import { HQ_LEASE_MS, hashClaimToken } from "./hq/commands.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { memoryHqStore } from "./hq/memory-store.js";
 import { HQ_ROSTER, rosterAgent, routeCommand } from "./hq/roster.js";
@@ -290,6 +291,7 @@ check(routeAccess("/api/sites", "POST") === "session", "Un autre verbe sur les s
 check(routeAccess("/api/playbooks/company", "GET") === "public", "Les playbooks restent publics");
 check(routeAccess("/api/command", "POST") === "session", "La commande de démonstration exige la session");
 check(routeAccess("/api/hq/command", "POST") === "session" && routeAccess("/api/hq/commands", "GET") === "session" && routeAccess("/api/hq/roster", "GET") === "session", "Le bureau exige la même session que les autres routes /api");
+check(routeAccess("/api/hq/commands/hq-00000000-0000-4000-8000-000000000001/claim", "POST") === "session" && routeAccess("/api/hq/commands/hq-00000000-0000-4000-8000-000000000001/interrupt", "POST") === "session", "La prise et l'interruption exigent la même session");
 
 const hqIds = ["office-klirline", "ops-klirline", "klirbuild", "klirmarket", "klirprospect", "klirline-ai", "noria", "black-wall-news", "bwn-redaction", "klirline-social", "youtube-channel", "ic-market", "cmcmarkets", "all-question", "sandbox-klirline"];
 check(HQ_ROSTER.map((agent) => agent.id).join() === hqIds.join(), "Le roster du bureau est la liste nommée, distincte des 34 postes");
@@ -372,6 +374,83 @@ try {
 } catch (error) {
   check(error.status === 400, "Un statut hors liste est refusé");
 }
+
+const hqCall = (method, pathname, body, now, actor = "ceo") => dispatchHq(hqStore, {
+  method,
+  pathname,
+  searchParams: new URLSearchParams(),
+  body,
+  actorId: actor,
+  now,
+});
+const t0 = new Date("2026-11-05T12:00:00.000Z");
+const leased = await hqCall("POST", "/api/hq/command", { text: "préparer la revue du bac à sable", ownerSlug: "sandbox-klirline" }, t0);
+const leaseId = leased.body.command.id;
+const firstClaim = await hqCall("POST", `/api/hq/commands/${leaseId}/claim`, {}, t0, "office-klirline");
+check(firstClaim.status === 200 && firstClaim.body.outcome === "issued" && firstClaim.body.command.status === "dispatched", "Le premier claim transmet la commande une fois");
+check(typeof firstClaim.body.claimToken === "string" && firstClaim.body.claimToken.length >= 32, "Le premier claim remet un bail");
+check(!JSON.stringify(firstClaim.body.command).includes(firstClaim.body.claimToken) && !firstClaim.body.command.claim.tokenHash, "La réponse de claim ne copie pas le bail dans la commande");
+const storedLease = await hqStore.get(leaseId);
+check(storedLease.claim.tokenHash === hashClaimToken(firstClaim.body.claimToken) && storedLease.claimToken == null, "Le dépôt ne garde que l'empreinte du bail");
+const secondClaim = await hqCall("POST", `/api/hq/commands/${leaseId}/claim`, {}, new Date(t0.getTime() + 1000), "ops-klirline");
+check(secondClaim.status === 200 && secondClaim.body.outcome === "held" && secondClaim.body.command.status === "dispatched", "Le second claim est un no-op");
+check(!Object.hasOwn(secondClaim.body, "claimToken") && !JSON.stringify(secondClaim.body).includes(firstClaim.body.claimToken), "Le second claim ne reçoit pas le bail");
+check(secondClaim.body.command.updatedAt === firstClaim.body.command.updatedAt && (await hqStore.get(leaseId)).claim.tokenHash === storedLease.claim.tokenHash, "Le second claim ne redistribue pas");
+const readLease = await hqCall("GET", `/api/hq/commands/${leaseId}`, {}, t0);
+const listed = await hqCall("GET", "/api/hq/commands", {}, t0);
+check(!JSON.stringify(readLease.body).includes(firstClaim.body.claimToken) && !JSON.stringify(listed.body).includes("tokenHash"), "La file et la fiche ne révèlent pas le bail");
+let bareDone;
+try {
+  bareDone = await hqCall("PATCH", `/api/hq/commands/${leaseId}`, { status: "done" }, t0);
+} catch (error) {
+  bareDone = { status: error.status };
+}
+check(bareDone.status === 400 && (await hqStore.get(leaseId)).status === "dispatched", "Clore sans preuve est refusé");
+let blankProof;
+try {
+  blankProof = await hqCall("PATCH", `/api/hq/commands/${leaseId}`, { status: "done", result: "  ", proof: "", agentNote: null }, t0);
+} catch (error) {
+  blankProof = { status: error.status };
+}
+check(blankProof.status === 400, "Une preuve vide est refusée");
+const proved = await hqCall("PATCH", `/api/hq/commands/${leaseId}`, { status: "done", proof: "Note de revue déposée" }, new Date(t0.getTime() + 2000));
+check(proved.status === 200 && proved.body.command.status === "done" && proved.body.command.proof === "Note de revue déposée", "Une preuve permet de clore");
+const closedClaim = await hqCall("POST", `/api/hq/commands/${leaseId}/claim`, {}, new Date(t0.getTime() + 3000));
+check(closedClaim.status === 409 && !Object.hasOwn(closedClaim.body, "claimToken"), "Une commande close ne se reprend pas");
+
+const stale = await hqCall("POST", "/api/hq/command", { text: "suivre l'exécution trop longue", ownerSlug: "ops-klirline" }, t0);
+const staleId = stale.body.command.id;
+await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, t0);
+await hqCall("PATCH", `/api/hq/commands/${staleId}`, { status: "running", agentNote: "Démarré" }, t0);
+const staleAt = new Date(t0.getTime() + HQ_LEASE_MS + 1000);
+const blockedRun = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, staleAt);
+check(blockedRun.status === 200 && blockedRun.body.outcome === "blocked" && blockedRun.body.command.status === "blocked", "Un running trop ancien passe bloqué");
+check(!Object.hasOwn(blockedRun.body, "claimToken") && blockedRun.body.command.updatedAt === staleAt.toISOString() && blockedRun.body.command.agentNote.includes("Interruption") && blockedRun.body.command.agentNote.includes("Démarré"), "L'interruption d'un running trop ancien laisse la date et la note");
+const refusedWhileBlocked = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, staleAt);
+check(refusedWhileBlocked.status === 409 && !Object.hasOwn(refusedWhileBlocked.body, "claimToken"), "Une commande bloquée ne se reprend pas toute seule");
+const reopened = await hqCall("PATCH", `/api/hq/commands/${staleId}`, { status: "pending" }, staleAt);
+const reissued = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, new Date(staleAt.getTime() + 1000));
+check(reopened.body.command.status === "pending" && reissued.body.outcome === "issued" && reissued.body.claimToken && reissued.body.claimToken !== firstClaim.body.claimToken, "Une commande bloquée se relance seulement après un pending explicite");
+
+const resumed = await hqCall("POST", "/api/hq/command", { text: "reprendre un envoi transmis", ownerSlug: "all-question" }, t0);
+const resumedId = resumed.body.command.id;
+const oldBail = await hqCall("POST", `/api/hq/commands/${resumedId}/claim`, {}, t0);
+const reclaimAt = new Date(t0.getTime() + HQ_LEASE_MS + 1000);
+const reclaimed = await hqCall("POST", `/api/hq/commands/${resumedId}/claim`, {}, reclaimAt);
+check(reclaimed.status === 200 && reclaimed.body.outcome === "reclaimed" && reclaimed.body.command.status === "dispatched", "Un bail expiré sur une commande transmise se reprend");
+check(reclaimed.body.claimToken && reclaimed.body.claimToken !== oldBail.body.claimToken && !JSON.stringify(reclaimed.body).includes(oldBail.body.claimToken), "La reprise remet un bail neuf");
+check(reclaimed.body.command.agentNote.includes("Reprise documentée") && reclaimed.body.command.updatedAt === reclaimAt.toISOString(), "La reprise est notée");
+
+const halted = await hqCall("POST", "/api/hq/command", { text: "couper le travail en cours", ownerSlug: "noria" }, t0);
+const haltedId = halted.body.command.id;
+await hqCall("POST", `/api/hq/commands/${haltedId}/claim`, {}, t0);
+await hqCall("PATCH", `/api/hq/commands/${haltedId}`, { status: "running" }, t0);
+const haltAt = new Date(t0.getTime() + 5000);
+const interrupted = await hqCall("POST", `/api/hq/commands/${haltedId}/interrupt`, { note: "Processus arrêté avant la preuve." }, haltAt);
+check(interrupted.status === 200 && interrupted.body.command.status === "running" && interrupted.body.command.updatedAt === haltAt.toISOString(), "L'interruption garde le statut et la date");
+check(!Object.hasOwn(interrupted.body, "claimToken") && interrupted.body.command.agentNote === "Processus arrêté avant la preuve.", "L'interruption laisse la note sans rendre le bail");
+const stillHeld = await hqCall("POST", `/api/hq/commands/${haltedId}/claim`, {}, new Date(t0.getTime() + 6000));
+check(stillHeld.body.outcome === "held" && !Object.hasOwn(stillHeld.body, "claimToken"), "L'interruption ne lance pas une seconde exécution");
 const demoUntouched = issueCommand(state, "ceo", "trouver 10 prospects");
 check(demoUntouched.origin === "command" && demoUntouched.ownerId === "prospecting", "La commande de démonstration reste sur les 34 postes");
 

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideInterrupt, matchesFilter, sortCommands } from "./commands.js";
 import { dataPath } from "../store.js";
 
 function hqPath() {
@@ -50,6 +50,26 @@ export function fileHqStore() {
       }
       commands[index] = command;
       writeAll(commands);
+    },
+    async claim(id, options) {
+      const commands = readAll();
+      const index = commands.findIndex((item) => item.id === id);
+      const decision = decideClaim(index < 0 ? null : commands[index], options);
+      if (decision.persist) {
+        commands[index] = decision.command;
+        writeAll(commands);
+      }
+      return { status: decision.http, body: decision.body };
+    },
+    async interrupt(id, options) {
+      const commands = readAll();
+      const index = commands.findIndex((item) => item.id === id);
+      const decision = decideInterrupt(index < 0 ? null : commands[index], options);
+      if (decision.persist) {
+        commands[index] = decision.command;
+        writeAll(commands);
+      }
+      return { status: decision.http, body: decision.body };
     },
   };
 }

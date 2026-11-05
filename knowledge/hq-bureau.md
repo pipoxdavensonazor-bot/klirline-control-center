@@ -21,6 +21,23 @@ Chaque élément contient `id`, `text`, `ownerSlug`, `grokAgentName`, `division`
 
 Les statuts utiles à l'aller sont `pending` et `queued`.
 
+## Prendre une commande
+
+Une seule exécution active. Le premier `POST /api/hq/commands/<id>/claim` passe `pending` ou `queued` à `dispatched` et renvoie `claimToken` une fois. Le dépôt ne garde que l'empreinte du jeton.
+
+Un second claim pendant le bail (30 minutes) répond `outcome: "held"` : même statut, même `updatedAt`, sans `claimToken`. Ce n'est pas une nouvelle distribution.
+
+```bash
+curl -sS -X POST "https://centre.klirline.com/api/hq/commands/<id>/claim" \
+  -H "Content-Type: application/json" \
+  -H "Cf-Access-Jwt-Assertion: <jeton Access>" \
+  -d '{}'
+```
+
+Si le bail d'une commande `dispatched` est expiré, le claim suivant est une reprise documentée : nouveau jeton, note `Reprise documentée`, `updatedAt` renouvelé. Un `running` dont le bail est expiré passe `blocked`, avec la date et la note d'interruption, et aucun jeton. Pour la relancer, un humain la repasse `pending`, puis un nouveau claim émet un autre jeton.
+
+`POST /api/hq/commands/<id>/interrupt` avec une note laisse le statut (`dispatched` ou `running`), met à jour `updatedAt` et enregistre la note. Le bail en cours n'est pas rouvert à un second agent.
+
 ## Renvoyer le statut
 
 ```bash
@@ -30,9 +47,11 @@ curl -sS -X PATCH "https://centre.klirline.com/api/hq/commands/<id>" \
   -d '{"status":"done","result":"Article prêt","agentNote":"BWN Rédaction"}'
 ```
 
-Statuts acceptés : `pending`, `queued`, `dispatched`, `running`, `done`, `blocked`, `cancelled`.
+Statuts acceptés : `pending`, `queued`, `dispatched`, `running`, `awaiting_validation`, `blocked`, `done`, `failed`, `cancelled`.
 
-Ordre attendu : `pending` → `dispatched` ou `queued` → `running` → `done`, ou `blocked` si l'agent ne peut pas avancer. `result` et `agentNote` sont facultatifs.
+Ordre attendu : `pending` ou `queued` → `dispatched` → `running` → `done`, ou `awaiting_validation` si une personne doit relire. `blocked` ou `failed` si l'agent ne peut pas avancer. `cancelled` abandonne la commande.
+
+`done` exige une preuve : `result`, `proof` ou `agentNote` non vide. Sans cela le PATCH répond `400` et la commande ne change pas. La preuve s'affiche dans la colonne Fait du bureau.
 
 ## Créer une commande
 

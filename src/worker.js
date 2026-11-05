@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { accessSettings, bindIdentity, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
 import { dispatchHq } from "./hq/dispatch.js";
+import { decideClaim, decideInterrupt } from "./hq/commands.js";
 import { HQ_INDEX, HQ_INSERT, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
 import { COMPANY } from "./policy.js";
 import { freshState } from "./fresh-state.js";
@@ -143,6 +144,19 @@ export class CompanyState extends DurableObject {
     return command;
   }
 
+  hqApply(id, decision) {
+    if (decision.persist) this.hqReplace(decision.command);
+    return { status: decision.http, body: decision.body };
+  }
+
+  hqClaim(id, options) {
+    return this.hqApply(id, decideClaim(this.hqGet(id), options));
+  }
+
+  hqInterrupt(id, options) {
+    return this.hqApply(id, decideInterrupt(this.hqGet(id), options));
+  }
+
   read() {
     const rows = this.ctx.storage.sql.exec("SELECT body FROM company WHERE id = 'main'").toArray();
     if (!rows.length) {
@@ -252,6 +266,8 @@ export default {
             get: (id) => company.hqGet(id),
             insert: (command) => company.hqInsert(command),
             replace: (command) => company.hqReplace(command),
+            claim: (id, options) => company.hqClaim(id, options),
+            interrupt: (id, options) => company.hqInterrupt(id, options),
           },
           {
             method: request.method,
