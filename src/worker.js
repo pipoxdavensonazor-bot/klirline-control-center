@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { accessSettings, bindIdentity, verifyAccessJwt } from "./access.js";
+import { accessSettings, assertServiceRoute, identityFromAccess, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { decideClaim, decideInterrupt } from "./hq/commands.js";
@@ -60,19 +60,14 @@ async function authenticate(request, env) {
     error.status = 401;
     throw error;
   }
-  const { email } = await verifyAccessJwt(token, {
+  const verified = await verifyAccessJwt(token, {
     teamDomain: settings.teamDomain,
     aud: settings.aud,
     keys: await accessKeys(settings.teamDomain),
     nowMs: Date.now(),
+    serviceClientIds: settings.serviceClientIds,
   });
-  const account = settings.accounts.find((item) => item.email === email);
-  if (!account) {
-    const error = new Error("Ce compte n'est pas autorisé pour ce centre.");
-    error.status = 403;
-    throw error;
-  }
-  return bindIdentity(account);
+  return identityFromAccess(verified, settings.accounts);
 }
 
 async function readJson(request) {
@@ -253,6 +248,7 @@ export default {
       }
 
       const identity = await authenticate(request, env);
+      assertServiceRoute(identity, url.pathname);
       const emailLimit = await limiter.consume(rateKey({ email: identity.email }), Date.now());
       if (!emailLimit.allowed) return json(429, { error: "Trop de requêtes." }, { "Retry-After": String(emailLimit.retryAfter) });
 
