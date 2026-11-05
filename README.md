@@ -75,6 +75,26 @@ Chaque route `/api/*` compte dans une fenêtre de 60 secondes et de 60 requêtes
 - Klirline OS est lu sur https://klirline.ca, page d'accueil seulement. KlirMarket est lu sur https://klirline.com, page d'accueil seulement.
 - Le compteur de requêtes vit dans l'objet `api-rate`. Il ne suit pas un changement de rôle ou d'organisation. Une autre adresse de connexion a sa propre fenêtre.
 
+## Bureau réel
+
+L'onglet Bureau enregistre des commandes hors du jeu des 34 postes. `POST /api/command` reste la démonstration. Le détail pour Office Klirline est dans `knowledge/hq-bureau.md`.
+
+Office lit la file, distribue vers l'agent Grok nommé par `grokAgentName`, puis renvoie le statut. Le Worker n'appelle aucun agent.
+
+Le jeton Cloudflare Access est obligatoire en ligne, comme pour les autres routes `/api` du dossier. L'exemple omet le vrai jeton.
+
+```bash
+curl -sS "https://centre.klirline.com/api/hq/commands?status=pending" \
+  -H "Cf-Access-Jwt-Assertion: <jeton Access>"
+
+curl -sS -X PATCH "https://centre.klirline.com/api/hq/commands/<id>" \
+  -H "Content-Type: application/json" \
+  -H "Cf-Access-Jwt-Assertion: <jeton Access>" \
+  -d '{"status":"done","result":"Fait","agentNote":"Office Klirline"}'
+```
+
+Vérifier le parcours en local : `node scripts/hq-flow.mjs`.
+
 ## Plus tard
 
 Lecture des dossiers commerciaux, envoi, appel, paiement, publication. Ces branchements attendent un accès déjà limité aux comptes autorisés.

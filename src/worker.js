@@ -1,12 +1,15 @@
 import { DurableObject } from "cloudflare:workers";
 import { accessSettings, bindIdentity, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
+import { dispatchHq } from "./hq/dispatch.js";
+import { HQ_INDEX, HQ_INSERT, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
 import { COMPANY } from "./policy.js";
 import { freshState } from "./fresh-state.js";
 import { API_LIMITS, RATE_OBJECT_NAME, nextWindow, rateKey } from "./limits.js";
 import { present } from "./present.js";
 import { probeProductSites } from "./product-sites.js";
 import { loadProspectSource } from "./prospect-feed.js";
+import { routeAccess } from "./routes.js";
 
 const jsonHeaders = {
   "Content-Type": "application/json; charset=utf-8",
@@ -100,6 +103,44 @@ export class CompanyState extends DurableObject {
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS company (id TEXT PRIMARY KEY, body TEXT NOT NULL)",
     );
+    this.ctx.storage.sql.exec(HQ_SCHEMA);
+    this.ctx.storage.sql.exec(HQ_INDEX);
+  }
+
+  hqList(filter = {}) {
+    const rows = this.ctx.storage.sql.exec(HQ_SELECT, ...hqSelectBindings(filter)).toArray();
+    return rows.map((row) => JSON.parse(row.body));
+  }
+
+  hqGet(id) {
+    const rows = this.ctx.storage.sql.exec("SELECT body FROM hq_command WHERE id = ?", id).toArray();
+    if (!rows.length) return null;
+    return JSON.parse(rows[0].body);
+  }
+
+  hqInsert(command) {
+    this.ctx.storage.sql.exec(
+      HQ_INSERT,
+      command.id,
+      command.status,
+      command.ownerSlug,
+      command.division,
+      command.createdAt,
+      JSON.stringify(command),
+    );
+    return command;
+  }
+
+  hqReplace(command) {
+    this.ctx.storage.sql.exec(
+      HQ_UPDATE,
+      command.status,
+      command.ownerSlug,
+      command.division,
+      JSON.stringify(command),
+      command.id,
+    );
+    return command;
   }
 
   read() {
@@ -184,15 +225,17 @@ export default {
       const ipLimit = await limiter.consume(rateKey({ ip }), Date.now());
       if (!ipLimit.allowed) return json(429, { error: "Trop de requêtes." }, { "Retry-After": String(ipLimit.retryAfter) });
 
-      if (url.pathname === "/api/health") return json(200, { ok: true, company: COMPANY.legalName, accessMode: "cloudflare-access" });
-      if (request.method === "GET" && url.pathname === "/api/sites") return json(200, { sites: await probeProductSites() });
-
-      if (url.pathname.startsWith("/api/playbooks/")) {
-        const id = url.pathname.split("/").pop();
-        if (!/^[a-z0-9-]+$/.test(id)) return json(404, { error: "Playbook introuvable" });
-        const file = await env.ASSETS.fetch(new URL(`/knowledge/${id}.md`, request.url));
-        if (!file.ok) return json(404, { error: "Playbook introuvable" });
-        return json(200, { id, body: await file.text() });
+      if (routeAccess(url.pathname, request.method) === "public") {
+        if (url.pathname === "/api/health") return json(200, { ok: true, company: COMPANY.legalName, accessMode: "cloudflare-access" });
+        if (request.method === "GET" && url.pathname === "/api/sites") return json(200, { sites: await probeProductSites() });
+        if (url.pathname.startsWith("/api/playbooks/")) {
+          const id = url.pathname.split("/").pop();
+          if (!/^[a-z0-9-]+$/.test(id)) return json(404, { error: "Playbook introuvable" });
+          const file = await env.ASSETS.fetch(new URL(`/knowledge/${id}.md`, request.url));
+          if (!file.ok) return json(404, { error: "Playbook introuvable" });
+          return json(200, { id, body: await file.text() });
+        }
+        return json(404, { error: "Introuvable" });
       }
 
       const identity = await authenticate(request, env);
@@ -200,6 +243,27 @@ export default {
       if (!emailLimit.allowed) return json(429, { error: "Trop de requêtes." }, { "Retry-After": String(emailLimit.retryAfter) });
 
       const company = env.COMPANY.get(env.COMPANY.idFromName(identity.orgId));
+
+      if (url.pathname.startsWith("/api/hq/")) {
+        const payload = request.method === "GET" ? {} : await readJson(request);
+        const result = await dispatchHq(
+          {
+            list: (filter) => company.hqList(filter),
+            get: (id) => company.hqGet(id),
+            insert: (command) => company.hqInsert(command),
+            replace: (command) => company.hqReplace(command),
+          },
+          {
+            method: request.method,
+            pathname: url.pathname,
+            searchParams: url.searchParams,
+            body: payload,
+            actorId: identity.actorId,
+          },
+        );
+        return json(result.status, result.body);
+      }
+
       const catalog = await playbookCatalog(request, env);
       const prospectSource = await loadProspectSource(env);
       const viewOf = (state) => ({ ...present(state, identity.actorId, catalog, "cloudflare-access"), prospectSource });

@@ -1,5 +1,6 @@
 const views = [
   ["scope", "Ce centre"],
+  ["bureau", "Bureau"],
   ["report", "Rapport du jour"],
   ["queue", "À valider"],
   ["work", "Travaux"],
@@ -67,6 +68,27 @@ let state = null;
 let error = "";
 let note = "";
 let liveSites = [];
+let hqRoster = [];
+let hqCommands = [];
+let hqDivision = sessionStorage.getItem("klirline-hq-division") || "Toutes";
+let hqError = "";
+let hqDraft = "";
+let hqOwner = "";
+let hqPriority = "normale";
+let hqLoad = 0;
+
+const hqStatusLabel = {
+  pending: "En attente",
+  queued: "En file",
+  dispatched: "Transmis",
+  running: "En cours",
+  done: "Fait",
+  blocked: "Bloqué",
+  cancelled: "Annulé",
+};
+const hqDivisions = ["Toutes", "Ops", "Produits", "Média", "Trading", "Autres"];
+const hqRouteLabel = { explicit: "Agent choisi", keyword: "Réparti par mot-clé", triage: "Triage" };
+const hqPriorityLabel = { basse: "Basse", normale: "Normale", haute: "Haute" };
 
 const app = document.querySelector("#app");
 const money = (value) => new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(value);
@@ -83,6 +105,8 @@ async function load() {
   if (playbookId) await openPlaybook(playbookId, false);
   render();
   refreshSites();
+  if (view === "bureau") refreshHq({ force: true });
+  ensureHqPoll();
 }
 
 async function refreshSites() {
@@ -246,7 +270,7 @@ function scopeHtml() {
     <article class="card"><h3>Ce qui est simulé</h3><ul><li>Prospects, clients, factures et marges.</li><li>L'état métier des plateformes, y compris l'export Klirline OS.</li><li>${state.accessMode === "cloudflare-access" ? "Les chiffres restent un jeu, même quand le rôle vient de Cloudflare Access." : "L'identité choisie dans le menu. Ce n'est pas une connexion. Le serveur local est en mode démonstration."}</li></ul></article>
     <article class="card"><h3>Ce qui n'est pas branché</h3><ul><li>Envoi de courriel, composition d'appel, paiement, publication.</li><li>${prospectSourceLine()}</li></ul></article>
   </div>
-  <div class="actions"><button data-view="report">Ouvrir le rapport du jour</button><button class="ghost" data-view="queue">Voir la file à valider</button></div>`;
+  <div class="actions"><button data-view="bureau">Ouvrir le bureau</button><button class="ghost" data-view="report">Ouvrir le rapport du jour</button><button class="ghost" data-view="queue">Voir la file à valider</button></div>`;
 }
 
 function reportHtml() {
@@ -257,7 +281,7 @@ function reportHtml() {
     : "Rien";
   const finance = state.briefing.finance;
   const desk = actorId === "ceo"
-    ? `<article class="card"><h3>Place de commande</h3><p>Écrivez l'ordre. La commande reste sur ce bureau, avec le détail complet.</p><textarea id="command" placeholder="Exemple : trouver 10 prospects"></textarea><div class="actions"><button id="send-command">Passer la commande</button></div></article>${deskPapersHtml()}`
+    ? `<article class="card"><h3>Place de commande · démonstration</h3><p>Écrivez l'ordre. Il reste dans le jeu des 34 postes. Le bureau réel est l'onglet Bureau.</p><textarea id="command" placeholder="Exemple : trouver 10 prospects"></textarea><div class="actions"><button id="send-command">Passer la commande</button></div></article>${deskPapersHtml()}`
     : "";
   return `<div class="banner">Les agents préparent les dossiers. Une action approuvée est consignée ici : elle n'envoie rien, n'appelle personne et ne déplace pas d'argent.</div>
   ${desk}
@@ -450,8 +474,60 @@ function journalHtml() {
   return events || `<article class="card"><p class="muted">Aucun événement.</p></article>`;
 }
 
+function hqTone(status) {
+  if (status === "done") return "done";
+  if (status === "blocked" || status === "cancelled") return "blocked";
+  return "pending_supervisor";
+}
+
+function lastHq(slug) {
+  return hqCommands.filter((command) => command.ownerSlug === slug).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
+}
+
+function hqCommandCard(command) {
+  const result = command.result ? `<p><strong>Résultat.</strong> ${escapeHtml(command.result)}</p>` : "";
+  const agentNote = command.agentNote ? `<p class="muted">${escapeHtml(command.agentNote)}</p>` : "";
+  return `<article class="card" data-hq-command="${escapeHtml(command.id)}"><div class="chips">${chip(hqTone(command.status), hqStatusLabel[command.status] || command.status)}${chip("", hqPriorityLabel[command.priority] || command.priority)}</div><h3>${escapeHtml(command.ownerName)}</h3><p>${escapeHtml(command.text)}</p><p class="muted">${escapeHtml(when(command.createdAt))} · ${escapeHtml(hqRouteLabel[command.routedBy] || command.routedBy)}</p>${result}${agentNote}</article>`;
+}
+
+function bureauHtml() {
+  const divisions = hqDivisions.map((division) => `<button class="${hqDivision === division ? "active" : ""}" data-hq-division="${escapeHtml(division)}">${escapeHtml(division)}</button>`).join("");
+  const visibleAgents = hqRoster.filter((agent) => hqDivision === "Toutes" || agent.division === hqDivision);
+  const visibleCommands = hqCommands.filter((command) => hqDivision === "Toutes" || command.division === hqDivision);
+  const cards = visibleAgents.map((agent) => {
+    const last = lastHq(agent.id);
+    const address = httpsUrl(agent.productUrl);
+    const link = address ? `<p><a href="${escapeHtml(address)}" target="_blank" rel="noopener noreferrer">${escapeHtml(address.replace(/^https:\/\//, ""))}</a></p>` : "";
+    const covers = Array.isArray(agent.covers) && agent.covers.length
+      ? `<p class="muted">Sans agent dédié : ${agent.covers.map((item) => escapeHtml(item.name)).join(", ")}.</p>`
+      : "";
+    const status = last ? chip(hqTone(last.status), hqStatusLabel[last.status] || last.status) : chip("", "Aucune commande");
+    return `<article class="card" data-hq-agent="${escapeHtml(agent.id)}"><div class="chips">${chip("", agent.division)}${status}</div><h3>${escapeHtml(agent.name)}</h3><p>${escapeHtml(agent.mission)}</p>${link}<p class="muted">Agent Grok : ${escapeHtml(agent.grokAgentName)}</p>${covers}</article>`;
+  }).join("");
+  const owners = [`<option value="">Répartition automatique</option>`].concat(hqRoster.map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === hqOwner ? "selected" : ""}>${escapeHtml(agent.name)} — ${escapeHtml(agent.division)}</option>`)).join("");
+  const lane = (title, items, empty) => `<section class="lane"><h3>${title}</h3>${items.length ? items.map(hqCommandCard).join("") : `<p class="muted">${empty}</p>`}</section>`;
+  const open = visibleCommands.filter((command) => ["pending", "queued", "dispatched", "running"].includes(command.status));
+  const done = visibleCommands.filter((command) => command.status === "done");
+  const blocked = visibleCommands.filter((command) => command.status === "blocked" || command.status === "cancelled");
+  const waiting = !hqRoster.length && !hqError ? `<article class="card"><p class="muted">Chargement du bureau.</p></article>` : "";
+  return `<div class="banner">Bureau réel. Une commande est enregistrée ici, puis Office Klirline la lit et renvoie le statut. Le rapport du jour reste la démonstration des 34 postes. Ce Worker n'envoie rien vers les agents.</div>
+  <article class="card"><h3>Nouvelle commande</h3><textarea id="hq-text" placeholder="Exemple : rédiger l'article Black Wall News">${escapeHtml(hqDraft)}</textarea>
+  <div class="hq-compose"><label>Agent<select id="hq-owner">${owners}</select></label><label>Priorité<select id="hq-priority"><option value="basse" ${hqPriority === "basse" ? "selected" : ""}>Basse</option><option value="normale" ${hqPriority === "normale" ? "selected" : ""}>Normale</option><option value="haute" ${hqPriority === "haute" ? "selected" : ""}>Haute</option></select></label></div>
+  <div class="actions"><button id="hq-send">Enregistrer la commande</button><button class="ghost" id="hq-refresh">Actualiser</button></div>
+  ${hqError ? `<p class="error">${escapeHtml(hqError)}</p>` : ""}</article>
+  <div class="filters" role="tablist">${divisions}</div>
+  <div class="hq-lanes">
+    ${lane("En cours", open, "Aucune commande en cours.")}
+    ${lane("Fait", done, "Rien de terminé.")}
+    ${lane("Bloqué", blocked, "Rien de bloqué.")}
+  </div>
+  ${waiting}
+  <div class="scope-grid">${cards}</div>`;
+}
+
 function mainHtml() {
   if (view === "scope") return scopeHtml();
+  if (view === "bureau") return bureauHtml();
   if (view === "report") return reportHtml();
   if (view === "queue") return queueHtml();
   if (view === "work") return `<div class="grid">${workHtml()}</div>`;
@@ -498,7 +574,14 @@ function render() {
 }
 
 function bind() {
-  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => { view = button.dataset.view; sessionStorage.setItem("klirline-view", view); error = ""; render(); }));
+  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => {
+    view = button.dataset.view;
+    sessionStorage.setItem("klirline-view", view);
+    error = "";
+    hqError = "";
+    render();
+    if (view === "bureau") refreshHq({ force: true });
+  }));
   document.querySelectorAll("[data-assume]").forEach((button) => button.addEventListener("click", () => {
     actorId = button.dataset.assume;
     selectedTaskId = button.dataset.open;
@@ -513,6 +596,24 @@ function bind() {
   document.querySelector("#actor")?.addEventListener("change", (event) => { actorId = event.target.value; sessionStorage.setItem("klirline-actor", actorId); load().catch(showLoadError); });
   document.querySelector("#reset")?.addEventListener("click", () => post("/api/reset", { actorId }));
   document.querySelector("#send-command")?.addEventListener("click", () => post("/api/command", { actorId, text: document.querySelector("#command")?.value || "" }));
+  document.querySelectorAll("[data-hq-division]").forEach((button) => button.addEventListener("click", () => {
+    hqDivision = button.dataset.hqDivision;
+    sessionStorage.setItem("klirline-hq-division", hqDivision);
+    render();
+  }));
+  document.querySelector("#hq-text")?.addEventListener("input", (event) => { hqDraft = event.target.value; });
+  document.querySelector("#hq-owner")?.addEventListener("change", (event) => { hqOwner = event.target.value; });
+  document.querySelector("#hq-priority")?.addEventListener("change", (event) => { hqPriority = event.target.value; });
+  document.querySelector("#hq-send")?.addEventListener("click", () => {
+    const text = document.querySelector("#hq-text")?.value || "";
+    const ownerSlug = document.querySelector("#hq-owner")?.value || "";
+    const priority = document.querySelector("#hq-priority")?.value || "normale";
+    hqDraft = text;
+    hqOwner = ownerSlug;
+    hqPriority = priority;
+    postHq({ text, priority, actorId, ...(ownerSlug ? { ownerSlug } : {}) });
+  });
+  document.querySelector("#hq-refresh")?.addEventListener("click", () => refreshHq({ force: true }));
   document.querySelector("#note")?.addEventListener("input", (event) => { note = event.target.value; });
   document.querySelectorAll("[data-decision]").forEach((button) => button.addEventListener("click", () => {
     const decision = button.dataset.decision;
@@ -532,6 +633,61 @@ async function openPlaybook(id, redraw) {
 
 function showLoadError(reason) {
   app.innerHTML = `<p class="error">${escapeHtml(reason.message)}</p>`;
+}
+
+async function refreshHq({ force = false } = {}) {
+  const token = ++hqLoad;
+  try {
+    const [rosterResponse, commandResponse] = await Promise.all([fetch("/api/hq/roster"), fetch("/api/hq/commands")]);
+    const rosterBody = await rosterResponse.json();
+    const commandBody = await commandResponse.json();
+    if (token !== hqLoad) return;
+    if (!rosterResponse.ok || !commandResponse.ok) {
+      hqError = rosterBody.error || commandBody.error || "Le bureau est indisponible.";
+      if (view === "bureau") render();
+      return;
+    }
+    const typing = document.activeElement && ["hq-text", "hq-owner", "hq-priority"].includes(document.activeElement.id);
+    const same = JSON.stringify(rosterBody.roster || []) === JSON.stringify(hqRoster) && JSON.stringify(commandBody.commands || []) === JSON.stringify(hqCommands);
+    hqRoster = rosterBody.roster || [];
+    hqCommands = commandBody.commands || [];
+    hqError = "";
+    if (view === "bureau" && (force || (!same && !typing))) render();
+  } catch (reason) {
+    if (token !== hqLoad) return;
+    hqError = reason.message || "Le bureau est indisponible.";
+    if (view === "bureau") render();
+  }
+}
+
+async function postHq(payload) {
+  hqError = "";
+  try {
+    const response = await fetch("/api/hq/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      hqError = body.error || "La commande n'a pas été enregistrée.";
+      render();
+      return;
+    }
+    hqDraft = "";
+    hqCommands = [body.command, ...hqCommands.filter((command) => command.id !== body.command.id)];
+    render();
+    refreshHq({ force: true });
+  } catch (reason) {
+    hqError = reason.message || "La commande n'a pas été enregistrée.";
+    render();
+  }
+}
+
+function ensureHqPoll() {
+  if (ensureHqPoll.started) return;
+  ensureHqPoll.started = true;
+  setInterval(() => { if (view === "bureau") refreshHq(); }, 4000);
 }
 
 load().catch(showLoadError);

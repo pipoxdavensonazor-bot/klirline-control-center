@@ -8,6 +8,11 @@ import { ACCESS_VALUES, PRODUCT_SITES, productSiteFields } from "./product-sites
 import { activeProspects, seedWorld } from "./seed.js";
 import { dataPath } from "./store.js";
 import { accessSettings, bindIdentity, orgObjectName, verifyAccessJwt } from "./access.js";
+import { dispatchHq } from "./hq/dispatch.js";
+import { memoryHqStore } from "./hq/memory-store.js";
+import { HQ_ROSTER, rosterAgent, routeCommand } from "./hq/roster.js";
+import { HQ_INDEX, HQ_INSERT, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
+import { routeAccess } from "./routes.js";
 import { API_LIMITS, rateKey, take } from "./limits.js";
 import { readProspectFeed } from "./prospect-feed.js";
 
@@ -279,6 +284,118 @@ check(!canViewAdminHub("coo") && !canViewAdminHub("pm-klirbuild") && !canViewAdm
 check(present(state, "ceo", []).adminHub === true, "Le bootstrap CEO ouvre le hub admin");
 check(present(state, "coo", []).adminHub === false, "Le bootstrap des autres postes ferme le hub admin");
 check(present(state, "ceo", []).platforms.length === 8, "Les huit plateformes simulées restent dans le bootstrap");
+
+check(routeAccess("/api/health", "GET") === "public" && routeAccess("/api/sites", "GET") === "public", "La santé et les sites restent publics");
+check(routeAccess("/api/sites", "POST") === "session", "Un autre verbe sur les sites reste une route de session");
+check(routeAccess("/api/playbooks/company", "GET") === "public", "Les playbooks restent publics");
+check(routeAccess("/api/command", "POST") === "session", "La commande de démonstration exige la session");
+check(routeAccess("/api/hq/command", "POST") === "session" && routeAccess("/api/hq/commands", "GET") === "session" && routeAccess("/api/hq/roster", "GET") === "session", "Le bureau exige la même session que les autres routes /api");
+
+const hqIds = ["office-klirline", "ops-klirline", "klirbuild", "klirmarket", "klirprospect", "klirline-ai", "noria", "black-wall-news", "bwn-redaction", "klirline-social", "youtube-channel", "ic-market", "cmcmarkets", "all-question", "sandbox-klirline"];
+check(HQ_ROSTER.map((agent) => agent.id).join() === hqIds.join(), "Le roster du bureau est la liste nommée, distincte des 34 postes");
+check(new Set(HQ_ROSTER.map((agent) => agent.id)).size === HQ_ROSTER.length, "Les identifiants du bureau sont uniques");
+check(new Set(HQ_ROSTER.map((agent) => agent.grokAgentName)).size === HQ_ROSTER.length, "Chaque agent Grok a un nom de routage");
+check(HQ_ROSTER.every((agent) => ["Ops", "Produits", "Média", "Trading", "Autres"].includes(agent.division) && agent.mission && agent.grokAgentName), "Chaque carte a une division, une mission et un nom Grok");
+check(rosterAgent("office-klirline").covers.map((item) => item.name).join() === "Centia,Klirline.ca,KlirSecure,KlirPay", "Les produits sans agent dédié restent chez Office Klirline");
+check(HQ_ROSTER.filter((agent) => agent.covers.length).length === 1, "Les autres cartes n'héritent pas de ces produits");
+const routed = (text) => routeCommand(text).agent.id;
+check(routed("rédiger l'article Black Wall News") === "bwn-redaction", "Un article Black Wall va à la rédaction");
+check(routed("ouvrir blackwallnews.com") === "black-wall-news", "Le site Black Wall va à son agent");
+check(routed("estimation KlirBuild") === "klirbuild", "KlirBuild est reconnu");
+check(routed("vitrine https://klirline.com") === "klirmarket", "klirline.com va à KlirMarket");
+check(routed("voir https://centre.klirline.com") === "ops-klirline", "Le centre ne part pas vers KlirMarket");
+check(routed("livraison Centia") === "office-klirline" && routed("écart KlirPay") === "office-klirline" && routed("constat KlirSecure") === "office-klirline" && routed("admin klirline.ca") === "office-klirline", "Les produits sans spécialiste reviennent à Office");
+check(routed("position IC Market") === "ic-market" && routed("compte CMCMarkets") === "cmcmarkets", "Les comptes de trading sont reconnus");
+check(routed("vidéo YouTube") === "youtube-channel" && routed("post Instagram") === "klirline-social", "Les canaux média sont reconnus");
+check(routed("essai sandbox") === "sandbox-klirline", "Le bac à sable est reconnu");
+check(routed("bonjour le bureau") === "all-question" && routeCommand("bonjour le bureau").routedBy === "triage", "Une commande sans cible part au triage");
+
+const hqStore = memoryHqStore();
+const createdHq = await dispatchHq(hqStore, {
+  method: "POST",
+  pathname: "/api/hq/command",
+  searchParams: new URLSearchParams(),
+  body: { text: "rédiger l'article Black Wall News", priority: "haute" },
+  actorId: "ceo",
+});
+check(createdHq.status === 201 && createdHq.body.command.status === "pending" && createdHq.body.command.ownerSlug === "bwn-redaction", "Une commande du bureau naît en attente");
+check(createdHq.body.mode === "hq" && createdHq.body.command.grokAgentName === "BWN Rédaction", "La réponse porte le nom Grok");
+const pendingHq = await dispatchHq(hqStore, {
+  method: "GET",
+  pathname: "/api/hq/commands",
+  searchParams: new URLSearchParams("status=pending"),
+  body: {},
+  actorId: "ceo",
+});
+check(pendingHq.body.commands.length === 1 && pendingHq.body.commands[0].id === createdHq.body.command.id, "La file pending contient la commande");
+const explicitHq = await dispatchHq(hqStore, {
+  method: "POST",
+  pathname: "/api/hq/command",
+  searchParams: new URLSearchParams(),
+  body: { text: "rédiger l'article Black Wall News", ownerSlug: "sandbox-klirline" },
+  actorId: "ceo",
+});
+check(explicitHq.body.command.ownerSlug === "sandbox-klirline" && explicitHq.body.command.routedBy === "explicit", "Un agent choisi gagne sur les mots-clés");
+const doneHq = await dispatchHq(hqStore, {
+  method: "PATCH",
+  pathname: `/api/hq/commands/${createdHq.body.command.id}`,
+  searchParams: new URLSearchParams(),
+  body: { status: "done", result: "Article prêt", agentNote: "BWN Rédaction" },
+  actorId: "ceo",
+});
+check(doneHq.status === 200 && doneHq.body.command.status === "done" && doneHq.body.command.result === "Article prêt" && doneHq.body.command.text.startsWith("rédiger"), "Le PATCH termine la commande sans réécrire l'ordre");
+const stillPending = await dispatchHq(hqStore, {
+  method: "GET",
+  pathname: "/api/hq/commands",
+  searchParams: new URLSearchParams("status=pending"),
+  body: {},
+  actorId: "ceo",
+});
+check(stillPending.body.commands.length === 1 && stillPending.body.commands[0].id === explicitHq.body.command.id, "Le filtre pending retire la commande terminée");
+const rosterHq = await dispatchHq(hqStore, {
+  method: "GET",
+  pathname: "/api/hq/roster",
+  searchParams: new URLSearchParams(),
+  body: {},
+  actorId: "ceo",
+});
+check(rosterHq.body.roster.length === HQ_ROSTER.length && rosterHq.body.roster.find((agent) => agent.id === "bwn-redaction").lastCommand.status === "done", "Le roster expose la dernière commande");
+try {
+  await dispatchHq(hqStore, { method: "POST", pathname: "/api/hq/command", searchParams: new URLSearchParams(), body: { text: "ok" }, actorId: "ceo" });
+  check(false, "Une commande trop courte est refusée");
+} catch (error) {
+  check(error.status === 400, "Une commande trop courte est refusée");
+}
+try {
+  await dispatchHq(hqStore, { method: "PATCH", pathname: `/api/hq/commands/${createdHq.body.command.id}`, searchParams: new URLSearchParams(), body: { status: "publie" }, actorId: "ceo" });
+  check(false, "Un statut hors liste est refusé");
+} catch (error) {
+  check(error.status === 400, "Un statut hors liste est refusé");
+}
+const demoUntouched = issueCommand(state, "ceo", "trouver 10 prospects");
+check(demoUntouched.origin === "command" && demoUntouched.ownerId === "prospecting", "La commande de démonstration reste sur les 34 postes");
+
+process.on("warning", (warning) => {
+  if (warning.name === "ExperimentalWarning") return;
+  console.error(warning.stack || warning.message);
+});
+const { DatabaseSync } = await import("node:sqlite");
+const hqDb = new DatabaseSync(":memory:");
+hqDb.exec(HQ_SCHEMA);
+hqDb.exec(HQ_INDEX);
+const insertHq = hqDb.prepare(HQ_INSERT);
+const selectHq = hqDb.prepare(HQ_SELECT);
+const first = createdHq.body.command;
+const second = explicitHq.body.command;
+insertHq.run(first.id, first.status, first.ownerSlug, first.division, first.createdAt, JSON.stringify(first));
+insertHq.run(second.id, second.status, second.ownerSlug, second.division, second.createdAt, JSON.stringify(second));
+const pendingRows = selectHq.all(...hqSelectBindings({ status: "pending" })).map((row) => JSON.parse(row.body));
+check(pendingRows.length === 2, "Le SQL du bureau retrouve les commandes en attente");
+hqDb.prepare(HQ_UPDATE).run("done", first.ownerSlug, first.division, JSON.stringify({ ...first, status: "done" }), first.id);
+const pendingAfter = selectHq.all(...hqSelectBindings({ status: "pending" })).map((row) => JSON.parse(row.body));
+check(pendingAfter.length === 1 && pendingAfter[0].id === second.id, "Le SQL du bureau retire une commande passée à done");
+const doneRows = selectHq.all(...hqSelectBindings({ status: "done" })).map((row) => JSON.parse(row.body));
+check(doneRows.length === 1 && doneRows[0].status === "done", "Le SQL du bureau enregistre un PATCH");
 
 if (failures.length) {
   console.error(failures.join("\n"));
