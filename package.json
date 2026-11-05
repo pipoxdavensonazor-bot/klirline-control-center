@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "check": "node src/self-check.js",
+    "check:hq": "node scripts/hq-flow.mjs",
     "stage": "node scripts/stage-assets.mjs",
     "deploy": "node scripts/stage-assets.mjs && wrangler deploy"
   },
