@@ -31,16 +31,21 @@ Gestion scolaire de Klirline Inc. Le site public est https://noriaedu.com. Le pa
 
 ## Panneaux d'administration
 
-Adresses retenues, sans fonction nouvelle :
+Adresses retenues, derrière Cloudflare Access, sans fonction nouvelle :
 
+- Klirline OS : https://www.klirline.ca/admin
 - KlirBuild : https://klirline.app/login
 - KlirPay : https://pay.klirline.ca/login. Les chemins `/admin` et `/dashboard` répondent 500 ; ils ne sont pas des panneaux.
+- KlirMarket : https://klirline.com/admin
+- KlirSecure : https://secure.klirline.ca/
+- Centia : https://centia.app/connexion
+- Klir IA : https://klirline.io/dashboard/admin/credits
 - Black Wall News : https://www.blackwallnews.com/admin. Site public : https://www.blackwallnews.com.
-- NORIA : https://noriaedu.com/app#admin. Site public : https://noriaedu.com. Connexion publique, pas encore derrière Cloudflare Access.
+- NORIA : https://noriaedu.com/app#admin. Site public : https://noriaedu.com.
 
-Pas de panneau web retenu : Klir IA (https://klirline.io), Centia (https://centia.app), KlirLead (déploiement Netlify actuel), KlirMarket (https://klirline.com, vitrine, pas de panneau distinct).
+Pas de panneau web retenu : KlirLead (déploiement Netlify actuel).
 
-Page publique derrière un défi Cloudflare, panneau non retenu : Klirline OS (https://klirline.ca), KlirProspect (https://klirprospect.klirline.ca), KlirSecure (https://secure.klirline.ca).
+Page publique derrière un défi Cloudflare, panneau non retenu : KlirProspect (https://klirprospect.klirline.ca).
 
 Le centre https://centre.klirline.com est déjà derrière Cloudflare Access. Il n'a pas de second lien.
 

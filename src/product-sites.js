@@ -3,15 +3,15 @@ export const ACCESS_VALUES = new Set(["public-login", "cf-access", "cf-challenge
 export const PRODUCT_SITES = [
   { id: "klirprospect", url: "https://klirprospect.klirline.ca", adminUrl: null, access: "cf-challenge" },
   { id: "klirlead", url: "https://scintillating-croissant-147cda.netlify.app", adminUrl: null, access: "none" },
-  { id: "klirline-os", url: "https://klirline.ca", adminUrl: null, access: "cf-challenge" },
-  { id: "klirbuild", url: "https://klirline.app", healthUrl: "https://klirline.app/api/health", adminUrl: "https://klirline.app/login", access: "public-login" },
-  { id: "klirpay", url: "https://pay.klirline.ca", note: "Bac à sable", adminUrl: "https://pay.klirline.ca/login", access: "public-login" },
-  { id: "klirmarket", url: "https://klirline.com", note: "Vitrine publique", adminUrl: null, access: "none" },
-  { id: "klirsecure", url: "https://secure.klirline.ca", adminUrl: null, access: "cf-challenge" },
-  { id: "centia", url: "https://centia.app", adminUrl: null, access: "none" },
-  { id: "klir-ia", name: "Klir IA", url: "https://klirline.io", skillsUrl: "https://klirline.io/api/skills", note: "Assistant marketing", adminUrl: null, access: "none" },
-  { id: "black-wall-news", name: "Black Wall News", url: "https://www.blackwallnews.com", adminUrl: "https://www.blackwallnews.com/admin", access: "public-login" },
-  { id: "noria", name: "NORIA", url: "https://noriaedu.com", note: "Gestion scolaire", adminUrl: "https://noriaedu.com/app#admin", access: "public-login" },
+  { id: "klirline-os", url: "https://klirline.ca", adminUrl: "https://www.klirline.ca/admin", access: "cf-access" },
+  { id: "klirbuild", url: "https://klirline.app", healthUrl: "https://klirline.app/api/health", adminUrl: "https://klirline.app/login", access: "cf-access" },
+  { id: "klirpay", url: "https://pay.klirline.ca", note: "Bac à sable", adminUrl: "https://pay.klirline.ca/login", access: "cf-access" },
+  { id: "klirmarket", url: "https://klirline.com", note: "Vitrine publique", adminUrl: "https://klirline.com/admin", access: "cf-access" },
+  { id: "klirsecure", url: "https://secure.klirline.ca", adminUrl: "https://secure.klirline.ca/", access: "cf-access" },
+  { id: "centia", url: "https://centia.app", adminUrl: "https://centia.app/connexion", access: "cf-access" },
+  { id: "klir-ia", name: "Klir IA", url: "https://klirline.io", skillsUrl: "https://klirline.io/api/skills", note: "Assistant marketing", adminUrl: "https://klirline.io/dashboard/admin/credits", access: "cf-access" },
+  { id: "black-wall-news", name: "Black Wall News", url: "https://www.blackwallnews.com", adminUrl: "https://www.blackwallnews.com/admin", access: "cf-access" },
+  { id: "noria", name: "NORIA", url: "https://noriaedu.com", note: "Gestion scolaire", adminUrl: "https://noriaedu.com/app#admin", access: "cf-access" },
 ];
 
 export function productSiteFields(site) {
@@ -22,7 +22,10 @@ export function productSiteFields(site) {
     throw new Error(`adminUrl invalide pour ${site.id}`);
   }
   if (access === "public-login" && !adminUrl) throw new Error(`${site.id} : public-login sans adminUrl`);
-  if (access !== "public-login" && adminUrl) throw new Error(`${site.id} : un lien admin exige public-login`);
+  if (access === "cf-access" && !adminUrl) throw new Error(`${site.id} : cf-access sans adminUrl`);
+  if (access !== "public-login" && access !== "cf-access" && adminUrl) {
+    throw new Error(`${site.id} : un lien admin exige public-login ou cf-access`);
+  }
   return { adminUrl, access };
 }
 
