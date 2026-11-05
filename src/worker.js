@@ -1,8 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
-import { accessSettings, bindIdentity, verifyAccessJwt } from "./access.js";
+import { accessSettings, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
 import { decideClaim, decideCompletion, decideInterrupt } from "./hq/commands.js";
-import { accessScopes } from "./hq/machine-auth.js";
+import { identifyAccess } from "./hq/machine-auth.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { runMissionOperation } from "./hq/missions.js";
 import { HQ_INDEX, HQ_INSERT, HQ_MISSION_INDEX, HQ_MISSION_INSERT, HQ_MISSION_SCHEMA, HQ_MISSION_SELECT, HQ_MISSION_UPDATE, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
@@ -62,19 +62,19 @@ async function authenticate(request, env) {
     error.status = 401;
     throw error;
   }
-  const { email } = await verifyAccessJwt(token, {
+  const claims = await verifyAccessJwt(token, {
     teamDomain: settings.teamDomain,
     aud: settings.aud,
     keys: await accessKeys(settings.teamDomain),
     nowMs: Date.now(),
   });
-  const account = settings.accounts.find((item) => item.email === email);
-  if (!account) {
-    const error = new Error("Ce compte n'est pas autorisé pour ce centre.");
-    error.status = 403;
+  const identified = identifyAccess(claims, env);
+  if (!identified.identity) {
+    const error = new Error(identified.error || "Jeton refusé.");
+    error.status = identified.status || 401;
     throw error;
   }
-  return bindIdentity(account);
+  return identified.identity;
 }
 
 async function readJson(request) {
@@ -328,8 +328,8 @@ export default {
             searchParams: url.searchParams,
             body: payload,
             actorId: identity.actorId,
-            scopes: accessScopes(identity.actorId),
-            human: true,
+            scopes: identity.scopes,
+            human: identity.human === true,
           },
         );
         return json(result.status, result.body);

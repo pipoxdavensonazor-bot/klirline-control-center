@@ -83,7 +83,7 @@ export const CONNECTIONS = [
     lastCheck: null,
     status: "human-sso-only",
     send: false,
-    note: "Un jeton de service machine n'est pas configuré. Il ne devra pas hériter des droits administrateur.",
+    note: "Le Worker n'accepte une machine qu'après un jeton Cloudflare Access de service. Les droits viennent de HQ_MACHINE_IDENTITIES, pas du rôle humain. Aucun jeton n'est posé.",
   },
 ];
 

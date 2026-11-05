@@ -8,6 +8,7 @@ import { ACCESS_VALUES, PRODUCT_SITES, productSiteFields } from "./product-sites
 import { activeProspects, seedWorld } from "./seed.js";
 import { dataPath } from "./store.js";
 import { accessSettings, bindIdentity, orgObjectName, verifyAccessJwt } from "./access.js";
+import { identifyAccess } from "./hq/machine-auth.js";
 import { HQ_LEASE_MS, hashClaimToken } from "./hq/commands.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { memoryHqStore } from "./hq/memory-store.js";
@@ -235,6 +236,35 @@ try {
   check(false, "Un jeton non signé est refusé");
 } catch (error) {
   check(error.status === 401, "Un jeton non signé est refusé");
+}
+const serviceName = "a".repeat(32) + ".access";
+const serviceClaims = await verifyAccessJwt(
+  sign({ type: "app", sub: "", common_name: serviceName, aud: "aud-essai", iss: "https://equipe.cloudflareaccess.com", exp: nowMs / 1000 + 60 }),
+  { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs },
+);
+check(serviceClaims.kind === "service" && serviceClaims.commonName === serviceName, "Un jeton de service Access est reconnu sans courriel");
+const accessEnv = {
+  ACCESS_TEAM_DOMAIN: "equipe.cloudflareaccess.com",
+  ACCESS_AUD: "aud-essai",
+  ACCESS_ACCOUNTS: JSON.stringify([{ email: "ada@example.com", role: "ceo", orgId: "klirline" }]),
+};
+const machineEnv = {
+  ...accessEnv,
+  HQ_MACHINE_IDENTITIES: JSON.stringify([
+    { id: "executor-klirprospect", accessClientId: serviceName, token: "local-only", actorId: "ceo", orgId: "klirline", scopes: ["work"] },
+  ]),
+};
+const machineIdentity = identifyAccess(serviceClaims, machineEnv).identity;
+check(machineIdentity.human === false && machineIdentity.scopes.join() === "work" && machineIdentity.actorId === "ceo", "Le passage Access ne donne pas les droits de revue du rôle");
+check(machineIdentity.orgId === "klirline" && machineIdentity.email === "machine:executor-klirprospect", "La machine reste dans l'organisation déclarée");
+const humanIdentity = identifyAccess(accepted, machineEnv).identity;
+check(humanIdentity.human === true && humanIdentity.scopes.includes("review") && humanIdentity.actorId === "ceo", "Le SSO humain garde ses permissions applicatives");
+check(identifyAccess(serviceClaims, accessEnv).status === 403, "Un jeton de service sans fiche machine est refusé");
+try {
+  await verifyAccessJwt(sign({ type: "app", sub: "", common_name: "pas-un-client", aud: "aud-essai", iss: "https://equipe.cloudflareaccess.com", exp: nowMs / 1000 + 60 }), { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
+  check(false, "Un common_name hors service est refusé");
+} catch (error) {
+  check(error.status === 401, "Un common_name hors service est refusé");
 }
 
 const liveFeed = readProspectFeed({

@@ -59,6 +59,8 @@ Forme de `ACCESS_ACCOUNTS`, sans exemple réel :
 3. Poser les trois secrets, par exemple `npx wrangler secret put ACCESS_TEAM_DOMAIN`. Ne pas les écrire dans git.
 4. Déployer seulement après cette configuration. Ce dépôt ne déploie pas et ne crée pas l'application Access.
 
+Une machine ne remplace pas ce SSO. Elle n'entre qu'avec un jeton de service Access déjà accepté par la politique, puis avec une fiche `HQ_MACHINE_IDENTITIES` dont les `scopes` sont écrits explicitement. Le modèle vide est `config/hq-machines.example.json`. Le champ `token` sert au serveur local. Le Worker lit `accessClientId`, le `common_name` du jeton Access.
+
 ## Limites des routes
 
 Chaque route `/api/*` compte dans une fenêtre de 60 secondes et de 60 requêtes. La clé est l'adresse de connexion, puis le courriel vérifié pour les routes du dossier. Le rôle et l'`orgId` n'entrent pas dans la clé. Un corps de plus de 32 Ko répond `413`. Un JSON illisible répond `400`. Un dépassement répond `429` avec `Retry-After`.

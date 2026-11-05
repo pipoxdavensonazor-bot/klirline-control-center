@@ -1,14 +1,18 @@
 [
   {
     "id": "executor-klirprospect",
-    "token": "",
+    "accessClientId": "",
     "actorId": "machine-klirprospect",
-    "scopes": ["work"]
+    "orgId": "klirline",
+    "scopes": ["work"],
+    "token": ""
   },
   {
     "id": "reviewer-office",
-    "token": "",
+    "accessClientId": "",
     "actorId": "coo",
-    "scopes": ["review"]
+    "orgId": "klirline",
+    "scopes": ["review"],
+    "token": ""
   }
 ]

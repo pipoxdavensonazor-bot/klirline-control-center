@@ -121,6 +121,11 @@ export async function verifyAccessJwt(token, { teamDomain, aud, keys, nowMs }) {
   if (!audiences.includes(aud)) rejected();
   if (typeof claims.exp !== "number" || claims.exp * 1000 <= nowMs) rejected();
   if (typeof claims.nbf === "number" && claims.nbf * 1000 > nowMs) rejected();
-  if (typeof claims.email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(claims.email)) rejected();
-  return { email: claims.email.toLowerCase() };
+  const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { kind: "human", email };
+  const commonName = typeof claims.common_name === "string" ? claims.common_name.trim() : "";
+  if (claims.type === "app" && claims.sub === "" && /^[a-f0-9]{32}\.access$/.test(commonName)) {
+    return { kind: "service", commonName };
+  }
+  rejected();
 }

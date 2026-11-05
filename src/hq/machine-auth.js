@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { bindIdentity, orgObjectName, accessSettings } from "../access.js";
 
 function bearer(headerValue) {
   const value = String(headerValue || "");
@@ -23,13 +24,68 @@ export function machineIdentities(env = {}) {
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  return parsed.filter((item) => item && item.id && item.token && item.actorId);
+  return parsed.filter((item) => item && item.id && item.actorId && (item.token || item.accessClientId));
+}
+
+const SERVICE_CLIENT = /^[a-f0-9]{32}\.access$/;
+const APP_SCOPES = new Set(["work", "review"]);
+
+export function resolveServiceMachine(commonName, env = {}) {
+  if (!SERVICE_CLIENT.test(commonName || "")) return null;
+  const match = machineIdentities(env).find((item) => item.accessClientId === commonName);
+  if (!match) return null;
+  const scopes = Array.isArray(match.scopes) ? [...new Set(match.scopes.map(String))] : [];
+  if (!scopes.length || scopes.some((scope) => !APP_SCOPES.has(scope))) return null;
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(String(match.actorId || ""))) return null;
+  let orgId;
+  try {
+    orgId = orgObjectName(String(match.orgId || ""));
+  } catch {
+    return null;
+  }
+  return {
+    id: String(match.id),
+    actorId: String(match.actorId),
+    orgId,
+    scopes,
+    human: false,
+  };
+}
+
+export function identifyAccess(claims, env = {}) {
+  if (claims?.kind === "human" && claims.email) {
+    const settings = accessSettings(env);
+    const account = settings.accounts.find((item) => item.email === claims.email);
+    if (!account) return { status: 403, error: "Ce compte n'est pas autorisé pour ce centre." };
+    const identity = bindIdentity(account);
+    return {
+      identity: {
+        ...identity,
+        human: true,
+        scopes: accessScopes(identity.actorId),
+      },
+    };
+  }
+  if (claims?.kind === "service") {
+    const machine = resolveServiceMachine(claims.commonName, env);
+    if (!machine) return { status: 403, error: "Ce jeton de service n'a pas de permission applicative." };
+    return {
+      identity: {
+        actorId: machine.actorId,
+        orgId: machine.orgId,
+        email: `machine:${machine.id}`,
+        human: false,
+        scopes: machine.scopes,
+      },
+    };
+  }
+  return { status: 401, error: "Jeton refusé." };
 }
 
 export function authenticateMachine(authorizationHeader, env = {}) {
   const token = bearer(authorizationHeader);
   if (!token) return null;
-  const match = machineIdentities(env).find((item) => sameSecret(item.token, token));
+  const match = machineIdentities(env).find((item) => item.token && sameSecret(item.token, token));
   if (!match) return null;
   return {
     id: String(match.id),
