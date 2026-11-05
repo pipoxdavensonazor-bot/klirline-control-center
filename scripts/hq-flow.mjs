@@ -58,11 +58,28 @@ try {
   assert(pending.status === 200, "liste pending");
   assert(pending.payload.commands.some((command) => command.id === id), "la commande n'est pas dans pending");
 
-  const patched = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", result: "Article prêt", agentNote: "BWN Rédaction" });
-  assert(patched.status === 200 && patched.payload.command.status === "done", "PATCH done a échoué");
+  const firstClaim = await request("POST", `/api/hq/commands/${id}/claim`, {});
+  assert(firstClaim.status === 200 && firstClaim.payload.outcome === "issued" && firstClaim.payload.command.status === "dispatched", "le premier claim ne transmet pas");
+  assert(typeof firstClaim.payload.claimToken === "string" && firstClaim.payload.claimToken.length >= 32, "le premier claim ne remet pas de bail");
+  assert(!JSON.stringify(firstClaim.payload.command).includes(firstClaim.payload.claimToken), "le bail est recopié dans la commande");
+
+  const secondClaim = await request("POST", `/api/hq/commands/${id}/claim`, {});
+  assert(secondClaim.status === 200 && secondClaim.payload.outcome === "held" && secondClaim.payload.command.status === "dispatched", "le second claim redistribue");
+  assert(secondClaim.payload.claimToken === undefined && !JSON.stringify(secondClaim.payload).includes(firstClaim.payload.claimToken), "le second claim renvoie le bail");
+  assert(secondClaim.payload.command.updatedAt === firstClaim.payload.command.updatedAt, "le second claim réécrit la date");
+
+  const bare = await request("PATCH", `/api/hq/commands/${id}`, { status: "done" });
+  assert(bare.status === 400, `clore sans preuve a répondu ${bare.status}`);
+  const blank = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", result: " ", proof: "", agentNote: "" });
+  assert(blank.status === 400, "une preuve vide est acceptée");
+  const stillOpen = await request("GET", `/api/hq/commands/${id}`);
+  assert(stillOpen.payload.command.status === "dispatched" && !JSON.stringify(stillOpen.payload).includes(firstClaim.payload.claimToken), "le refus de clôture a changé la commande");
+
+  const patched = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", result: "Article prêt", agentNote: "BWN Rédaction", proof: "Brouillon déposé au bureau" });
+  assert(patched.status === 200 && patched.payload.command.status === "done" && patched.payload.command.proof === "Brouillon déposé au bureau", "PATCH done a échoué");
 
   const again = await request("GET", `/api/hq/commands/${id}`);
-  assert(again.payload.command.status === "done" && again.payload.command.result === "Article prêt", "la lecture ne montre pas done");
+  assert(again.payload.command.status === "done" && again.payload.command.result === "Article prêt" && again.payload.command.proof === "Brouillon déposé au bureau", "la lecture ne montre pas done");
 
   const roster = await request("GET", "/api/hq/roster");
   assert(roster.payload.roster.length >= 14, "roster trop court");
@@ -76,7 +93,7 @@ try {
 
   const page = await fetch(`${base}/app.js`, { signal: AbortSignal.timeout(5000) });
   const source = await page.text();
-  assert(source.includes("Bureau") && source.includes("Plateformes") && source.includes("Admin produits"), "l'interface a perdu le bureau ou les plateformes");
+  assert(source.includes("Bureau") && source.includes("Plateformes") && source.includes("Admin produits") && source.includes("Preuve."), "l'interface a perdu le bureau, les plateformes ou la preuve");
 
   console.log(`OK — commande ${id} : pending → done. Démonstration et hub intacts.`);
 } finally {
