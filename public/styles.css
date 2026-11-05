@@ -48,6 +48,27 @@ nav button.active, nav button:hover { background: rgba(26, 159, 224, 0.16); }
 .hq-compose label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
 .hq-compose select, #hq-text { width: 100%; }
 #hq-text { display: block; min-height: 96px; }
+.hq-status { display: grid; gap: 8px; margin-top: 10px; }
+.hq-status label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.hq-status textarea { width: 100%; min-height: 0; }
+.hq-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.hq-status .hq-actions { margin-top: 4px; }
+.hq-card .error { margin: 10px 0 0; }
+.hq-lanes .hq-actions button {
+  width: auto;
+  text-align: center;
+  border-radius: 999px;
+  padding: 8px 14px;
+  border: 1px solid var(--copper);
+  background: var(--copper);
+  color: white;
+}
+.hq-lanes .hq-actions button.ghost { background: transparent; color: var(--copper); }
+.hq-lanes .hq-actions button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+.hq-lanes .hq-actions button.ghost.active,
+.hq-lanes .hq-actions button.danger.active { background: var(--sidebar); color: white; border-color: var(--sidebar); }
+.hq-lanes .hq-actions button.solid-danger { background: var(--danger); color: white; border-color: var(--danger); }
+.hq-lanes .hq-actions button:disabled { opacity: 0.55; cursor: progress; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 .filters button { border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 12px; }
 .filters button.active { background: var(--sidebar); color: var(--sidebar-text); border-color: var(--sidebar); }

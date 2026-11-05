@@ -53,6 +53,12 @@ Ordre attendu : `pending` ou `queued` → `dispatched` → `running` → `done`,
 
 `done` exige une preuve : `result`, `proof` ou `agentNote` non vide. Sans cela le PATCH répond `400` et la commande ne change pas. La preuve s'affiche dans la colonne Fait du bureau.
 
+## Depuis le Bureau
+
+Une personne déjà connectée à Cloudflare Access change le statut sur la carte, sans curl. Les colonnes En cours et Bloqué proposent : Passer en cours, Marquer fait, À valider, Marquer bloqué (ou l'échec, avec une note). La colonne Fait reste en lecture : résultat, preuve et note y restent visibles.
+
+Le navigateur appelle `PATCH /api/hq/commands/<id>` sur la même origine. Les cookies de la session Access partent avec la requête. Aucun jeton de service, aucun contournement d'Access, aucun secret de Worker. Une réponse 400 ou 403 s'affiche sur la carte. Marquer fait exige un résultat, une preuve ou une note, comme ce PATCH.
+
 ## Créer une commande
 
 ```bash
