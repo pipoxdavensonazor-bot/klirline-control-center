@@ -74,6 +74,8 @@ function options() {
         { id: "reviewer-only", accessClientId: `${"cd".repeat(16)}.access`, actorId: "coo", orgId: "klirline", scopes: ["review"] },
       ]),
     },
+    // Ce remplacement n'existe que dans ce script. wrangler.jsonc et src/worker.js
+    // vont chercher les certificats sur https://<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs.
     outboundService: (request) => {
       const url = new URL(request.url);
       if (url.hostname === team && url.pathname === "/cdn-cgi/access/certs") {
@@ -169,7 +171,7 @@ try {
   const selfApproval = await call(mf, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, executor);
   assert(selfApproval.status === 403, `l'exécuteur s'est validé ${selfApproval.status}`);
   const approved = await call(mf, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu en local." }, approver);
-  assert(approved.status === 200 && approved.payload.mission.approvalValid === true, `validation ${approved.status} ${approved.payload.error || ""}`);
+  assert(approved.status === 200 && approved.payload.mission.status === "in_review" && approved.payload.mission.approvalValid === true, `validation ${approved.status} ${approved.payload.mission?.status || ""} ${approved.payload.error || ""}`);
   const send = await call(mf, "POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Ce message ne part pas." }, executor);
   assert(send.status === 403 && send.payload.mission.drafts.at(-1).sent === false, `envoi ${send.status} ${send.payload.error || ""}`);
 
@@ -178,7 +180,7 @@ try {
   const after = await tables(mf);
   const reloaded = await call(mf, "GET", `/api/hq/missions/${missionId}`, undefined, approver);
   assert(after.includes("hq_mission"), "hq_mission absente après redémarrage");
-  assert(reloaded.status === 200 && reloaded.payload.mission.id === missionId && reloaded.payload.mission.approvalValid === true, `relecture ${reloaded.status} ${reloaded.payload.error || reloaded.payload.mission?.status || ""}`);
+  assert(reloaded.status === 200 && reloaded.payload.mission.id === missionId && reloaded.payload.mission.status === "in_review" && reloaded.payload.mission.approvalValid === true, `relecture ${reloaded.status} ${reloaded.payload.error || reloaded.payload.mission?.status || ""}`);
   const hidden = await call(mf, "GET", "/api/hq/clients/cli-reserve", undefined, executor);
   assert(hidden.status === 404, `dossier réservé ${hidden.status}`);
   console.log(JSON.stringify({
