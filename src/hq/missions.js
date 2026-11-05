@@ -292,6 +292,30 @@ export function addDeliverable(mission, commands, input, options = {}) {
   if (body.length > 4000) fail(400, "Le livrable est trop long.");
   const command = commands.find((item) => item.id === task.commandId);
   if (!command) fail(409, "La commande de la tâche est introuvable.");
+  if (command.status === "done") {
+    const now = clock(options).toISOString();
+    const next = clone(mission);
+    const target = next.tasks.find((item) => item.id === task.id);
+    target.status = "todo";
+    target.commandId = null;
+    next.status = "rework";
+    next.deliverables.push({
+      id: `liv-${crypto.randomUUID()}`,
+      taskId: target.id,
+      body,
+      source: "demonstration",
+      state: "revision",
+      executionKind: input?.executionKind || "manual",
+      createdAt: now,
+      createdBy: options.actorId || "",
+    });
+    for (const approval of next.approvals) {
+      if (!approval.invalidatedAt) approval.invalidatedAt = now;
+    }
+    next.updatedAt = now;
+    pushEvent(next, "revision", options.actorId, "Livrable modifié. L'approbation précédente ne vaut plus.", now);
+    return { mission: next, command, changed: true, replaceCommand: false };
+  }
   const proved = decideCompletion(command, {
     status: "done",
     proof: body,
@@ -312,6 +336,7 @@ export function addDeliverable(mission, commands, input, options = {}) {
     body,
     source: "demonstration",
     state: "proposal",
+    executionKind: input?.executionKind || "deterministic-script",
     createdAt: now,
     createdBy: options.actorId || "",
   });
@@ -395,6 +420,12 @@ export function runMissionOperation(mission, commands, operation, input, options
   if (operation === "decide") return { mission: decideMission(mission, input, options), changed: true, httpStatus: 200 };
   if (operation === "act") return { ...prepareExternalAction(mission, input, options), changed: true };
   fail(400, "Opération inconnue.");
+}
+
+export function canReadMission(mission, actorId, scopes) {
+  if (!mission) return false;
+  if (Array.isArray(scopes) && scopes.includes("review")) return true;
+  return mission.createdBy === actorId || mission.validatorId === actorId;
 }
 
 export function presentMission(mission, actorId, now = new Date()) {

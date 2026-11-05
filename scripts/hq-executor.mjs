@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runModelAdapter } from "../src/hq/model-run.js";
 
 export const PROCEDURE_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../knowledge/procedures/klirprospect-synthese.md");
 
@@ -13,6 +14,16 @@ export function readPinnedProcedure(file = PROCEDURE_PATH) {
   const fiches = JSON.parse(json).fiches;
   if (!Array.isArray(fiches) || fiches.length !== 3) throw new Error("La procédure doit contenir trois fiches.");
   return { id, version, fiches, text };
+}
+
+export function deterministicAdapter(procedure) {
+  return {
+    kind: "deterministic-script",
+    async run() {
+      const synthesis = buildSynthesis(procedure);
+      return synthesis;
+    },
+  };
 }
 
 export function buildSynthesis(procedure) {
@@ -56,7 +67,14 @@ export function buildSynthesis(procedure) {
 
 export async function runExecutor(base, token) {
   const procedure = readPinnedProcedure();
-  const synthesis = buildSynthesis(procedure);
+  const synthesis = await runModelAdapter(deterministicAdapter(procedure), {
+    procedureId: procedure.id,
+    procedureVersion: procedure.version,
+    fiches: procedure.fiches,
+  }, { capCents: 0, timeoutMs: 2000 });
+  if (!synthesis.ok || synthesis.executionKind !== "deterministic-script") {
+    throw new Error(synthesis.error || "La synthèse déterministe a échoué.");
+  }
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
   const call = async (method, pathname, body) => {
     const response = await fetch(`${base}${pathname}`, {
@@ -81,6 +99,7 @@ export async function runExecutor(base, token) {
     taskId,
     body: synthesis.body,
     result: synthesis.result,
+    executionKind: synthesis.executionKind,
     attemptId: started.attemptId,
     claimToken: started.claimToken,
   });

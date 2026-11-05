@@ -135,6 +135,7 @@ const server = http.createServer(async (req, res) => {
         actorId: machine.actorId,
         machineId: machine.id,
         scopes: machine.scopes,
+        human: false,
       });
       return send(res, result.status, result.body);
     }

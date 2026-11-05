@@ -3,9 +3,9 @@
   "model": null,
   "aiExecution": "blocked",
   "aiReason": "Plafond de 0 $ et aucun modèle autorisé. Le script n'est pas une exécution d'IA.",
-  "missionId": "msn-11cd4f58-98e2-4ac9-883d-43a5fc9bfd29",
-  "attemptId": "911477b4-09f8-46da-afc8-75319b7e8da5",
-  "previousAttemptId": "6da6d2df-bec5-4e50-ab65-cd59aa33279b",
+  "missionId": "msn-08934e00-021c-4f09-afb0-01130af0ac44",
+  "attemptId": "89d427ce-8bea-43e1-ba53-d4d1de474891",
+  "previousAttemptId": "b24ea64c-8089-4be4-bc8e-0511ef5c0604",
   "procedure": {
     "id": "klirprospect-synthese",
     "version": "2026-11-05.1"
@@ -13,77 +13,108 @@
   "costCents": 0,
   "demosBooked": 0,
   "deliverable": {
-    "id": "liv-53ae7279-877f-44a5-880f-d4f7da01530c",
-    "taskId": "tsk-fcc8ea62-52ec-4c83-8800-8935baf22ad7",
+    "id": "liv-2d1b1f32-5f3c-44a1-b51c-d05e7ff2aab2",
+    "taskId": "tsk-9689e4ab-693f-41f5-82fa-aaa0eabb3cf0",
     "body": "# Synthèse KlirProspect\n\nProcédure klirprospect-synthese version 2026-11-05.1.\nExécution déterministe d'un script. Aucun modèle d'IA n'a été appelé. Coût : 0 $.\n\n## Besoins\n- Atelier Nord : Trouver des donneurs d'ordre pour des chantiers locaux. (Activité de rénovation, secteur Montréal.)\n- Boulangerie des Quais : Relancer d'anciens acheteurs de plateaux repas. (Commerce de proximité, ventes irrégulières.)\n- Cabinet Lumen : Suivre des devis qui restent sans réponse. (Équipe de quatre personnes.)\n\n## Informations manquantes\n- Atelier Nord : Budget, échéance et nom du décideur.\n- Boulangerie des Quais : Liste des contacts et preuve de consentement.\n- Cabinet Lumen : Outil actuel et nombre de devis par mois.\n\n## Questions à poser\n- Atelier Nord : que manque-t-il pour trouver des donneurs d'ordre pour des chantiers locaux. Préciser : Budget, échéance et nom du décideur.\n- Boulangerie des Quais : que manque-t-il pour relancer d'anciens acheteurs de plateaux repas. Préciser : Liste des contacts et preuve de consentement.\n- Cabinet Lumen : que manque-t-il pour suivre des devis qui restent sans réponse. Préciser : Outil actuel et nombre de devis par mois.\n\n## Ordre du jour proposé\n1. Rappeler que les trois fiches sont fictives et qu'aucune démonstration n'est réservée.\n2. Passer en revue le besoin de chaque fiche.\n3. Lister les informations manquantes avant tout contact.\n4. Décider si une démonstration réelle pourra être demandée plus tard, dans une validation séparée.\n\nAucune démonstration n'est réservée.",
     "source": "demonstration",
     "state": "proposal",
-    "createdAt": "2026-11-05T16:58:29.391Z",
+    "executionKind": "deterministic-script",
+    "createdAt": "2026-11-05T17:08:55.724Z",
     "createdBy": "machine-klirprospect"
   },
   "events": [
     {
-      "at": "2026-11-05T16:58:29.364Z",
+      "at": "2026-11-05T17:08:55.683Z",
       "actorId": "machine-klirprospect",
       "type": "create",
       "detail": "Synthèse de fiches fictives ouverte."
     },
     {
-      "at": "2026-11-05T16:58:29.368Z",
+      "at": "2026-11-05T17:08:55.686Z",
       "actorId": "machine-klirprospect",
       "type": "transition",
       "detail": "qualify → ready"
     },
     {
-      "at": "2026-11-05T16:58:29.370Z",
+      "at": "2026-11-05T17:08:55.689Z",
       "actorId": "machine-klirprospect",
       "type": "start",
-      "detail": "Analyser trois fiches fictives et préparer la synthèse · tentative 6da6d2df-bec5-4e50-ab65-cd59aa33279b"
+      "detail": "Analyser trois fiches fictives et préparer la synthèse · tentative b24ea64c-8089-4be4-bc8e-0511ef5c0604"
     },
     {
-      "at": "2026-11-05T16:58:29.374Z",
+      "at": "2026-11-05T17:08:55.692Z",
       "actorId": "machine-klirprospect",
       "type": "deliverable",
       "detail": "Analyser trois fiches fictives et préparer la synthèse"
     },
     {
-      "at": "2026-11-05T16:58:29.377Z",
+      "at": "2026-11-05T17:08:55.695Z",
       "actorId": "machine-klirprospect",
       "type": "transition",
       "detail": "running → in_review"
     },
     {
-      "at": "2026-11-05T16:58:29.382Z",
+      "at": "2026-11-05T17:08:55.699Z",
       "actorId": "coo",
       "type": "reject",
       "detail": "Dossier renvoyé."
     },
     {
-      "at": "2026-11-05T16:58:29.388Z",
+      "at": "2026-11-05T17:08:55.703Z",
       "actorId": "machine-klirprospect",
       "type": "start",
-      "detail": "Analyser trois fiches fictives et préparer la synthèse · tentative 911477b4-09f8-46da-afc8-75319b7e8da5"
+      "detail": "Analyser trois fiches fictives et préparer la synthèse · tentative 5c2d0a54-2f90-4ffb-a178-a37eaadc6933"
     },
     {
-      "at": "2026-11-05T16:58:29.391Z",
+      "at": "2026-11-05T17:08:55.707Z",
       "actorId": "machine-klirprospect",
       "type": "deliverable",
       "detail": "Analyser trois fiches fictives et préparer la synthèse"
     },
     {
-      "at": "2026-11-05T16:58:29.399Z",
+      "at": "2026-11-05T17:08:55.714Z",
       "actorId": "machine-klirprospect",
       "type": "transition",
       "detail": "running → in_review"
     },
     {
-      "at": "2026-11-05T16:58:29.401Z",
+      "at": "2026-11-05T17:08:55.719Z",
       "actorId": "coo",
       "type": "approve",
       "detail": "Dossier approuvé."
     },
     {
-      "at": "2026-11-05T16:58:29.402Z",
+      "at": "2026-11-05T17:08:55.721Z",
+      "actorId": "machine-klirprospect",
+      "type": "revision",
+      "detail": "Livrable modifié. L'approbation précédente ne vaut plus."
+    },
+    {
+      "at": "2026-11-05T17:08:55.723Z",
+      "actorId": "machine-klirprospect",
+      "type": "start",
+      "detail": "Analyser trois fiches fictives et préparer la synthèse · tentative 89d427ce-8bea-43e1-ba53-d4d1de474891"
+    },
+    {
+      "at": "2026-11-05T17:08:55.724Z",
+      "actorId": "machine-klirprospect",
+      "type": "deliverable",
+      "detail": "Analyser trois fiches fictives et préparer la synthèse"
+    },
+    {
+      "at": "2026-11-05T17:08:55.726Z",
+      "actorId": "machine-klirprospect",
+      "type": "transition",
+      "detail": "running → in_review"
+    },
+    {
+      "at": "2026-11-05T17:08:55.727Z",
+      "actorId": "coo",
+      "type": "approve",
+      "detail": "Dossier approuvé."
+    },
+    {
+      "at": "2026-11-05T17:08:55.728Z",
       "actorId": "coo",
       "type": "transition",
       "detail": "in_review → done"

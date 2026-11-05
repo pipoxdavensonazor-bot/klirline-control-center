@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildSynthesis, readPinnedProcedure, runExecutor } from "./hq-executor.mjs";
+import { runModelAdapter } from "../src/hq/model-run.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const port = Number(process.env.HQ_EXEC_PORT || 4191);
@@ -38,6 +39,12 @@ const synthesis = buildSynthesis(procedure);
 assert(synthesis.executionKind === "deterministic-script" && synthesis.model === null && synthesis.costCents === 0, "la synthèse ne doit pas prétendre à un modèle");
 assert(synthesis.body.includes("Besoins") && synthesis.body.includes("Informations manquantes") && synthesis.body.includes("Questions à poser") && synthesis.body.includes("Ordre du jour"), "la synthèse est incomplète");
 assert(synthesis.body.includes("Aucune démonstration n'est réservée."), "la synthèse compte une réservation");
+const blockedModel = await runModelAdapter(
+  { kind: "model", async run() { throw new Error("appel interdit"); } },
+  { procedureId: procedure.id, procedureVersion: procedure.version },
+  { capCents: 0, timeoutMs: 50 },
+);
+assert(blockedModel.ok === false && blockedModel.executionKind === "model" && blockedModel.costCents === 0 && blockedModel.billed === false, "le plafond 0 $ laisse passer un modèle");
 
 const child = spawn(process.execPath, ["src/server.js"], {
   cwd: root,
@@ -100,8 +107,36 @@ try {
   });
   assert(delivered.status === 200, "la tentative active ne dépose pas le livrable");
   await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/transition`, { status: "in_review" });
+  const hiddenMission = await call("local-test-accounting", "GET", `/api/hq/missions/${first.missionId}`);
+  assert(hiddenMission.status === 404, "un rôle non autorisé lit la mission");
+  const reviewerClaim = await call("local-test-reviewer", "POST", "/api/hq/command", { text: "essai réservé au travail", ownerSlug: "sandbox-klirline" });
+  const claimDenied = await call("local-test-reviewer", "POST", `/api/hq/commands/${reviewerClaim.payload.command.id}/claim`, {});
+  assert(reviewerClaim.status === 201 && claimDenied.status === 403, "un rôle de revue prend une commande");
   const approved = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve", note: "Synthèse interne acceptée." });
   assert(approved.status === 200 && approved.payload.mission.approvalValid === true, "le réviseur n'accepte pas le dossier");
+  const revised = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/deliverables`, {
+    taskId: returned.payload.mission.tasks[0].id,
+    body: `${synthesis.body}\n\nRévision : toujours aucune démonstration réservée.`,
+    executionKind: "manual",
+  });
+  assert(revised.status === 200 && revised.payload.mission.approvalValid === false && revised.payload.mission.status === "rework", "une modification laisse l'approbation en place");
+  const prematureClose = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/transition`, {
+    status: "done",
+    result: "Synthèse interne préparée. Aucune démonstration n'est réservée.",
+  });
+  assert(prematureClose.status === 409, "la mission se clôt après une modification non réapprouvée");
+  const again = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/tasks/${returned.payload.mission.tasks[0].id}/start`, {});
+  await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/deliverables`, {
+    taskId: returned.payload.mission.tasks[0].id,
+    body: synthesis.body,
+    result: synthesis.result,
+    attemptId: again.payload.attemptId,
+    claimToken: again.payload.claimToken,
+    executionKind: "deterministic-script",
+  });
+  await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/transition`, { status: "in_review" });
+  const reapproved = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve", note: "Révision acceptée." });
+  assert(reapproved.payload.mission.approvalValid === true, "la nouvelle approbation manque");
   const closed = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/transition`, {
     status: "done",
     result: "Synthèse interne préparée. Aucune démonstration n'est réservée.",
@@ -116,7 +151,7 @@ try {
     aiExecution: "blocked",
     aiReason: "Plafond de 0 $ et aucun modèle autorisé. Le script n'est pas une exécution d'IA.",
     missionId: closed.payload.mission.id,
-    attemptId: restarted.payload.attemptId,
+    attemptId: again.payload.attemptId,
     previousAttemptId: first.attemptId,
     procedure: { id: procedure.id, version: procedure.version },
     costCents: closed.payload.mission.cost.spentCents,
@@ -127,6 +162,7 @@ try {
     executor: "machine-klirprospect",
   };
   const proofPath = path.join(os.tmpdir(), `klirline-execution-proof-${process.pid}.json`);
+  assert(!JSON.stringify(proof).includes("claimToken") && !JSON.stringify(proof).includes("local-test-"), "la preuve contient un secret");
   fs.writeFileSync(proofPath, JSON.stringify(proof, null, 2));
   console.log(JSON.stringify(proof, null, 2));
   console.log(`OK — preuve ${proofPath}`);

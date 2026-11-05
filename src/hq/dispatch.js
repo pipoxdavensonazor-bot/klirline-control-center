@@ -1,7 +1,7 @@
 import { buildHqCommand, commandFilter, isHqId, publicCommand, rejectImpersonation } from "./commands.js";
 import { CONNECTIONS } from "./connections.js";
 import { visibleClient, visibleClients } from "./clients.js";
-import { createMission, isMissionId, presentMission } from "./missions.js";
+import { canReadMission, createMission, isMissionId, presentMission } from "./missions.js";
 import { rosterView } from "./roster.js";
 import { SKILL_REGISTRY } from "./skills.js";
 
@@ -23,11 +23,10 @@ function commandId(pathname, suffix) {
 }
 
 function allows(scopes, needed) {
-  if (!Array.isArray(scopes)) return true;
-  return scopes.includes(needed);
+  return Array.isArray(scopes) && scopes.includes(needed);
 }
 
-export async function dispatchHq(store, { method, pathname, searchParams, body, actorId, now, scopes }) {
+export async function dispatchHq(store, { method, pathname, searchParams, body, actorId, now, scopes, human }) {
   const clock = now instanceof Date ? now : new Date();
   if (method !== "GET" && body && typeof body === "object") {
     try {
@@ -48,7 +47,8 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   }
   if (method === "GET" && pathname === "/api/hq/missions") {
     const missions = await store.missionList();
-    return { status: 200, body: { mode: "hq", missions: missions.map((mission) => presentMission(mission, actorId, clock)) } };
+    const visible = missions.filter((mission) => canReadMission(mission, actorId, scopes));
+    return { status: 200, body: { mode: "hq", missions: visible.map((mission) => presentMission(mission, actorId, clock)) } };
   }
   if (method === "POST" && pathname === "/api/hq/missions") {
     if (!allows(scopes, "work")) return { status: 403, body: { error: "Cette identité ne peut pas ouvrir une mission." } };
@@ -69,7 +69,7 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
     if (!isMissionId(rawId)) return { status: 404, body: { error: "Mission introuvable" } };
     if (missionOne && method === "GET") {
       const mission = await store.missionGet(rawId);
-      if (!mission) return { status: 404, body: { error: "Mission introuvable" } };
+      if (!mission || !canReadMission(mission, actorId, scopes)) return { status: 404, body: { error: "Mission introuvable" } };
       return { status: 200, body: { mode: "hq", mission: presentMission(mission, actorId, clock) } };
     }
     if (method !== "POST" || missionOne) return { status: 404, body: { error: "Introuvable" } };
@@ -84,7 +84,7 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
         return { status: 404, body: { error: "Tâche introuvable" } };
       }
     }
-    const result = await store.missionOperate(rawId, operation, missionStart ? { ...(body || {}), taskId } : (body || {}), actorId, { now: clock });
+    const result = await store.missionOperate(rawId, operation, missionStart ? { ...(body || {}), taskId } : (body || {}), actorId, { now: clock, scopes, human });
     return {
       status: result.httpStatus || 200,
       body: {
@@ -115,6 +115,9 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   if (claimRoute) {
     if (claimRoute.error) return claimRoute.error;
     if (method !== "POST") return { status: 404, body: { error: "Introuvable" } };
+    if (Array.isArray(scopes) && !scopes.includes("work")) {
+      return { status: 403, body: { error: "Cette identité ne peut pas prendre une commande." } };
+    }
     try {
       rejectImpersonation(body);
     } catch (error) {
@@ -150,7 +153,7 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
     } catch (error) {
       return { status: error.status || 400, body: { error: error.message } };
     }
-    return store.complete(match.id, body, { actorId, now: clock, scopes });
+    return store.complete(match.id, body, { actorId, now: clock, scopes, human });
   }
   return { status: 404, body: { error: "Introuvable" } };
 }

@@ -124,6 +124,8 @@ try {
   const page = await fetch(`${base}/app.js`, { signal: AbortSignal.timeout(5000) });
   const source = await page.text();
   assert(source.includes("Bureau") && source.includes("Plateformes") && source.includes("Admin produits") && source.includes("Preuve."), "l'interface a perdu le bureau, les plateformes ou la preuve");
+  assert(source.includes("Préparation manuelle") && source.includes("Exécution déterministe") && source.includes("Exécution par modèle") && source.includes("Non exécutable"), "l'interface confond les modes d'exécution");
+  assert(!source.includes("agent IA opérationnel"), "l'interface annonce un agent IA opérationnel");
   assert(source.includes("Passer en cours") && source.includes("Marquer fait") && source.includes("À valider") && source.includes("Marquer bloqué") && source.includes("Clore — fait") && source.includes("Confirmer l'échec"), "les actions de statut manquent sur les cartes");
   assert(source.includes('method: "PATCH"') && source.includes('credentials: "same-origin"') && source.includes("/api/hq/commands/"), "le statut ne part pas en PATCH same-origin");
 

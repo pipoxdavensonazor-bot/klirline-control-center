@@ -242,7 +242,7 @@ export function decideCompletion(command, input, options = {}) {
       body: { mode: "hq", outcome: "rejected", error: "Le résultat est déjà enregistré.", command: publicCommand(command) },
     };
   }
-  const reviewer = Array.isArray(options.scopes) && options.scopes.includes("review");
+  const reviewer = options.human === true || (Array.isArray(options.scopes) && options.scopes.includes("review"));
   if (!reviewer && !credentialMatches(command.claim, attemptId, token)) {
     return {
       http: 409,

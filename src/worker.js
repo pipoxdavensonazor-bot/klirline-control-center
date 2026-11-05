@@ -329,6 +329,7 @@ export default {
             body: payload,
             actorId: identity.actorId,
             scopes: accessScopes(identity.actorId),
+            human: true,
           },
         );
         return json(result.status, result.body);
