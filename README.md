@@ -81,6 +81,8 @@ L'onglet Bureau enregistre des commandes hors du jeu des 34 postes. `POST /api/c
 
 Office lit la file, distribue vers l'agent Grok nommé par `grokAgentName`, puis renvoie le statut. Le Worker n'appelle aucun agent. Un claim sur la même commande ne lance qu'une exécution : le second appel, pendant le bail, ne reçoit pas le jeton. Clore (`done`) exige un résultat, une preuve ou une note. Le détail est dans `knowledge/hq-bureau.md`.
 
+Dans l'onglet Bureau, les cartes En cours et Bloqué envoient le même PATCH depuis le navigateur déjà authentifié. La colonne Fait affiche la preuve. Aucun jeton de service n'est ajouté.
+
 Le jeton Cloudflare Access est obligatoire en ligne, comme pour les autres routes `/api` du dossier. L'exemple omet le vrai jeton.
 
 ```bash

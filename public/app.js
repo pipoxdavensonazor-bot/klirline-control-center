@@ -76,6 +76,7 @@ let hqDraft = "";
 let hqOwner = "";
 let hqPriority = "normale";
 let hqLoad = 0;
+let hqEditors = {};
 
 const hqStatusLabel = {
   pending: "En attente",
@@ -486,11 +487,56 @@ function lastHq(slug) {
   return hqCommands.filter((command) => command.ownerSlug === slug).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
 }
 
+function blankHqEditor() {
+  return { mode: "", result: "", proof: "", note: "", error: "", busy: false };
+}
+
+function hqEvidence(command) {
+  const parts = [];
+  if (command.result) parts.push(`<p><strong>Résultat.</strong> ${escapeHtml(command.result)}</p>`);
+  if (command.proof) parts.push(`<p><strong>Preuve.</strong> ${escapeHtml(command.proof)}</p>`);
+  if (command.agentNote) parts.push(`<p><strong>Note.</strong> ${escapeHtml(command.agentNote)}</p>`);
+  if (command.status === "done" && !parts.length) parts.push(`<p class="muted">Aucune preuve enregistrée.</p>`);
+  return parts.join("");
+}
+
+function hqCommandActions(command) {
+  if (command.status === "done") return "";
+  const editor = hqEditors[command.id] || blankHqEditor();
+  const id = escapeHtml(command.id);
+  const disabled = editor.busy ? "disabled" : "";
+  const pressed = (mode) => editor.mode === mode ? "true" : "false";
+  const buttons = [];
+  if (command.status !== "running") {
+    buttons.push(`<button type="button" data-hq-action="running" data-hq-id="${id}" ${disabled}>Passer en cours</button>`);
+  }
+  buttons.push(`<button type="button" class="ghost ${editor.mode === "done" ? "active" : ""}" data-hq-action="done" data-hq-id="${id}" aria-pressed="${pressed("done")}" ${disabled}>Marquer fait</button>`);
+  if (command.status !== "awaiting_validation") {
+    buttons.push(`<button type="button" class="ghost" data-hq-action="awaiting_validation" data-hq-id="${id}" ${disabled}>À valider</button>`);
+  }
+  buttons.push(`<button type="button" class="ghost danger ${editor.mode === "blocked" ? "active" : ""}" data-hq-action="blocked" data-hq-id="${id}" aria-pressed="${pressed("blocked")}" ${disabled}>Marquer bloqué</button>`);
+  let panel = "";
+  if (editor.mode === "done") {
+    panel = `<div class="hq-status" data-hq-id="${id}">
+      <p class="muted">Pour clore, indiquez un résultat, une preuve ou une note.</p>
+      <label>Résultat<textarea rows="2" maxlength="4000" data-hq-field="result" ${disabled}>${escapeHtml(editor.result)}</textarea></label>
+      <label>Preuve<textarea rows="2" maxlength="4000" data-hq-field="proof" ${disabled}>${escapeHtml(editor.proof)}</textarea></label>
+      <label>Note<textarea rows="2" maxlength="4000" data-hq-field="note" ${disabled}>${escapeHtml(editor.note)}</textarea></label>
+      <div class="hq-actions"><button type="button" data-hq-submit="done" data-hq-id="${id}" ${disabled}>Clore — fait</button><button type="button" class="ghost" data-hq-action="cancel" data-hq-id="${id}" ${disabled}>Annuler</button></div>
+    </div>`;
+  } else if (editor.mode === "blocked") {
+    panel = `<div class="hq-status" data-hq-id="${id}">
+      <p class="muted">Une note explique le blocage ou l'échec. Elle remplace la note déjà affichée.</p>
+      <label>Note<textarea rows="3" maxlength="4000" data-hq-field="note" ${disabled}>${escapeHtml(editor.note)}</textarea></label>
+      <div class="hq-actions"><button type="button" data-hq-submit="blocked" data-hq-id="${id}" ${disabled}>Confirmer bloqué</button><button type="button" class="solid-danger" data-hq-submit="failed" data-hq-id="${id}" ${disabled}>Confirmer l'échec</button><button type="button" class="ghost" data-hq-action="cancel" data-hq-id="${id}" ${disabled}>Annuler</button></div>
+    </div>`;
+  }
+  const error = editor.error ? `<p class="error">${escapeHtml(editor.error)}</p>` : "";
+  return `<div class="hq-actions">${buttons.join("")}</div>${panel}${error}`;
+}
+
 function hqCommandCard(command) {
-  const result = command.result ? `<p><strong>Résultat.</strong> ${escapeHtml(command.result)}</p>` : "";
-  const proof = command.proof ? `<p><strong>Preuve.</strong> ${escapeHtml(command.proof)}</p>` : "";
-  const agentNote = command.agentNote ? `<p class="muted">${escapeHtml(command.agentNote)}</p>` : "";
-  return `<article class="card" data-hq-command="${escapeHtml(command.id)}"><div class="chips">${chip(hqTone(command.status), hqStatusLabel[command.status] || command.status)}${chip("", hqPriorityLabel[command.priority] || command.priority)}</div><h3>${escapeHtml(command.ownerName)}</h3><p>${escapeHtml(command.text)}</p><p class="muted">${escapeHtml(when(command.createdAt))} · ${escapeHtml(hqRouteLabel[command.routedBy] || command.routedBy)}</p>${result}${proof}${agentNote}</article>`;
+  return `<article class="card hq-card" data-hq-command="${escapeHtml(command.id)}"><div class="chips">${chip(hqTone(command.status), hqStatusLabel[command.status] || command.status)}${chip("", hqPriorityLabel[command.priority] || command.priority)}</div><h3>${escapeHtml(command.ownerName)}</h3><p>${escapeHtml(command.text)}</p><p class="muted">${escapeHtml(when(command.createdAt))} · ${escapeHtml(hqRouteLabel[command.routedBy] || command.routedBy)}</p>${hqEvidence(command)}${hqCommandActions(command)}</article>`;
 }
 
 function bureauHtml() {
@@ -513,7 +559,7 @@ function bureauHtml() {
   const done = visibleCommands.filter((command) => command.status === "done");
   const blocked = visibleCommands.filter((command) => command.status === "blocked" || command.status === "cancelled" || command.status === "failed");
   const waiting = !hqRoster.length && !hqError ? `<article class="card"><p class="muted">Chargement du bureau.</p></article>` : "";
-  return `<div class="banner">Bureau réel. Une commande est enregistrée ici, puis Office Klirline la lit et renvoie le statut. Le rapport du jour reste la démonstration des 34 postes. Ce Worker n'envoie rien vers les agents.</div>
+  return `<div class="banner">Bureau réel. Une commande est enregistrée ici. Le statut se met à jour sur la carte, ou Office Klirline le renvoie. Le rapport du jour reste la démonstration des 34 postes. Ce Worker n'envoie rien vers les agents.</div>
   <article class="card"><h3>Nouvelle commande</h3><textarea id="hq-text" placeholder="Exemple : rédiger l'article Black Wall News">${escapeHtml(hqDraft)}</textarea>
   <div class="hq-compose"><label>Agent<select id="hq-owner">${owners}</select></label><label>Priorité<select id="hq-priority"><option value="basse" ${hqPriority === "basse" ? "selected" : ""}>Basse</option><option value="normale" ${hqPriority === "normale" ? "selected" : ""}>Normale</option><option value="haute" ${hqPriority === "haute" ? "selected" : ""}>Haute</option></select></label></div>
   <div class="actions"><button id="hq-send">Enregistrer la commande</button><button class="ghost" id="hq-refresh">Actualiser</button></div>
@@ -540,7 +586,8 @@ function mainHtml() {
   return `<div class="grid">${journalHtml()}</div>`;
 }
 
-function render() {
+function render({ keepScroll = false } = {}) {
+  const scrollY = keepScroll ? window.scrollY : 0;
   const showDetail = ["report", "queue", "comms"].includes(view);
   const selected = selectedTaskId ? taskById(selectedTaskId) : null;
   const date = new Date(state.generatedAt).toLocaleDateString("fr-CA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -574,6 +621,7 @@ function render() {
     </section>
   </div>`;
   bind();
+  if (keepScroll) window.scrollTo(0, scrollY);
 }
 
 function bind() {
@@ -602,7 +650,7 @@ function bind() {
   document.querySelectorAll("[data-hq-division]").forEach((button) => button.addEventListener("click", () => {
     hqDivision = button.dataset.hqDivision;
     sessionStorage.setItem("klirline-hq-division", hqDivision);
-    render();
+    render({ keepScroll: true });
   }));
   document.querySelector("#hq-text")?.addEventListener("input", (event) => { hqDraft = event.target.value; });
   document.querySelector("#hq-owner")?.addEventListener("change", (event) => { hqOwner = event.target.value; });
@@ -617,6 +665,35 @@ function bind() {
     postHq({ text, priority, actorId, ...(ownerSlug ? { ownerSlug } : {}) });
   });
   document.querySelector("#hq-refresh")?.addEventListener("click", () => refreshHq({ force: true }));
+  document.querySelectorAll("[data-hq-field]").forEach((field) => field.addEventListener("input", (event) => {
+    const id = event.target.closest("[data-hq-id]")?.dataset.hqId;
+    if (!id) return;
+    const editor = hqEditors[id] || (hqEditors[id] = blankHqEditor());
+    editor[event.target.dataset.hqField] = event.target.value;
+  }));
+  document.querySelectorAll("[data-hq-action]").forEach((button) => button.addEventListener("click", () => {
+    const id = button.dataset.hqId;
+    const command = hqCommands.find((item) => item.id === id);
+    if (!command || hqEditors[id]?.busy) return;
+    const action = button.dataset.hqAction;
+    if (action === "cancel") {
+      const editor = hqEditors[id];
+      if (editor) {
+        editor.mode = "";
+        editor.error = "";
+      }
+      render({ keepScroll: true });
+      return;
+    }
+    if (action === "done" || action === "blocked") {
+      openHqEditor(command, action);
+      render({ keepScroll: true });
+      if (hqEditors[id]?.mode) document.querySelector(`[data-hq-command="${CSS.escape(id)}"] .hq-status textarea`)?.focus();
+      return;
+    }
+    if (action === "running" || action === "awaiting_validation") patchHq(id, { status: action });
+  }));
+  document.querySelectorAll("[data-hq-submit]").forEach((button) => button.addEventListener("click", () => submitHqStatus(button.dataset.hqId, button.dataset.hqSubmit)));
   document.querySelector("#note")?.addEventListener("input", (event) => { note = event.target.value; });
   document.querySelectorAll("[data-decision]").forEach((button) => button.addEventListener("click", () => {
     const decision = button.dataset.decision;
@@ -647,19 +724,131 @@ async function refreshHq({ force = false } = {}) {
     if (token !== hqLoad) return;
     if (!rosterResponse.ok || !commandResponse.ok) {
       hqError = rosterBody.error || commandBody.error || "Le bureau est indisponible.";
-      if (view === "bureau") render();
+      if (view === "bureau") render({ keepScroll: true });
       return;
     }
-    const typing = document.activeElement && ["hq-text", "hq-owner", "hq-priority"].includes(document.activeElement.id);
+    const typing = hqComposerFocused();
     const same = JSON.stringify(rosterBody.roster || []) === JSON.stringify(hqRoster) && JSON.stringify(commandBody.commands || []) === JSON.stringify(hqCommands);
     hqRoster = rosterBody.roster || [];
     hqCommands = commandBody.commands || [];
     hqError = "";
-    if (view === "bureau" && (force || (!same && !typing))) render();
+    if (view === "bureau" && (force || (!same && !typing))) render({ keepScroll: true });
   } catch (reason) {
     if (token !== hqLoad) return;
     hqError = reason.message || "Le bureau est indisponible.";
-    if (view === "bureau") render();
+    if (view === "bureau") render({ keepScroll: true });
+  }
+}
+
+function hqComposerFocused() {
+  const active = document.activeElement;
+  if (!active) return false;
+  if (["hq-text", "hq-owner", "hq-priority"].includes(active.id)) return true;
+  return Boolean(active.closest(".hq-status"));
+}
+
+function openHqEditor(command, mode) {
+  const current = hqEditors[command.id] || blankHqEditor();
+  if (current.mode === mode) {
+    hqEditors[command.id] = { ...current, mode: "", error: "" };
+    return;
+  }
+  const untouched = current.mode === "";
+  hqEditors[command.id] = {
+    mode,
+    result: untouched ? (command.result || "") : current.result,
+    proof: untouched ? (command.proof || "") : current.proof,
+    note: untouched ? (command.agentNote || "") : current.note,
+    error: "",
+    busy: false,
+  };
+}
+
+function hqFieldError(result, proof, note) {
+  if (result.length > 4000) return "Le résultat est trop long.";
+  if (proof.length > 4000) return "La preuve est trop longue.";
+  if (note.length > 4000) return "La note est trop longue.";
+  return "";
+}
+
+function submitHqStatus(id, kind) {
+  const editor = hqEditors[id];
+  if (!editor || editor.busy) return;
+  const result = editor.result.trim();
+  const proof = editor.proof.trim();
+  const note = editor.note.trim();
+  const tooLong = hqFieldError(result, proof, note);
+  if (tooLong) {
+    editor.error = tooLong;
+    render({ keepScroll: true });
+    return;
+  }
+  if (kind === "done") {
+    if (!result && !proof && !note) {
+      editor.error = "Une preuve est requise (résultat, preuve ou note) pour clore.";
+      render({ keepScroll: true });
+      return;
+    }
+    patchHq(id, { status: "done", result, proof, agentNote: note });
+    return;
+  }
+  if (kind === "blocked" || kind === "failed") {
+    if (!note) {
+      editor.error = kind === "failed" ? "Une note est requise pour marquer l'échec." : "Une note est requise pour marquer bloqué.";
+      render({ keepScroll: true });
+      return;
+    }
+    patchHq(id, { status: kind, agentNote: note });
+  }
+}
+
+async function readApiBody(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function hqApiError(response, body) {
+  if (body && typeof body.error === "string" && body.error.trim()) return body.error;
+  if (response.status === 400) return "La mise à jour a été refusée (400).";
+  if (response.status === 401 || response.status === 403) return "Accès refusé. La session Cloudflare Access ne permet pas cette mise à jour.";
+  return `La mise à jour a échoué (${response.status}).`;
+}
+
+async function patchHq(id, payload) {
+  const editor = hqEditors[id] || (hqEditors[id] = blankHqEditor());
+  if (editor.busy) return;
+  editor.busy = true;
+  editor.error = "";
+  render({ keepScroll: true });
+  try {
+    const response = await fetch(`/api/hq/commands/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await readApiBody(response);
+    if (!response.ok || !body?.command) {
+      const current = hqEditors[id] || (hqEditors[id] = blankHqEditor());
+      current.busy = false;
+      current.error = response.ok ? "Réponse inattendue. Actualisez le Bureau." : hqApiError(response, body);
+      render({ keepScroll: true });
+      return;
+    }
+    delete hqEditors[id];
+    hqCommands = hqCommands.map((command) => command.id === body.command.id ? body.command : command);
+    render({ keepScroll: true });
+    refreshHq({ force: true });
+  } catch (reason) {
+    const current = hqEditors[id] || (hqEditors[id] = blankHqEditor());
+    current.busy = false;
+    current.error = reason.message || "La mise à jour a échoué.";
+    render({ keepScroll: true });
   }
 }
 
