@@ -16,15 +16,17 @@ function assert(condition, message) {
 }
 
 const machineToken = "local-test-executor";
+const reviewToken = "local-test-reviewer";
 const machineIdentities = JSON.stringify([
-  { id: "executor-test", token: machineToken, actorId: "machine-klirprospect", scopes: ["work", "review"] },
+  { id: "executor-test", token: machineToken, actorId: "machine-klirprospect", scopes: ["work"] },
+  { id: "reviewer-test", token: reviewToken, actorId: "coo", scopes: ["review"] },
 ]);
 
-async function request(method, pathname, body) {
+async function request(method, pathname, body, token = machineToken) {
   const response = await fetch(`${base}${pathname}`, {
     method,
     headers: {
-      Authorization: `Bearer ${machineToken}`,
+      Authorization: `Bearer ${token}`,
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -94,6 +96,25 @@ try {
   assert(roster.payload.roster.length >= 14, "roster trop court");
   assert(roster.payload.roster.find((agent) => agent.id === "bwn-redaction").lastCommand.status === "done", "la carte ne suit pas le statut");
 
+  const human = await request("POST", "/api/hq/command", { text: "relire la page d'accueil Klirline" }, reviewToken);
+  assert(human.status === 201, `création humaine ${human.status}`);
+  const humanId = human.payload.command.id;
+  const running = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "running" }, reviewToken);
+  assert(running.status === 200 && running.payload.command.status === "running", "passage en cours");
+  const review = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "awaiting_validation" }, reviewToken);
+  assert(review.status === 200 && review.payload.command.status === "awaiting_validation", "passage à valider");
+  const blocked = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "blocked", agentNote: "Il manque la source." }, reviewToken);
+  assert(blocked.status === 200 && blocked.payload.command.status === "blocked" && blocked.payload.command.agentNote === "Il manque la source.", "passage bloqué");
+  const failed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "failed", agentNote: "La source est injoignable." }, reviewToken);
+  assert(failed.status === 200 && failed.payload.command.status === "failed" && failed.payload.command.agentNote === "La source est injoignable.", "passage en échec");
+  const refused = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", result: "", proof: "", agentNote: "" }, reviewToken);
+  assert(refused.status === 400 && typeof refused.payload.error === "string", "clôture humaine sans preuve");
+  const closed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", proof: "Capture du bureau" }, reviewToken);
+  assert(closed.status === 200 && closed.payload.command.status === "done" && closed.payload.command.proof === "Capture du bureau", "clôture humaine avec preuve");
+  const listed = await request("GET", "/api/hq/commands", undefined, reviewToken);
+  const found = listed.payload.commands.find((command) => command.id === humanId);
+  assert(found && found.status === "done" && found.proof === "Capture du bureau", "la liste Fait n'expose pas la preuve");
+
   const demo = await request("POST", "/api/command", { actorId: "ceo", text: "trouver 10 prospects" });
   assert(demo.status === 200 && demo.payload.tasks.some((task) => task.origin === "command"), "la commande de démonstration est cassée");
 
@@ -103,6 +124,8 @@ try {
   const page = await fetch(`${base}/app.js`, { signal: AbortSignal.timeout(5000) });
   const source = await page.text();
   assert(source.includes("Bureau") && source.includes("Plateformes") && source.includes("Admin produits") && source.includes("Preuve."), "l'interface a perdu le bureau, les plateformes ou la preuve");
+  assert(source.includes("Passer en cours") && source.includes("Marquer fait") && source.includes("À valider") && source.includes("Marquer bloqué") && source.includes("Clore — fait") && source.includes("Confirmer l'échec"), "les actions de statut manquent sur les cartes");
+  assert(source.includes('method: "PATCH"') && source.includes('credentials: "same-origin"') && source.includes("/api/hq/commands/"), "le statut ne part pas en PATCH same-origin");
 
   console.log(`OK — commande ${id} : pending → done. Démonstration et hub intacts.`);
 } finally {

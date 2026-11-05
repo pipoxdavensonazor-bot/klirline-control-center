@@ -150,7 +150,7 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
     } catch (error) {
       return { status: error.status || 400, body: { error: error.message } };
     }
-    return store.complete(match.id, body, { actorId, now: clock });
+    return store.complete(match.id, body, { actorId, now: clock, scopes });
   }
   return { status: 404, body: { error: "Introuvable" } };
 }

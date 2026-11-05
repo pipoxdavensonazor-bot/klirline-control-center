@@ -225,7 +225,7 @@ export function decideCompletion(command, input, options = {}) {
   }
   const attemptId = input?.attemptId;
   const token = input?.claimToken;
-  if (command.status === "done" || command.status === "failed") {
+  if (command.status === "done") {
     const sameAttempt = credentialMatches(
       { tokenHash: command.completedTokenHash, attemptId: command.completedAttemptId },
       attemptId,
@@ -242,7 +242,8 @@ export function decideCompletion(command, input, options = {}) {
       body: { mode: "hq", outcome: "rejected", error: "Le résultat est déjà enregistré.", command: publicCommand(command) },
     };
   }
-  if (!credentialMatches(command.claim, attemptId, token)) {
+  const reviewer = Array.isArray(options.scopes) && options.scopes.includes("review");
+  if (!reviewer && !credentialMatches(command.claim, attemptId, token)) {
     return {
       http: 409,
       persist: false,
@@ -251,8 +252,8 @@ export function decideCompletion(command, input, options = {}) {
   }
   try {
     const next = applyHqPatch(command, input, options);
-    next.completedAttemptId = command.claim.attemptId;
-    next.completedTokenHash = command.claim.tokenHash;
+    next.completedAttemptId = command.claim?.attemptId || null;
+    next.completedTokenHash = command.claim?.tokenHash || null;
     return { http: 200, persist: true, command: next, body: { mode: "hq", outcome: "completed", command: publicCommand(next) } };
   } catch (error) {
     return { http: error.status || 500, persist: false, body: { error: error.message } };
