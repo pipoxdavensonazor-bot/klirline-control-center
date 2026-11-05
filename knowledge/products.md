@@ -26,6 +26,9 @@ Sert à consigner un périmètre, une date et des constats. Pas de constat sans 
 ## Centia
 Ligne de services de Klirline. On suit les livraisons déjà enregistrées. L'offre se complète quand le CEO la fixe.
 
+## NORIA
+Gestion scolaire de Klirline Inc. Le site public est https://noriaedu.com. Le panneau retenu est https://noriaedu.com/app#admin.
+
 ## Panneaux d'administration
 
 Adresses retenues, sans fonction nouvelle :
@@ -33,6 +36,7 @@ Adresses retenues, sans fonction nouvelle :
 - KlirBuild : https://klirline.app/login
 - KlirPay : https://pay.klirline.ca/login. Les chemins `/admin` et `/dashboard` répondent 500 ; ils ne sont pas des panneaux.
 - Black Wall News : https://www.blackwallnews.com/admin. Site public : https://www.blackwallnews.com.
+- NORIA : https://noriaedu.com/app#admin. Site public : https://noriaedu.com. Connexion publique, pas encore derrière Cloudflare Access.
 
 Pas de panneau web retenu : Klir IA (https://klirline.io), Centia (https://centia.app), KlirLead (déploiement Netlify actuel), KlirMarket (https://klirline.com, vitrine, pas de panneau distinct).
 

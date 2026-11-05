@@ -240,7 +240,7 @@ check(!Object.hasOwn(liveFeed.prospects[0], "public_email") && !JSON.stringify(l
 check(readProspectFeed({ prospects: [] }).status === "empty", "Une liste vide reste vide");
 check(readProspectFeed(null).status === "invalid", "Une réponse illisible est refusée");
 
-check(PRODUCT_SITES.length === 10, "Dix sites produits, Black Wall News compris");
+check(PRODUCT_SITES.length === 11, "Onze sites produits, NORIA compris");
 check(new Set(PRODUCT_SITES.map((site) => site.id)).size === PRODUCT_SITES.length, "Les identifiants de sites sont uniques");
 const sitesById = Object.fromEntries(PRODUCT_SITES.map((site) => [site.id, site]));
 for (const site of PRODUCT_SITES) {
@@ -251,6 +251,7 @@ for (const site of PRODUCT_SITES) {
 check(sitesById.klirbuild.adminUrl === "https://klirline.app/login" && sitesById.klirbuild.healthUrl === "https://klirline.app/api/health" && sitesById.klirbuild.access === "public-login", "KlirBuild garde sa santé et son login");
 check(sitesById.klirpay.adminUrl === "https://pay.klirline.ca/login" && sitesById.klirpay.access === "public-login", "KlirPay pointe vers /login");
 check(sitesById["black-wall-news"].name === "Black Wall News" && sitesById["black-wall-news"].url === "https://www.blackwallnews.com" && sitesById["black-wall-news"].adminUrl === "https://www.blackwallnews.com/admin" && sitesById["black-wall-news"].access === "public-login", "Black Wall News a son site et son admin");
+check(sitesById.noria.name === "NORIA" && sitesById.noria.url === "https://noriaedu.com" && sitesById.noria.adminUrl === "https://noriaedu.com/app#admin" && sitesById.noria.access === "public-login" && new URL(sitesById.noria.adminUrl).hash === "#admin", "NORIA garde le lien admin avec le fragment #admin");
 check(sitesById["klir-ia"].skillsUrl === "https://klirline.io/api/skills" && sitesById["klir-ia"].adminUrl === null && sitesById["klir-ia"].access === "none", "Klir IA garde son catalogue et n'a pas d'admin");
 for (const id of ["centia", "klirlead", "klirmarket"]) {
   check(sitesById[id].adminUrl === null && sitesById[id].access === "none", `${id} sans admin`);

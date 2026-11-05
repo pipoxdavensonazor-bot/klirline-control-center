@@ -11,6 +11,7 @@ export const PRODUCT_SITES = [
   { id: "centia", url: "https://centia.app", adminUrl: null, access: "none" },
   { id: "klir-ia", name: "Klir IA", url: "https://klirline.io", skillsUrl: "https://klirline.io/api/skills", note: "Assistant marketing", adminUrl: null, access: "none" },
   { id: "black-wall-news", name: "Black Wall News", url: "https://www.blackwallnews.com", adminUrl: "https://www.blackwallnews.com/admin", access: "public-login" },
+  { id: "noria", name: "NORIA", url: "https://noriaedu.com", note: "Gestion scolaire", adminUrl: "https://noriaedu.com/app#admin", access: "public-login" },
 ];
 
 export function productSiteFields(site) {
