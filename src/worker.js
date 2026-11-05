@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { accessSettings, bindIdentity, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
+import { applyHqPatch, claimHqCommand } from "./hq/commands.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { HQ_INDEX, HQ_INSERT, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
 import { COMPANY } from "./policy.js";
@@ -143,6 +144,27 @@ export class CompanyState extends DurableObject {
     return command;
   }
 
+  // Lecture et écriture dans le même appel : un second claim concurrent voit déjà le premier.
+  hqPatch(id, input, actorId) {
+    try {
+      const command = applyHqPatch(this.hqGet(id), input || {}, { actorId });
+      this.hqReplace(command);
+      return { ok: true, command };
+    } catch (error) {
+      return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
+    }
+  }
+
+  hqClaim(id, input, actorId) {
+    try {
+      const outcome = claimHqCommand(this.hqGet(id), input || {}, { actorId });
+      if (outcome.changed) this.hqReplace(outcome.command);
+      return { ok: true, outcome };
+    } catch (error) {
+      return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
+    }
+  }
+
   read() {
     const rows = this.ctx.storage.sql.exec("SELECT body FROM company WHERE id = 'main'").toArray();
     if (!rows.length) {
@@ -252,6 +274,24 @@ export default {
             get: (id) => company.hqGet(id),
             insert: (command) => company.hqInsert(command),
             replace: (command) => company.hqReplace(command),
+            patch: async (id, input, actorId) => {
+              const stored = await company.hqPatch(id, input, actorId);
+              if (!stored?.ok) {
+                const error = new Error(stored?.error || "Erreur");
+                error.status = stored?.status || 500;
+                throw error;
+              }
+              return stored.command;
+            },
+            claim: async (id, input, actorId) => {
+              const stored = await company.hqClaim(id, input, actorId);
+              if (!stored?.ok) {
+                const error = new Error(stored?.error || "Erreur");
+                error.status = stored?.status || 500;
+                throw error;
+              }
+              return stored.outcome;
+            },
           },
           {
             method: request.method,

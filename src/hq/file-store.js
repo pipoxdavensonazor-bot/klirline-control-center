@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { matchesFilter, sortCommands } from "./commands.js";
+import { applyHqPatch, claimHqCommand, matchesFilter, sortCommands } from "./commands.js";
 import { dataPath } from "../store.js";
 
 function hqPath() {
@@ -50,6 +50,24 @@ export function fileHqStore() {
       }
       commands[index] = command;
       writeAll(commands);
+    },
+    async patch(id, input, actorId, options = {}) {
+      const commands = readAll();
+      const index = commands.findIndex((item) => item.id === id);
+      const next = applyHqPatch(index < 0 ? null : commands[index], input, { ...options, actorId });
+      commands[index] = next;
+      writeAll(commands);
+      return next;
+    },
+    async claim(id, input, actorId, options = {}) {
+      const commands = readAll();
+      const index = commands.findIndex((item) => item.id === id);
+      const outcome = claimHqCommand(index < 0 ? null : commands[index], input, { ...options, actorId });
+      if (outcome.changed) {
+        commands[index] = outcome.command;
+        writeAll(commands);
+      }
+      return outcome;
     },
   };
 }

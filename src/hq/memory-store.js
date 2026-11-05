@@ -1,4 +1,4 @@
-import { matchesFilter, sortCommands } from "./commands.js";
+import { applyHqPatch, claimHqCommand, matchesFilter, sortCommands } from "./commands.js";
 
 export function memoryHqStore(seed = []) {
   const commands = seed.map((command) => ({ ...command }));
@@ -7,7 +7,8 @@ export function memoryHqStore(seed = []) {
       return sortCommands(commands.filter((command) => matchesFilter(command, filter)));
     },
     async get(id) {
-      return commands.find((command) => command.id === id) || null;
+      const found = commands.find((command) => command.id === id);
+      return found ? { ...found } : null;
     },
     async insert(command) {
       commands.push({ ...command });
@@ -20,6 +21,18 @@ export function memoryHqStore(seed = []) {
         throw error;
       }
       commands[index] = { ...command };
+    },
+    async patch(id, input, actorId, options = {}) {
+      const index = commands.findIndex((item) => item.id === id);
+      const next = applyHqPatch(index < 0 ? null : commands[index], input, { ...options, actorId });
+      commands[index] = { ...next };
+      return { ...next };
+    },
+    async claim(id, input, actorId, options = {}) {
+      const index = commands.findIndex((item) => item.id === id);
+      const outcome = claimHqCommand(index < 0 ? null : commands[index], input, { ...options, actorId });
+      if (outcome.changed) commands[index] = { ...outcome.command };
+      return { ...outcome, command: { ...outcome.command } };
     },
   };
 }

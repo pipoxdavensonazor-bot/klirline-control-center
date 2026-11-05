@@ -58,11 +58,34 @@ try {
   assert(pending.status === 200, "liste pending");
   assert(pending.payload.commands.some((command) => command.id === id), "la commande n'est pas dans pending");
 
-  const patched = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", result: "Article prêt", agentNote: "BWN Rédaction" });
-  assert(patched.status === 200 && patched.payload.command.status === "done", "PATCH done a échoué");
+  const token = "poll-flow-token";
+  const claim = await request("POST", `/api/hq/commands/${id}/claim`, { claimedBy: "office-klirline", claimToken: token });
+  assert(claim.status === 200 && claim.payload.started === true && claim.payload.reason === "claimed" && claim.payload.command.status === "running", "le claim ne démarre pas");
+
+  const pendingAfter = await request("GET", "/api/hq/commands?status=pending");
+  assert(!pendingAfter.payload.commands.some((command) => command.id === id), "le claim laisse la commande dans pending");
+
+  const rival = await request("POST", `/api/hq/commands/${id}/claim`, { claimedBy: "autre-poll", claimToken: "autre-flow-token" });
+  assert(rival.status === 200 && rival.payload.started === false && rival.payload.reason === "already_active" && rival.payload.command.claimToken === null, "le second claim relance");
+  assert(rival.payload.command.updatedAt === claim.payload.command.updatedAt, "le second claim réécrit la commande");
+
+  const replay = await request("POST", `/api/hq/commands/${id}/claim`, { claimedBy: "office-klirline", claimToken: token });
+  assert(replay.status === 200 && replay.payload.started === false && replay.payload.reason === "replay" && replay.payload.command.claimToken === token, "le replay ne répond pas");
+  assert(replay.payload.command.updatedAt === claim.payload.command.updatedAt, "le replay réécrit la commande");
+
+  const bare = await request("PATCH", `/api/hq/commands/${id}`, { status: "done" });
+  assert(bare.status === 400, `done sans preuve a répondu ${bare.status}`);
+  const stillRunning = await request("GET", `/api/hq/commands/${id}`);
+  assert(stillRunning.payload.command.status === "running", "le refus de preuve a changé le statut");
+
+  const patched = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", result: "Article prêt", proof: "Brouillon déposé", agentNote: "BWN Rédaction" });
+  assert(patched.status === 200 && patched.payload.command.status === "done" && patched.payload.command.proof === "Brouillon déposé", "PATCH done a échoué");
 
   const again = await request("GET", `/api/hq/commands/${id}`);
-  assert(again.payload.command.status === "done" && again.payload.command.result === "Article prêt", "la lecture ne montre pas done");
+  assert(again.payload.command.status === "done" && again.payload.command.result === "Article prêt" && again.payload.command.proof === "Brouillon déposé", "la lecture ne montre pas done");
+
+  const late = await request("POST", `/api/hq/commands/${id}/claim`, { claimToken: token });
+  assert(late.status === 409 && late.payload.started === false && late.payload.command.status === "done", "un claim après done a été accepté");
 
   const roster = await request("GET", "/api/hq/roster");
   assert(roster.payload.roster.length >= 14, "roster trop court");
@@ -77,8 +100,9 @@ try {
   const page = await fetch(`${base}/app.js`, { signal: AbortSignal.timeout(5000) });
   const source = await page.text();
   assert(source.includes("Bureau") && source.includes("Plateformes") && source.includes("Admin produits"), "l'interface a perdu le bureau ou les plateformes");
+  assert(source.includes("<strong>Preuve.</strong>") && source.includes("awaiting_validation") && source.includes("Échoué"), "l'interface n'affiche plus la preuve ou les statuts");
 
-  console.log(`OK — commande ${id} : pending → done. Démonstration et hub intacts.`);
+  console.log(`OK — commande ${id} : claim idempotent, done sans preuve refusé, preuve visible. Démonstration et hub intacts.`);
 } finally {
   child.kill();
   await new Promise((resolve) => {

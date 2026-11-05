@@ -82,8 +82,10 @@ const hqStatusLabel = {
   queued: "En file",
   dispatched: "Transmis",
   running: "En cours",
+  awaiting_validation: "À valider",
   done: "Fait",
   blocked: "Bloqué",
+  failed: "Échoué",
   cancelled: "Annulé",
 };
 const hqDivisions = ["Toutes", "Ops", "Produits", "Média", "Trading", "Autres"];
@@ -476,7 +478,7 @@ function journalHtml() {
 
 function hqTone(status) {
   if (status === "done") return "done";
-  if (status === "blocked" || status === "cancelled") return "blocked";
+  if (status === "blocked" || status === "cancelled" || status === "failed") return "blocked";
   return "pending_supervisor";
 }
 
@@ -486,8 +488,14 @@ function lastHq(slug) {
 
 function hqCommandCard(command) {
   const result = command.result ? `<p><strong>Résultat.</strong> ${escapeHtml(command.result)}</p>` : "";
-  const agentNote = command.agentNote ? `<p class="muted">${escapeHtml(command.agentNote)}</p>` : "";
-  return `<article class="card" data-hq-command="${escapeHtml(command.id)}"><div class="chips">${chip(hqTone(command.status), hqStatusLabel[command.status] || command.status)}${chip("", hqPriorityLabel[command.priority] || command.priority)}</div><h3>${escapeHtml(command.ownerName)}</h3><p>${escapeHtml(command.text)}</p><p class="muted">${escapeHtml(when(command.createdAt))} · ${escapeHtml(hqRouteLabel[command.routedBy] || command.routedBy)}</p>${result}${agentNote}</article>`;
+  const proof = command.proof ? `<p><strong>Preuve.</strong> ${escapeHtml(command.proof)}</p>` : "";
+  const agentNote = command.agentNote ? `<p class="muted"><strong>Note.</strong> ${escapeHtml(command.agentNote)}</p>` : "";
+  const activity = command.activityNote ? `<p class="muted"><strong>Suivi.</strong> ${escapeHtml(command.activityNote)}</p>` : "";
+  const updated = command.updatedAt && command.updatedAt !== command.createdAt ? ` · mis à jour ${escapeHtml(when(command.updatedAt))}` : "";
+  const lease = command.status === "running" && command.leaseUntil
+    ? `<p class="muted">${command.leaseExpired ? "Bail expiré. Une reprise est possible." : `Bail jusqu'au ${escapeHtml(when(command.leaseUntil))}.`}</p>`
+    : "";
+  return `<article class="card" data-hq-command="${escapeHtml(command.id)}"><div class="chips">${chip(hqTone(command.status), hqStatusLabel[command.status] || command.status)}${chip("", hqPriorityLabel[command.priority] || command.priority)}</div><h3>${escapeHtml(command.ownerName)}</h3><p>${escapeHtml(command.text)}</p><p class="muted">${escapeHtml(when(command.createdAt))} · ${escapeHtml(hqRouteLabel[command.routedBy] || command.routedBy)}${updated}</p>${lease}${result}${proof}${agentNote}${activity}</article>`;
 }
 
 function bureauHtml() {
@@ -506,9 +514,9 @@ function bureauHtml() {
   }).join("");
   const owners = [`<option value="">Répartition automatique</option>`].concat(hqRoster.map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === hqOwner ? "selected" : ""}>${escapeHtml(agent.name)} — ${escapeHtml(agent.division)}</option>`)).join("");
   const lane = (title, items, empty) => `<section class="lane"><h3>${title}</h3>${items.length ? items.map(hqCommandCard).join("") : `<p class="muted">${empty}</p>`}</section>`;
-  const open = visibleCommands.filter((command) => ["pending", "queued", "dispatched", "running"].includes(command.status));
+  const open = visibleCommands.filter((command) => ["pending", "queued", "dispatched", "running", "awaiting_validation"].includes(command.status));
   const done = visibleCommands.filter((command) => command.status === "done");
-  const blocked = visibleCommands.filter((command) => command.status === "blocked" || command.status === "cancelled");
+  const blocked = visibleCommands.filter((command) => command.status === "blocked" || command.status === "cancelled" || command.status === "failed");
   const waiting = !hqRoster.length && !hqError ? `<article class="card"><p class="muted">Chargement du bureau.</p></article>` : "";
   return `<div class="banner">Bureau réel. Une commande est enregistrée ici, puis Office Klirline la lit et renvoie le statut. Le rapport du jour reste la démonstration des 34 postes. Ce Worker n'envoie rien vers les agents.</div>
   <article class="card"><h3>Nouvelle commande</h3><textarea id="hq-text" placeholder="Exemple : rédiger l'article Black Wall News">${escapeHtml(hqDraft)}</textarea>
