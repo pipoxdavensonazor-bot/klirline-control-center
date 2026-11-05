@@ -1,40 +1,45 @@
-import { buildHqCommand, commandFilter, isHqId, presentHqCommand } from "./commands.js";
+import { buildHqCommand, commandFilter, isHqId, publicCommand, rejectImpersonation } from "./commands.js";
 import { CONNECTIONS } from "./connections.js";
 import { visibleClient, visibleClients } from "./clients.js";
 import { createMission, isMissionId, presentMission } from "./missions.js";
 import { rosterView } from "./roster.js";
 import { SKILL_REGISTRY } from "./skills.js";
 
-function readId(raw) {
+function present(command) {
+  return publicCommand(command);
+}
+
+function commandId(pathname, suffix) {
+  const match = pathname.match(new RegExp(`^/api/hq/commands/([^/]+)${suffix}$`));
+  if (!match) return null;
+  let id;
   try {
-    return decodeURIComponent(raw);
+    id = decodeURIComponent(match[1]);
   } catch {
-    return null;
+    return { error: { status: 404, body: { error: "Commande introuvable" } } };
   }
+  if (!isHqId(id)) return { error: { status: 404, body: { error: "Commande introuvable" } } };
+  return { id };
 }
 
-function show(command, options, revealClaim = false) {
-  const view = presentHqCommand(command, options);
-  if (!revealClaim) view.claimToken = null;
-  return view;
+function allows(scopes, needed) {
+  if (!Array.isArray(scopes)) return true;
+  return scopes.includes(needed);
 }
 
-export async function dispatchHq(store, { method, pathname, searchParams, body, actorId, now, leaseMs }) {
-  const options = {};
-  if (now instanceof Date) options.now = now;
-  if (Number(leaseMs) > 0) options.leaseMs = Number(leaseMs);
-  if (method === "GET" && pathname === "/api/hq/skills") {
-    return { status: 200, body: { mode: "hq", skills: SKILL_REGISTRY } };
+export async function dispatchHq(store, { method, pathname, searchParams, body, actorId, now, scopes }) {
+  const clock = now instanceof Date ? now : new Date();
+  if (method !== "GET" && body && typeof body === "object") {
+    try {
+      rejectImpersonation(body);
+    } catch (error) {
+      return { status: error.status || 400, body: { error: error.message } };
+    }
   }
-  if (method === "POST" && pathname.startsWith("/api/hq/skills")) {
-    return { status: 403, body: { error: "Une compétence ne s'active pas elle-même." } };
-  }
-  if (method === "GET" && pathname === "/api/hq/connections") {
-    return { status: 200, body: { mode: "hq", connections: CONNECTIONS } };
-  }
-  if (method === "GET" && pathname === "/api/hq/clients") {
-    return { status: 200, body: { mode: "hq", clients: visibleClients(actorId) } };
-  }
+  if (method === "GET" && pathname === "/api/hq/skills") return { status: 200, body: { mode: "hq", skills: SKILL_REGISTRY } };
+  if (method === "POST" && pathname.startsWith("/api/hq/skills")) return { status: 403, body: { error: "Une compétence ne s'active pas elle-même." } };
+  if (method === "GET" && pathname === "/api/hq/connections") return { status: 200, body: { mode: "hq", connections: CONNECTIONS } };
+  if (method === "GET" && pathname === "/api/hq/clients") return { status: 200, body: { mode: "hq", clients: visibleClients(actorId) } };
   const clientMatch = pathname.match(/^\/api\/hq\/clients\/([^/]+)$/);
   if (clientMatch && method === "GET") {
     const client = visibleClient(actorId, clientMatch[1]);
@@ -43,36 +48,51 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   }
   if (method === "GET" && pathname === "/api/hq/missions") {
     const missions = await store.missionList();
-    return { status: 200, body: { mode: "hq", missions: missions.map((mission) => presentMission(mission, actorId, options.now)) } };
+    return { status: 200, body: { mode: "hq", missions: missions.map((mission) => presentMission(mission, actorId, clock)) } };
   }
   if (method === "POST" && pathname === "/api/hq/missions") {
-    const mission = createMission(body, actorId, options);
+    if (!allows(scopes, "work")) return { status: 403, body: { error: "Cette identité ne peut pas ouvrir une mission." } };
+    const mission = createMission(body, actorId, { now: clock });
     await store.missionInsert(mission);
-    return { status: 201, body: { mode: "hq", mission: presentMission(mission, actorId, options.now) } };
+    return { status: 201, body: { mode: "hq", mission: presentMission(mission, actorId, clock) } };
   }
   const missionStart = pathname.match(/^\/api\/hq\/missions\/([^/]+)\/tasks\/([^/]+)\/start$/);
   const missionAction = pathname.match(/^\/api\/hq\/missions\/([^/]+)\/(transition|deliverables|approval|actions)$/);
-  const missionGet = pathname.match(/^\/api\/hq\/missions\/([^/]+)$/);
-  if (missionStart || missionAction || missionGet) {
-    const rawId = (missionStart || missionAction || missionGet)[1];
-    const id = readId(rawId);
-    if (!id || !isMissionId(id)) return { status: 404, body: { error: "Mission introuvable" } };
-    if (missionGet && method === "GET") {
-      const mission = await store.missionGet(id);
-      if (!mission) return { status: 404, body: { error: "Mission introuvable" } };
-      return { status: 200, body: { mode: "hq", mission: presentMission(mission, actorId, options.now) } };
+  const missionOne = pathname.match(/^\/api\/hq\/missions\/([^/]+)$/);
+  if (missionStart || missionAction || missionOne) {
+    let rawId;
+    try {
+      rawId = decodeURIComponent((missionStart || missionAction || missionOne)[1]);
+    } catch {
+      return { status: 404, body: { error: "Mission introuvable" } };
     }
-    if (method !== "POST" || missionGet) return { status: 404, body: { error: "Introuvable" } };
+    if (!isMissionId(rawId)) return { status: 404, body: { error: "Mission introuvable" } };
+    if (missionOne && method === "GET") {
+      const mission = await store.missionGet(rawId);
+      if (!mission) return { status: 404, body: { error: "Mission introuvable" } };
+      return { status: 200, body: { mode: "hq", mission: presentMission(mission, actorId, clock) } };
+    }
+    if (method !== "POST" || missionOne) return { status: 404, body: { error: "Introuvable" } };
     const operation = missionStart ? "start" : { transition: "transition", deliverables: "deliver", approval: "decide", actions: "act" }[missionAction[2]];
-    const input = missionStart ? { ...(body || {}), taskId: readId(missionStart[2]) } : (body || {});
-    const result = await store.missionOperate(id, operation, input, actorId, options);
+    const needed = operation === "decide" || (operation === "transition" && body?.status === "done") ? "review" : "work";
+    if (!allows(scopes, needed)) return { status: 403, body: { error: "Cette identité n'a pas ce droit." } };
+    let taskId = "";
+    if (missionStart) {
+      try {
+        taskId = decodeURIComponent(missionStart[2]);
+      } catch {
+        return { status: 404, body: { error: "Tâche introuvable" } };
+      }
+    }
+    const result = await store.missionOperate(rawId, operation, missionStart ? { ...(body || {}), taskId } : (body || {}), actorId, { now: clock });
     return {
       status: result.httpStatus || 200,
       body: {
         mode: "hq",
-        mission: presentMission(result.mission, actorId, options.now),
+        mission: presentMission(result.mission, actorId, clock),
         started: result.started,
         reason: result.reason,
+        ...(result.claimToken ? { claimToken: result.claimToken, attemptId: result.attemptId } : {}),
         ...(result.error ? { error: result.error } : {}),
       },
     };
@@ -83,43 +103,54 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   }
   if (method === "GET" && pathname === "/api/hq/commands") {
     const commands = await store.list(commandFilter(searchParams));
-    return { status: 200, body: { mode: "hq", commands: commands.map((command) => show(command, options)) } };
+    return { status: 200, body: { mode: "hq", commands: commands.map(present) } };
   }
   if (method === "POST" && pathname === "/api/hq/command") {
-    const command = buildHqCommand(body, actorId, options);
+    const command = buildHqCommand(body, actorId, { now: clock });
     await store.insert(command);
-    return { status: 201, body: { mode: "hq", command: show(command, options) } };
+    return { status: 201, body: { mode: "hq", command: present(command) } };
   }
-  const claimMatch = pathname.match(/^\/api\/hq\/commands\/([^/]+)\/claim$/);
-  if (claimMatch) {
+
+  const claimRoute = commandId(pathname, "/claim");
+  if (claimRoute) {
+    if (claimRoute.error) return claimRoute.error;
     if (method !== "POST") return { status: 404, body: { error: "Introuvable" } };
-    const id = readId(claimMatch[1]);
-    if (!id || !isHqId(id)) return { status: 404, body: { error: "Commande introuvable" } };
-    const outcome = await store.claim(id, body, actorId, options);
-    const revealClaim = outcome.reason === "claimed" || outcome.reason === "reclaimed" || outcome.reason === "replay";
-    return {
-      status: outcome.httpStatus,
-      body: {
-        mode: "hq",
-        command: show(outcome.command, options, revealClaim),
-        started: outcome.started,
-        reason: outcome.reason,
-        ...(outcome.error ? { error: outcome.error } : {}),
-      },
-    };
+    try {
+      rejectImpersonation(body);
+    } catch (error) {
+      return { status: error.status || 400, body: { error: error.message } };
+    }
+    return store.claim(claimRoute.id, {
+      actorId,
+      now: clock,
+      note: body?.note ?? body?.agentNote,
+    });
   }
-  const match = pathname.match(/^\/api\/hq\/commands\/([^/]+)$/);
+
+  const interruptRoute = commandId(pathname, "/interrupt");
+  if (interruptRoute) {
+    if (interruptRoute.error) return interruptRoute.error;
+    if (method !== "POST") return { status: 404, body: { error: "Introuvable" } };
+    return store.interrupt(interruptRoute.id, {
+      actorId,
+      now: clock,
+      note: body?.note ?? body?.agentNote,
+    });
+  }
+
+  const match = commandId(pathname, "");
   if (!match) return { status: 404, body: { error: "Introuvable" } };
-  const id = readId(match[1]);
-  if (!id || !isHqId(id)) return { status: 404, body: { error: "Commande introuvable" } };
-  if (method === "GET") {
-    const current = await store.get(id);
-    if (!current) return { status: 404, body: { error: "Commande introuvable" } };
-    return { status: 200, body: { mode: "hq", command: show(current, options) } };
-  }
+  if (match.error) return match.error;
+  const current = await store.get(match.id);
+  if (!current) return { status: 404, body: { error: "Commande introuvable" } };
+  if (method === "GET") return { status: 200, body: { mode: "hq", command: present(current) } };
   if (method === "PATCH") {
-    const command = await store.patch(id, body, actorId, options);
-    return { status: 200, body: { mode: "hq", command: show(command, options) } };
+    try {
+      rejectImpersonation(body);
+    } catch (error) {
+      return { status: error.status || 400, body: { error: error.message } };
+    }
+    return store.complete(match.id, body, { actorId, now: clock });
   }
   return { status: 404, body: { error: "Introuvable" } };
 }

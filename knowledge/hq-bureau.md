@@ -2,13 +2,11 @@
 
 Le bureau est distinct du rapport de démonstration. Les 34 postes simulés restent sur `POST /api/command`. Les commandes réelles passent par `/api/hq/*`.
 
-Office Klirline interroge le centre, prend une commande, choisit l'agent Grok indiqué par `grokAgentName`, puis renvoie le statut et une preuve. Le Worker ne contacte aucun agent.
+Office Klirline interroge le centre, choisit l'agent Grok indiqué par `grokAgentName`, puis renvoie le statut. Le Worker ne contacte aucun agent.
 
 ## Session
 
 Sur `https://centre.klirline.com`, ces routes exigent le même jeton Cloudflare Access que les autres routes du dossier. Sans `Cf-Access-Jwt-Assertion`, la réponse est `401`. Le cookie seul ne suffit pas au Worker. Ne pas écrire le jeton dans le dépôt.
-
-Le poll headless utilisera ce même en-tête. Un jeton de service Access, distinct du SSO humain, sera branché quand la policy Access le permettra. Ce dépôt ne crée pas cette policy et n'ouvre aucune route.
 
 En local, `node src/server.js` reste une démonstration : le bureau répond sans Access.
 
@@ -19,50 +17,26 @@ curl -sS "https://centre.klirline.com/api/hq/commands?status=pending" \
   -H "Cf-Access-Jwt-Assertion: <jeton Access>"
 ```
 
-Chaque élément contient `id`, `text`, `ownerSlug`, `grokAgentName`, `division`, `priority`, `status`, `createdAt`, `updatedAt`. `GET` ne prend pas la commande. Deux lectures peuvent voir le même `id`.
+Chaque élément contient `id`, `text`, `ownerSlug`, `grokAgentName`, `division`, `priority`, `status`, `createdAt`.
 
-Les statuts prenables sont `pending`, `queued` et `dispatched`. Une commande `running` dont le bail est expiré (`leaseExpired: true`) se reprend par un claim. Elle ne se relance pas tant que le bail tient.
+Les statuts utiles à l'aller sont `pending` et `queued`.
 
-## Prendre la commande
+## Prendre une commande
+
+Une seule exécution active. Le premier `POST /api/hq/commands/<id>/claim` passe `pending` ou `queued` à `dispatched` et renvoie `claimToken` une fois. Le dépôt ne garde que l'empreinte du jeton.
+
+Un second claim pendant le bail (30 minutes) répond `outcome: "held"` : même statut, même `updatedAt`, sans `claimToken`. Ce n'est pas une nouvelle distribution.
 
 ```bash
 curl -sS -X POST "https://centre.klirline.com/api/hq/commands/<id>/claim" \
   -H "Content-Type: application/json" \
   -H "Cf-Access-Jwt-Assertion: <jeton Access>" \
-  -d '{"claimedBy":"office-klirline","claimToken":"<jeton stable du poll>"}'
+  -d '{}'
 ```
 
-Le `claimToken` est choisi par le poll (8 à 80 caractères : lettres, chiffres, point, tiret bas, deux-points, tiret). Sans jeton, le centre en génère un et le renvoie dans `command.claimToken`. Il faut le conserver pour reconnaître un renvoi.
+Si le bail d'une commande `dispatched` est expiré, le claim suivant est une reprise documentée : nouveau jeton, note `Reprise documentée`, `updatedAt` renouvelé. Un `running` dont le bail est expiré passe `blocked`, avec la date et la note d'interruption, et aucun jeton. Pour la relancer, un humain la repasse `pending`, puis un nouveau claim émet un autre jeton.
 
-Réponse `200`. Exécuter seulement si `started` est `true`. Le `claimToken` n'est renvoyé que pour `claimed`, `reclaimed` et `replay`. La file et un claim déjà tenu par un autre ne le montrent pas.
-
-| `reason` | `started` | Suite |
-| --- | --- | --- |
-| `claimed` | `true` | Première prise. La commande passe `running`. |
-| `reclaimed` | `true` | Le bail précédent est fini. Une nouvelle exécution remplace l'ancienne. |
-| `replay` | `false` | Même jeton, bail encore ouvert. Rien n'est réécrit. Ne pas relancer. |
-| `already_active` | `false` | Un autre claim tient le bail. Ne rien exécuter. |
-
-`409` si le statut est `done`, `failed`, `cancelled`, `blocked` ou `awaiting_validation`. Le corps contient encore la commande.
-
-Le bail dure 15 minutes à partir de `claimedAt`. Un second claim dans ce délai ne le prolonge pas. Pour le prolonger :
-
-```bash
-curl -sS -X PATCH "https://centre.klirline.com/api/hq/commands/<id>" \
-  -H "Content-Type: application/json" \
-  -H "Cf-Access-Jwt-Assertion: <jeton Access>" \
-  -d '{"status":"running","claimToken":"<le même jeton>"}'
-```
-
-Un `PATCH` `running` sans ce jeton ne remplace pas le claim en cours.
-
-Si la réponse du premier claim est perdue, renvoyer le même `claimToken` donne `replay` : ne pas lancer une seconde exécution. Le travail déjà commencé dans ce processus peut continuer. Un processus qui n'a jamais démarré attend la fin du bail, puis réclame à nouveau (`reclaimed`).
-
-## Interruption
-
-Un crash laisse la commande `running`, avec `updatedAt`, `claimedBy`, `claimedAt` et `activityNote` (« Prise en charge par … »). Rien n'est effacé. Le centre ne la passe pas seul à `blocked`.
-
-Passé les 15 minutes, `leaseExpired` devient `true`. Le claim suivant répond `reclaimed`, reste `running`, et écrit une `activityNote` d'interruption. `blocked` reste un statut explicite, posé par un `PATCH`.
+`POST /api/hq/commands/<id>/interrupt` avec une note laisse le statut (`dispatched` ou `running`), met à jour `updatedAt` et enregistre la note. Le bail en cours n'est pas rouvert à un second agent.
 
 ## Renvoyer le statut
 
@@ -70,16 +44,14 @@ Passé les 15 minutes, `leaseExpired` devient `true`. Le claim suivant répond `
 curl -sS -X PATCH "https://centre.klirline.com/api/hq/commands/<id>" \
   -H "Content-Type: application/json" \
   -H "Cf-Access-Jwt-Assertion: <jeton Access>" \
-  -d '{"status":"done","result":"Article prêt","proof":"Brouillon déposé","agentNote":"BWN Rédaction"}'
+  -d '{"status":"done","result":"Article prêt","agentNote":"BWN Rédaction"}'
 ```
 
 Statuts acceptés : `pending`, `queued`, `dispatched`, `running`, `awaiting_validation`, `blocked`, `done`, `failed`, `cancelled`.
 
-Ordre attendu : `pending` → claim → `running` → `done`, ou `blocked` si l'agent ne peut pas avancer. `awaiting_validation` attend une relecture avant `done`. `failed` clôt sans succès.
+Ordre attendu : `pending` ou `queued` → `dispatched` → `running` → `done`, ou `awaiting_validation` si une personne doit relire. `blocked` ou `failed` si l'agent ne peut pas avancer. `cancelled` abandonne la commande.
 
-`done` exige une preuve : au moins un de `result`, `proof`, `agentNote` non vide. Sinon la réponse est `400` et la commande ne change pas. Les trois textes sont affichés dans la colonne Fait. Un seul suffit.
-
-`done`, `failed` et `cancelled` ne changent plus de statut (`409`).
+`done` exige une preuve : `result`, `proof` ou `agentNote` non vide. Sans cela le PATCH répond `400` et la commande ne change pas. La preuve s'affiche dans la colonne Fait du bureau.
 
 ## Créer une commande
 

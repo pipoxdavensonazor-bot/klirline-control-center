@@ -1,7 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { accessSettings, bindIdentity, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
-import { applyHqPatch, claimHqCommand } from "./hq/commands.js";
+import { decideClaim, decideCompletion, decideInterrupt } from "./hq/commands.js";
+import { accessScopes } from "./hq/machine-auth.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { runMissionOperation } from "./hq/missions.js";
 import { HQ_INDEX, HQ_INSERT, HQ_MISSION_INDEX, HQ_MISSION_INSERT, HQ_MISSION_SCHEMA, HQ_MISSION_SELECT, HQ_MISSION_UPDATE, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
@@ -147,15 +148,21 @@ export class CompanyState extends DurableObject {
     return command;
   }
 
-  // Lecture et écriture dans le même appel : un second claim concurrent voit déjà le premier.
-  hqPatch(id, input, actorId) {
-    try {
-      const command = applyHqPatch(this.hqGet(id), input || {}, { actorId });
-      this.hqReplace(command);
-      return { ok: true, command };
-    } catch (error) {
-      return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
-    }
+  hqApply(id, decision) {
+    if (decision.persist) this.hqReplace(decision.command);
+    return { status: decision.http, body: decision.body };
+  }
+
+  hqClaim(id, options) {
+    return this.hqApply(id, decideClaim(this.hqGet(id), options));
+  }
+
+  hqInterrupt(id, options) {
+    return this.hqApply(id, decideInterrupt(this.hqGet(id), options));
+  }
+
+  hqComplete(id, input, options) {
+    return this.hqApply(id, decideCompletion(this.hqGet(id), input, options));
   }
 
   hqMissionList() {
@@ -178,7 +185,6 @@ export class CompanyState extends DurableObject {
     return mission;
   }
 
-  // Mission et commande liées : une seule méthode, donc une seule exécution active.
   hqMissionOperate(id, operation, input, actorId) {
     try {
       const result = runMissionOperation(this.hqMissionGet(id), this.hqList({}), operation, input || {}, { actorId });
@@ -186,16 +192,6 @@ export class CompanyState extends DurableObject {
       else if (result.replaceCommand && result.command) this.hqReplace(result.command);
       if (result.changed && result.mission) this.hqMissionReplace(result.mission);
       return { ok: true, result };
-    } catch (error) {
-      return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
-    }
-  }
-
-  hqClaim(id, input, actorId) {
-    try {
-      const outcome = claimHqCommand(this.hqGet(id), input || {}, { actorId });
-      if (outcome.changed) this.hqReplace(outcome.command);
-      return { ok: true, outcome };
     } catch (error) {
       return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
     }
@@ -310,24 +306,9 @@ export default {
             get: (id) => company.hqGet(id),
             insert: (command) => company.hqInsert(command),
             replace: (command) => company.hqReplace(command),
-            patch: async (id, input, actorId) => {
-              const stored = await company.hqPatch(id, input, actorId);
-              if (!stored?.ok) {
-                const error = new Error(stored?.error || "Erreur");
-                error.status = stored?.status || 500;
-                throw error;
-              }
-              return stored.command;
-            },
-            claim: async (id, input, actorId) => {
-              const stored = await company.hqClaim(id, input, actorId);
-              if (!stored?.ok) {
-                const error = new Error(stored?.error || "Erreur");
-                error.status = stored?.status || 500;
-                throw error;
-              }
-              return stored.outcome;
-            },
+            claim: (id, options) => company.hqClaim(id, options),
+            interrupt: (id, options) => company.hqInterrupt(id, options),
+            complete: (id, input, options) => company.hqComplete(id, input, options),
             missionList: () => company.hqMissionList(),
             missionGet: (id) => company.hqMissionGet(id),
             missionInsert: (mission) => company.hqMissionInsert(mission),
@@ -347,6 +328,7 @@ export default {
             searchParams: url.searchParams,
             body: payload,
             actorId: identity.actorId,
+            scopes: accessScopes(identity.actorId),
           },
         );
         return json(result.status, result.body);

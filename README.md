@@ -79,9 +79,9 @@ Chaque route `/api/*` compte dans une fenêtre de 60 secondes et de 60 requêtes
 
 L'onglet Bureau enregistre des commandes hors du jeu des 34 postes. `POST /api/command` reste la démonstration. Le détail pour Office Klirline est dans `knowledge/hq-bureau.md`.
 
-Office lit la file, réclame la commande, distribue vers l'agent Grok nommé par `grokAgentName`, puis renvoie le statut. Le Worker n'appelle aucun agent. Un second claim sur le même id ne relance pas le travail. `done` exige `result`, `proof` ou `agentNote`. Le détail est dans `knowledge/hq-bureau.md`.
+Office lit la file, distribue vers l'agent Grok nommé par `grokAgentName`, puis renvoie le statut. Le Worker n'appelle aucun agent. Un claim sur la même commande ne lance qu'une exécution : le second appel, pendant le bail, ne reçoit pas le jeton. Clore (`done`) exige un résultat, une preuve ou une note. Le détail est dans `knowledge/hq-bureau.md`.
 
-Le jeton Cloudflare Access est obligatoire en ligne, comme pour les autres routes `/api` du dossier. L'exemple omet le vrai jeton. Le poll headless enverra `Cf-Access-Jwt-Assertion` (jeton de service) lorsque la policy Access sera en place. Ce dépôt ne crée pas cette policy.
+Le jeton Cloudflare Access est obligatoire en ligne, comme pour les autres routes `/api` du dossier. L'exemple omet le vrai jeton.
 
 ```bash
 curl -sS "https://centre.klirline.com/api/hq/commands?status=pending" \
@@ -94,8 +94,6 @@ curl -sS -X PATCH "https://centre.klirline.com/api/hq/commands/<id>" \
 ```
 
 Vérifier le parcours en local : `node scripts/hq-flow.mjs`.
-
-L'onglet Missions prépare un dossier de campagne. Les cartes d'agents ne sont pas exécutables. Le choix d'architecture et les limites sont dans `knowledge/bureau-architecture.md`. Rien n'est envoyé.
 
 ## Plus tard
 

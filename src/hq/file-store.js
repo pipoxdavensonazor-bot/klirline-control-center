@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { applyHqPatch, claimHqCommand, matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideCompletion, decideInterrupt, matchesFilter, sortCommands } from "./commands.js";
 import { runMissionOperation } from "./missions.js";
 import { dataPath } from "../store.js";
 
@@ -76,23 +76,35 @@ export function fileHqStore() {
       commands[index] = command;
       writeAll(commands);
     },
-    async patch(id, input, actorId, options = {}) {
+    async claim(id, options) {
       const commands = readAll();
       const index = commands.findIndex((item) => item.id === id);
-      const next = applyHqPatch(index < 0 ? null : commands[index], input, { ...options, actorId });
-      commands[index] = next;
-      writeAll(commands);
-      return next;
-    },
-    async claim(id, input, actorId, options = {}) {
-      const commands = readAll();
-      const index = commands.findIndex((item) => item.id === id);
-      const outcome = claimHqCommand(index < 0 ? null : commands[index], input, { ...options, actorId });
-      if (outcome.changed) {
-        commands[index] = outcome.command;
+      const decision = decideClaim(index < 0 ? null : commands[index], options);
+      if (decision.persist) {
+        commands[index] = decision.command;
         writeAll(commands);
       }
-      return outcome;
+      return { status: decision.http, body: decision.body };
+    },
+    async complete(id, input, options) {
+      const commands = readAll();
+      const index = commands.findIndex((item) => item.id === id);
+      const decision = decideCompletion(index < 0 ? null : commands[index], input, options);
+      if (decision.persist) {
+        commands[index] = decision.command;
+        writeAll(commands);
+      }
+      return { status: decision.http, body: decision.body };
+    },
+    async interrupt(id, options) {
+      const commands = readAll();
+      const index = commands.findIndex((item) => item.id === id);
+      const decision = decideInterrupt(index < 0 ? null : commands[index], options);
+      if (decision.persist) {
+        commands[index] = decision.command;
+        writeAll(commands);
+      }
+      return { status: decision.http, body: decision.body };
     },
     async missionList() {
       return readMissions();

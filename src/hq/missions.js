@@ -1,4 +1,4 @@
-import { HQ_RUNNING_LEASE_MS, applyHqPatch, buildHqCommand, claimHqCommand, isLeaseExpired } from "./commands.js";
+import { buildHqCommand, decideClaim, decideCompletion } from "./commands.js";
 import { visibleClient } from "./clients.js";
 import { connectionById } from "./connections.js";
 import { fold, rosterAgent } from "./roster.js";
@@ -102,40 +102,49 @@ export function createMission(input, actorId, options = {}) {
   const template = String(input?.template || "");
   const actor = String(actorId || "");
   if (!actor) fail(400, "Rôle manquant.");
-  if (template && template !== "klirprospect-demos") fail(400, "Modèle de mission inconnu.");
+  if (template && template !== "klirprospect-demos" && template !== "klirprospect-synthese") fail(400, "Modèle de mission inconnu.");
   const campaign = template === "klirprospect-demos";
-  const objective = campaign
-    ? "Préparer une campagne pour obtenir cinq démonstrations de KlirProspect."
-    : String(input?.objective || input?.title || "").trim();
+  const synthese = template === "klirprospect-synthese";
+  const objective = synthese
+    ? "Analyser trois fiches fictives et préparer une synthèse pour une démonstration de KlirProspect."
+    : campaign
+      ? "Préparer une campagne pour obtenir cinq démonstrations de KlirProspect."
+      : String(input?.objective || input?.title || "").trim();
   if (objective.length < 8) fail(400, "Écrivez l'objectif.");
   if (objective.length > 500) fail(400, "L'objectif est trop long.");
-  const ownerSlug = campaign ? "klirprospect" : String(input?.ownerSlug || "office-klirline");
+  const ownerSlug = campaign || synthese ? "klirprospect" : String(input?.ownerSlug || "office-klirline");
   if (!rosterAgent(ownerSlug)) fail(400, "Agent inconnu.");
   const clientId = campaign ? "cli-atelier-nord" : input?.clientId || null;
   if (clientId && !visibleClient(actor, clientId)) fail(403, "Dossier client inaccessible.");
   return {
     id: `msn-${crypto.randomUUID()}`,
-    template: campaign ? template : null,
-    title: campaign ? "Campagne KlirProspect — cinq démonstrations" : objective.slice(0, 120),
+    template: campaign || synthese ? template : null,
+    title: synthese ? "Synthèse KlirProspect — trois fiches fictives" : campaign ? "Campagne KlirProspect — cinq démonstrations" : objective.slice(0, 120),
     objective,
-    request: campaign ? "Préparer une campagne pour obtenir cinq démonstrations de KlirProspect." : objective,
+    request: synthese
+      ? "Analyser trois fiches fictives et préparer une synthèse pour une démonstration de KlirProspect."
+      : campaign
+        ? "Préparer une campagne pour obtenir cinq démonstrations de KlirProspect."
+        : objective,
     ownerSlug,
     clientId,
-    product: campaign ? "klirprospect" : String(input?.product || ""),
+    product: campaign || synthese ? "klirprospect" : String(input?.product || ""),
     priority: "haute",
     dueAt: null,
-    successCriterion: campaign
-      ? "Dossier traçable : liste fictive, messages, contrôle des liens, validation. Aucune démonstration réelle n'est comptée."
-      : String(input?.successCriterion || "").trim(),
+    successCriterion: synthese
+      ? "Synthèse interne : besoins, manques, questions et ordre du jour. Aucune démonstration réservée, aucun contact."
+      : campaign
+        ? "Dossier traçable : liste fictive, messages, contrôle des liens, validation. Aucune démonstration réelle n'est comptée."
+        : String(input?.successCriterion || "").trim(),
     status: "qualify",
-    tasks: campaign ? campaignTasks() : [],
+    tasks: synthese ? [taskShell("synthese", "Analyser trois fiches fictives et préparer la synthèse", "klirprospect", [])] : campaign ? campaignTasks() : [],
     deliverables: [],
     drafts: [],
     approvals: [],
-    events: [{ at: now, actorId: actor, type: "create", detail: campaign ? "Campagne de démonstration ouverte." : "Mission ouverte." }],
+    events: [{ at: now, actorId: actor, type: "create", detail: synthese ? "Synthèse de fiches fictives ouverte." : campaign ? "Campagne de démonstration ouverte." : "Mission ouverte." }],
     outcomes: { demosPrepared: 0, demosBooked: 0 },
     cost: { spentCents: 0, capCents: 0 },
-    validatorId: actor === "ceo" ? "coo" : "ceo",
+    validatorId: "coo",
     createdBy: actor,
     createdAt: now,
     updatedAt: now,
@@ -212,7 +221,6 @@ export function startMissionTask(mission, commands, taskId, options = {}) {
   if (!source) fail(404, "Tâche introuvable");
   if (!["ready", "running", "rework", "blocked"].includes(mission.status)) fail(409, "La mission n'est pas prête à démarrer.");
   if (Number(options.costCents) > 0) recordCost(mission, options.costCents);
-  const lease = Number(options.leaseMs) > 0 ? Number(options.leaseMs) : HQ_RUNNING_LEASE_MS;
   const unmet = (source.dependsOn || []).filter((id) => mission.tasks.find((task) => task.id === id)?.status !== "done");
   if (unmet.length) fail(409, "Une tâche précédente n'est pas terminée.");
   const now = clock(options);
@@ -220,9 +228,10 @@ export function startMissionTask(mission, commands, taskId, options = {}) {
   if (source.status === "done" || existing?.status === "done") {
     return { mission, command: existing || null, started: false, reason: "already_done", changed: false };
   }
-  if (existing && existing.status === "running" && !isLeaseExpired(existing, now, lease)) {
-    const outcome = claimHqCommand(existing, { claimedBy: source.ownerSlug, claimToken: source.claimToken }, { ...options, now, leaseMs: lease });
-    return { mission, command: outcome.command, started: false, reason: outcome.reason, changed: false };
+  const leaseUntil = Date.parse(existing?.claim?.leaseUntil || "");
+  if (existing && existing.status === "dispatched" && !Number.isNaN(leaseUntil) && leaseUntil > now.getTime()) {
+    const held = decideClaim(existing, { actorId: options.actorId, now });
+    return { mission, command: held.command || existing, started: false, reason: "held", changed: false };
   }
   if (source.attempts >= source.maxAttempts) {
     const blocked = clone(mission);
@@ -236,31 +245,38 @@ export function startMissionTask(mission, commands, taskId, options = {}) {
   }
   let command = existing;
   let insertCommand = false;
-  if (!command || ["done", "failed", "cancelled"].includes(command.status)) {
+  if (!command || ["done", "failed", "cancelled", "blocked"].includes(command.status)) {
     command = buildHqCommand({ text: source.title, ownerSlug: source.ownerSlug, priority: mission.priority === "haute" ? "haute" : "normale" }, options.actorId, { now });
     command.missionId = mission.id;
     command.taskId = source.id;
     insertCommand = true;
   }
-  const outcome = claimHqCommand(command, { claimedBy: source.ownerSlug, claimToken: crypto.randomUUID() }, { ...options, now, leaseMs: lease });
+  const decision = decideClaim(command, { actorId: options.actorId, now });
+  if (decision.body.outcome !== "issued" && decision.body.outcome !== "reclaimed") {
+    const error = new Error(decision.body.error || "La tâche ne peut pas être prise.");
+    error.status = decision.http || 409;
+    throw error;
+  }
   const next = clone(mission);
   const task = next.tasks.find((item) => item.id === taskId);
   task.attempts += 1;
-  task.commandId = outcome.command.id;
-  task.claimToken = outcome.command.claimToken;
+  task.commandId = decision.command.id;
+  task.attemptId = decision.command.claim.attemptId;
   task.status = "running";
   task.blockedReason = null;
   if (["qualify", "ready", "rework", "blocked"].includes(next.status)) next.status = "running";
   next.updatedAt = now.toISOString();
-  pushEvent(next, outcome.reason === "reclaimed" ? "reclaim" : "start", options.actorId, task.title, next.updatedAt);
+  pushEvent(next, decision.body.outcome === "reclaimed" ? "reclaim" : "start", options.actorId, `${task.title} · tentative ${task.attemptId}`, next.updatedAt);
   return {
     mission: next,
-    command: outcome.command,
+    command: decision.command,
     insertCommand,
     replaceCommand: !insertCommand,
     started: true,
-    reason: outcome.reason,
+    reason: decision.body.outcome,
     changed: true,
+    claimToken: decision.body.claimToken,
+    attemptId: decision.command.claim.attemptId,
   };
 }
 
@@ -276,7 +292,15 @@ export function addDeliverable(mission, commands, input, options = {}) {
   if (body.length > 4000) fail(400, "Le livrable est trop long.");
   const command = commands.find((item) => item.id === task.commandId);
   if (!command) fail(409, "La commande de la tâche est introuvable.");
-  const proved = applyHqPatch(command, { status: "done", proof: body }, options);
+  const proved = decideCompletion(command, {
+    status: "done",
+    proof: body,
+    result: input?.result || null,
+    attemptId: input?.attemptId,
+    claimToken: input?.claimToken,
+  }, options);
+  if (proved.http >= 400) fail(proved.http, proved.body.error || "Livrable refusé.");
+  if (!proved.persist) return { mission, command, changed: false, replaceCommand: false };
   const now = clock(options).toISOString();
   const next = clone(mission);
   const target = next.tasks.find((item) => item.id === task.id);
@@ -297,7 +321,7 @@ export function addDeliverable(mission, commands, input, options = {}) {
   next.outcomes = { demosPrepared: next.deliverables.length, demosBooked: 0 };
   next.updatedAt = now;
   pushEvent(next, "deliverable", options.actorId, target.title, now);
-  return { mission: next, command: proved };
+  return { mission: next, command: proved.command, replaceCommand: true };
 }
 
 export function decideMission(mission, input, options = {}) {

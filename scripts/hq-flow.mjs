@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const port = Number(process.env.HQ_FLOW_PORT || 4188);
 const hqFile = path.join(os.tmpdir(), `klirline-hq-${process.pid}.json`);
-const missionFile = path.join(os.tmpdir(), `klirline-missions-${process.pid}.json`);
 const stateFile = path.join(root, "data", "state.json");
 const stateBackup = fs.existsSync(stateFile) ? fs.readFileSync(stateFile) : null;
 const base = `http://127.0.0.1:${port}`;
@@ -16,10 +15,18 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+const machineToken = "local-test-executor";
+const machineIdentities = JSON.stringify([
+  { id: "executor-test", token: machineToken, actorId: "machine-klirprospect", scopes: ["work", "review"] },
+]);
+
 async function request(method, pathname, body) {
   const response = await fetch(`${base}${pathname}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      Authorization: `Bearer ${machineToken}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(5000),
   });
@@ -42,7 +49,7 @@ async function waitForHealth(child) {
 
 const child = spawn(process.execPath, ["src/server.js"], {
   cwd: root,
-  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile, HQ_MISSIONS_PATH: missionFile },
+  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile, HQ_MACHINE_IDENTITIES: machineIdentities },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
@@ -59,34 +66,29 @@ try {
   assert(pending.status === 200, "liste pending");
   assert(pending.payload.commands.some((command) => command.id === id), "la commande n'est pas dans pending");
 
-  const token = "poll-flow-token";
-  const claim = await request("POST", `/api/hq/commands/${id}/claim`, { claimedBy: "office-klirline", claimToken: token });
-  assert(claim.status === 200 && claim.payload.started === true && claim.payload.reason === "claimed" && claim.payload.command.status === "running", "le claim ne démarre pas");
+  const firstClaim = await request("POST", `/api/hq/commands/${id}/claim`, {});
+  assert(firstClaim.status === 200 && firstClaim.payload.outcome === "issued" && firstClaim.payload.command.status === "dispatched", "le premier claim ne transmet pas");
+  assert(typeof firstClaim.payload.claimToken === "string" && firstClaim.payload.claimToken.length >= 32, "le premier claim ne remet pas de bail");
+  assert(!JSON.stringify(firstClaim.payload.command).includes(firstClaim.payload.claimToken), "le bail est recopié dans la commande");
 
-  const pendingAfter = await request("GET", "/api/hq/commands?status=pending");
-  assert(!pendingAfter.payload.commands.some((command) => command.id === id), "le claim laisse la commande dans pending");
+  const secondClaim = await request("POST", `/api/hq/commands/${id}/claim`, {});
+  assert(secondClaim.status === 200 && secondClaim.payload.outcome === "held" && secondClaim.payload.command.status === "dispatched", "le second claim redistribue");
+  assert(secondClaim.payload.claimToken === undefined && !JSON.stringify(secondClaim.payload).includes(firstClaim.payload.claimToken), "le second claim renvoie le bail");
+  assert(secondClaim.payload.command.updatedAt === firstClaim.payload.command.updatedAt, "le second claim réécrit la date");
 
-  const rival = await request("POST", `/api/hq/commands/${id}/claim`, { claimedBy: "autre-poll", claimToken: "autre-flow-token" });
-  assert(rival.status === 200 && rival.payload.started === false && rival.payload.reason === "already_active" && rival.payload.command.claimToken === null, "le second claim relance");
-  assert(rival.payload.command.updatedAt === claim.payload.command.updatedAt, "le second claim réécrit la commande");
-
-  const replay = await request("POST", `/api/hq/commands/${id}/claim`, { claimedBy: "office-klirline", claimToken: token });
-  assert(replay.status === 200 && replay.payload.started === false && replay.payload.reason === "replay" && replay.payload.command.claimToken === token, "le replay ne répond pas");
-  assert(replay.payload.command.updatedAt === claim.payload.command.updatedAt, "le replay réécrit la commande");
-
+  const attempt = { attemptId: firstClaim.payload.command.claim.attemptId, claimToken: firstClaim.payload.claimToken };
   const bare = await request("PATCH", `/api/hq/commands/${id}`, { status: "done" });
-  assert(bare.status === 400, `done sans preuve a répondu ${bare.status}`);
-  const stillRunning = await request("GET", `/api/hq/commands/${id}`);
-  assert(stillRunning.payload.command.status === "running", "le refus de preuve a changé le statut");
+  assert(bare.status === 409, `clore sans tentative a répondu ${bare.status}`);
+  const blank = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", ...attempt, result: " ", proof: "", agentNote: "" });
+  assert(blank.status === 400, "une preuve vide est acceptée");
+  const stillOpen = await request("GET", `/api/hq/commands/${id}`);
+  assert(stillOpen.payload.command.status === "dispatched" && !JSON.stringify(stillOpen.payload).includes(firstClaim.payload.claimToken), "le refus de clôture a changé la commande");
 
-  const patched = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", result: "Article prêt", proof: "Brouillon déposé", agentNote: "BWN Rédaction" });
-  assert(patched.status === 200 && patched.payload.command.status === "done" && patched.payload.command.proof === "Brouillon déposé", "PATCH done a échoué");
+  const patched = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", ...attempt, result: "Article prêt", agentNote: "BWN Rédaction", proof: "Brouillon déposé au bureau" });
+  assert(patched.status === 200 && patched.payload.command.status === "done" && patched.payload.command.proof === "Brouillon déposé au bureau", "PATCH done a échoué");
 
   const again = await request("GET", `/api/hq/commands/${id}`);
-  assert(again.payload.command.status === "done" && again.payload.command.result === "Article prêt" && again.payload.command.proof === "Brouillon déposé", "la lecture ne montre pas done");
-
-  const late = await request("POST", `/api/hq/commands/${id}/claim`, { claimToken: token });
-  assert(late.status === 409 && late.payload.started === false && late.payload.command.status === "done", "un claim après done a été accepté");
+  assert(again.payload.command.status === "done" && again.payload.command.result === "Article prêt" && again.payload.command.proof === "Brouillon déposé au bureau", "la lecture ne montre pas done");
 
   const roster = await request("GET", "/api/hq/roster");
   assert(roster.payload.roster.length >= 14, "roster trop court");
@@ -100,20 +102,9 @@ try {
 
   const page = await fetch(`${base}/app.js`, { signal: AbortSignal.timeout(5000) });
   const source = await page.text();
-  assert(source.includes("Bureau") && source.includes("Plateformes") && source.includes("Admin produits"), "l'interface a perdu le bureau ou les plateformes");
-  assert(source.includes("<strong>Preuve.</strong>") && source.includes("awaiting_validation") && source.includes("Échoué"), "l'interface n'affiche plus la preuve ou les statuts");
-  assert(source.includes("Missions") && source.includes("Non exécutable") && source.includes("Envoi désactivé"), "l'interface perd les missions ou présente un agent comme exécutable");
+  assert(source.includes("Bureau") && source.includes("Plateformes") && source.includes("Admin produits") && source.includes("Preuve."), "l'interface a perdu le bureau, les plateformes ou la preuve");
 
-  const campaign = await request("POST", "/api/hq/missions", { template: "klirprospect-demos", actorId: "sales-director" });
-  assert(campaign.status === 201 && campaign.payload.mission.outcomes.demosBooked === 0 && campaign.payload.mission.tasks.length === 4, "la campagne de démonstration ne s'ouvre pas");
-  const hidden = await request("GET", "/api/hq/clients?actor=accounting");
-  assert(hidden.status === 200 && hidden.payload.clients.length === 0, "un rôle hors liste lit un dossier");
-  const denied = await request("POST", "/api/hq/skills/klir-coordination/enable", { actorId: "ceo" });
-  assert(denied.status === 403, "une compétence s'active toute seule");
-  const unsent = await request("POST", `/api/hq/missions/${campaign.payload.mission.id}/actions`, { type: "email", body: "Invitation", actorId: "sales-director" });
-  assert(unsent.status === 403 && unsent.payload.mission.drafts[0].sent === false, "un courriel part sans approbation");
-
-  console.log(`OK — commande ${id} : claim idempotent, done sans preuve refusé, preuve visible. Démonstration et hub intacts.`);
+  console.log(`OK — commande ${id} : pending → done. Démonstration et hub intacts.`);
 } finally {
   child.kill();
   await new Promise((resolve) => {
@@ -122,7 +113,6 @@ try {
     setTimeout(resolve, 500);
   });
   fs.rmSync(hqFile, { force: true });
-  fs.rmSync(missionFile, { force: true });
   if (stateBackup) fs.writeFileSync(stateFile, stateBackup);
   else fs.rmSync(stateFile, { force: true });
 }

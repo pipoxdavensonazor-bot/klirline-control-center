@@ -8,7 +8,7 @@ import { ACCESS_VALUES, PRODUCT_SITES, productSiteFields } from "./product-sites
 import { activeProspects, seedWorld } from "./seed.js";
 import { dataPath } from "./store.js";
 import { accessSettings, bindIdentity, orgObjectName, verifyAccessJwt } from "./access.js";
-import { HQ_RUNNING_LEASE_MS, HQ_STATUSES, claimHqCommand } from "./hq/commands.js";
+import { HQ_LEASE_MS, hashClaimToken } from "./hq/commands.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { memoryHqStore } from "./hq/memory-store.js";
 import { HQ_ROSTER, rosterAgent, routeCommand } from "./hq/roster.js";
@@ -291,9 +291,7 @@ check(routeAccess("/api/sites", "POST") === "session", "Un autre verbe sur les s
 check(routeAccess("/api/playbooks/company", "GET") === "public", "Les playbooks restent publics");
 check(routeAccess("/api/command", "POST") === "session", "La commande de démonstration exige la session");
 check(routeAccess("/api/hq/command", "POST") === "session" && routeAccess("/api/hq/commands", "GET") === "session" && routeAccess("/api/hq/roster", "GET") === "session", "Le bureau exige la même session que les autres routes /api");
-check(routeAccess("/api/hq/commands/hq-11111111-1111-4111-8111-111111111111/claim", "POST") === "session", "Le claim du bureau reste une route de session");
-check(HQ_STATUSES.join() === "pending,queued,dispatched,running,awaiting_validation,blocked,done,failed,cancelled", "Les statuts du bureau couvrent la file, la reprise et la clôture");
-check(HQ_RUNNING_LEASE_MS === 15 * 60 * 1000, "Le bail d'une commande running est de 15 minutes");
+check(routeAccess("/api/hq/commands/hq-00000000-0000-4000-8000-000000000001/claim", "POST") === "session" && routeAccess("/api/hq/commands/hq-00000000-0000-4000-8000-000000000001/interrupt", "POST") === "session", "La prise et l'interruption exigent la même session");
 
 const hqIds = ["office-klirline", "ops-klirline", "klirbuild", "klirmarket", "klirprospect", "klirline-ai", "noria", "black-wall-news", "bwn-redaction", "klirline-social", "youtube-channel", "ic-market", "cmcmarkets", "all-question", "sandbox-klirline"];
 check(HQ_ROSTER.map((agent) => agent.id).join() === hqIds.join(), "Le roster du bureau est la liste nommée, distincte des 34 postes");
@@ -340,11 +338,24 @@ const explicitHq = await dispatchHq(hqStore, {
   actorId: "ceo",
 });
 check(explicitHq.body.command.ownerSlug === "sandbox-klirline" && explicitHq.body.command.routedBy === "explicit", "Un agent choisi gagne sur les mots-clés");
+const claimedHq = await dispatchHq(hqStore, {
+  method: "POST",
+  pathname: `/api/hq/commands/${createdHq.body.command.id}/claim`,
+  searchParams: new URLSearchParams(),
+  body: {},
+  actorId: "ceo",
+});
 const doneHq = await dispatchHq(hqStore, {
   method: "PATCH",
   pathname: `/api/hq/commands/${createdHq.body.command.id}`,
   searchParams: new URLSearchParams(),
-  body: { status: "done", result: "Article prêt", agentNote: "BWN Rédaction" },
+  body: {
+    status: "done",
+    result: "Article prêt",
+    agentNote: "BWN Rédaction",
+    attemptId: claimedHq.body.command.claim.attemptId,
+    claimToken: claimedHq.body.claimToken,
+  },
   actorId: "ceo",
 });
 check(doneHq.status === 200 && doneHq.body.command.status === "done" && doneHq.body.command.result === "Article prêt" && doneHq.body.command.text.startsWith("rédiger"), "Le PATCH termine la commande sans réécrire l'ordre");
@@ -370,196 +381,113 @@ try {
 } catch (error) {
   check(error.status === 400, "Une commande trop courte est refusée");
 }
-try {
-  await dispatchHq(hqStore, { method: "PATCH", pathname: `/api/hq/commands/${createdHq.body.command.id}`, searchParams: new URLSearchParams(), body: { status: "publie" }, actorId: "ceo" });
-  check(false, "Un statut hors liste est refusé");
-} catch (error) {
-  check(error.status === 400, "Un statut hors liste est refusé");
-}
-try {
-  await dispatchHq(hqStore, { method: "PATCH", pathname: `/api/hq/commands/${createdHq.body.command.id}`, searchParams: new URLSearchParams(), body: { status: "running" }, actorId: "ceo" });
-  check(false, "Une commande close ne se rouvre pas");
-} catch (error) {
-  check(error.status === 409, "Une commande close ne se rouvre pas");
-}
+const unknownStatus = await dispatchHq(hqStore, { method: "PATCH", pathname: `/api/hq/commands/${createdHq.body.command.id}`, searchParams: new URLSearchParams(), body: { status: "publie" }, actorId: "ceo" });
+check(unknownStatus.status === 400, "Un statut hors liste est refusé");
 
-const reliability = memoryHqStore();
-const t0 = new Date("2026-11-05T16:00:00.000Z");
-const leaseMs = 60 * 1000;
-const reliabilityCall = (method, pathname, body, at) => dispatchHq(reliability, {
-  method,
-  pathname,
-  searchParams: new URLSearchParams(),
-  body,
-  actorId: "ceo",
-  now: at,
-  leaseMs,
-});
-const taken = await reliabilityCall("POST", "/api/hq/command", { text: "rédiger l'article Black Wall News", priority: "haute" }, t0);
-const takenId = taken.body.command.id;
-check(taken.body.command.proof === null && taken.body.command.leaseExpired === false && taken.body.command.status === "pending", "Une commande neuve n'a ni preuve ni bail");
-const claimToken = "poll-office-001";
-const firstClaim = await reliabilityCall("POST", `/api/hq/commands/${takenId}/claim`, { claimedBy: "office-klirline", claimToken }, t0);
-check(firstClaim.status === 200 && firstClaim.body.started === true && firstClaim.body.reason === "claimed", "Le premier claim démarre une seule exécution");
-check(firstClaim.body.command.status === "running" && firstClaim.body.command.claimToken === claimToken && firstClaim.body.command.activityNote === "Prise en charge par office-klirline.", "Le claim laisse une trace running");
-const listedPending = await reliabilityCall("GET", "/api/hq/commands", {}, t0);
-const pendingOnly = listedPending.body.commands.filter((command) => command.status === "pending");
-check(pendingOnly.length === 0, "Le claim retire la commande de la file pending");
-const runningList = await dispatchHq(reliability, { method: "GET", pathname: "/api/hq/commands", searchParams: new URLSearchParams("status=running"), body: {}, actorId: "ceo", now: t0, leaseMs });
-check(runningList.body.commands.length === 1 && runningList.body.commands[0].leaseExpired === false, "La file running expose le bail encore ouvert");
-const rival = await reliabilityCall("POST", `/api/hq/commands/${takenId}/claim`, { claimedBy: "autre-poll", claimToken: "autre-poll-0002" }, new Date(t0.getTime() + 1000));
-check(rival.status === 200 && rival.body.started === false && rival.body.reason === "already_active" && rival.body.command.claimToken === null && rival.body.command.updatedAt === firstClaim.body.command.updatedAt, "Un second claim est un no-op et ne redémarre pas");
-const replay = await reliabilityCall("POST", `/api/hq/commands/${takenId}/claim`, { claimedBy: "office-klirline", claimToken }, new Date(t0.getTime() + 2000));
-check(replay.status === 200 && replay.body.started === false && replay.body.reason === "replay" && replay.body.command.leaseUntil === firstClaim.body.command.leaseUntil, "Le même jeton ne prolonge pas le bail et ne réécrit rien");
-const heartbeatAt = new Date(t0.getTime() + 30 * 1000);
-const heartbeat = await reliabilityCall("PATCH", `/api/hq/commands/${takenId}`, { status: "running", claimToken }, heartbeatAt);
-check(heartbeat.status === 200 && heartbeat.body.command.claimedAt === heartbeatAt.toISOString() && heartbeat.body.command.leaseUntil === new Date(heartbeatAt.getTime() + leaseMs).toISOString() && heartbeat.body.command.claimToken === null, "Le PATCH running avec le même jeton prolonge le bail");
-const stillHeld = await reliabilityCall("POST", `/api/hq/commands/${takenId}/claim`, { claimedBy: "autre-poll", claimToken: "autre-poll-0003" }, new Date(heartbeatAt.getTime() + 1000));
-check(stillHeld.body.started === false && stillHeld.body.reason === "already_active", "Après le battement, l'autre poll ne prend pas la commande");
-const staleAt = new Date(heartbeatAt.getTime() + leaseMs);
-const reclaimed = await reliabilityCall("POST", `/api/hq/commands/${takenId}/claim`, { claimedBy: "reprise-office", claimToken: "reprise-poll-01" }, staleAt);
-check(reclaimed.body.started === true && reclaimed.body.reason === "reclaimed" && reclaimed.body.command.status === "running" && reclaimed.body.command.claimToken === "reprise-poll-01", "Un running trop vieux est repris, pas dupliqué");
-check(reclaimed.body.command.activityNote.includes("Interruption") && reclaimed.body.command.activityNote.includes("office-klirline") && reclaimed.body.command.updatedAt === staleAt.toISOString(), "La reprise laisse une note, un statut et updatedAt");
-const afterReclaim = await reliabilityCall("GET", `/api/hq/commands/${takenId}`, {}, staleAt);
-check(afterReclaim.body.command.claimedBy === "reprise-office" && afterReclaim.body.command.claimToken === null && afterReclaim.body.command.status === "running", "La lecture montre la reprise sans livrer le jeton");
-try {
-  await reliabilityCall("PATCH", `/api/hq/commands/${takenId}`, { status: "done", result: "   ", proof: "", agentNote: null }, staleAt);
-  check(false, "done sans preuve est refusé");
-} catch (error) {
-  check(error.status === 400 && /preuve/i.test(error.message), "done sans preuve est refusé");
-}
-const untouched = await reliabilityCall("GET", `/api/hq/commands/${takenId}`, {}, staleAt);
-check(untouched.body.command.status === "running" && untouched.body.command.claimedBy === "reprise-office" && untouched.body.command.updatedAt === staleAt.toISOString(), "Un refus de clôture ne change pas la commande");
-const proved = await reliabilityCall("PATCH", `/api/hq/commands/${takenId}`, { status: "done", proof: "Brouillon déposé au bureau" }, staleAt);
-check(proved.status === 200 && proved.body.command.status === "done" && proved.body.command.proof === "Brouillon déposé au bureau", "La preuve seule permet de clore");
-const noteOnly = await reliabilityCall("POST", "/api/hq/command", { text: "noter la veille KlirBuild", ownerSlug: "klirbuild" }, t0);
-const noted = await reliabilityCall("PATCH", `/api/hq/commands/${noteOnly.body.command.id}`, { status: "done", agentNote: "Veille consignée" }, t0);
-check(noted.body.command.status === "done" && noted.body.command.agentNote === "Veille consignée", "Une note d'agent suffit comme preuve");
-const blocked = await reliabilityCall("POST", "/api/hq/command", { text: "tenir le centre", ownerSlug: "ops-klirline" }, t0);
-const waiting = await reliabilityCall("PATCH", `/api/hq/commands/${blocked.body.command.id}`, { status: "awaiting_validation" }, t0);
-const refusedClaim = await reliabilityCall("POST", `/api/hq/commands/${blocked.body.command.id}/claim`, { claimToken: "claim-attente-01" }, t0);
-check(waiting.body.command.status === "awaiting_validation" && refusedClaim.status === 409 && refusedClaim.body.started === false && refusedClaim.body.reason === "not_claimable", "awaiting_validation ne se réclame pas");
-const failed = await reliabilityCall("PATCH", `/api/hq/commands/${blocked.body.command.id}`, { status: "failed", agentNote: "Source indisponible" }, t0);
-check(failed.body.command.status === "failed", "failed se pose sans exiger la preuve de done");
-const closedClaim = await reliabilityCall("POST", `/api/hq/commands/${takenId}/claim`, { claimToken: "reprise-poll-01" }, staleAt);
-check(closedClaim.status === 409 && closedClaim.body.reason === "terminal" && closedClaim.body.command.status === "done", "Une commande done ne se réclame plus");
-const queued = claimHqCommand({ ...taken.body.command, status: "queued", claimToken: null, claimedAt: null }, { claimedBy: "office-klirline", claimToken: "file-claim-001" }, { now: t0, actorId: "ceo" });
-const dispatched = claimHqCommand({ ...taken.body.command, status: "dispatched", claimToken: null, claimedAt: null }, { claimedBy: "office-klirline", claimToken: "emis-claim-01" }, { now: t0, actorId: "ceo" });
-check(queued.started === true && queued.command.status === "running" && dispatched.started === true, "queued et dispatched se prennent comme pending");
-const bureauDoc = fs.readFileSync(dataPath("knowledge", "hq-bureau.md"), "utf8");
-const bureauUi = fs.readFileSync(dataPath("public", "app.js"), "utf8");
-check(bureauDoc.includes("15 minutes") && bureauDoc.includes("preuve") && bureauDoc.includes("claimToken"), "Le playbook décrit le bail, le claim et la preuve");
-check(bureauUi.includes("<strong>Preuve.</strong>") && bureauUi.includes('awaiting_validation: "À valider"') && bureauUi.includes('failed: "Échoué"'), "La colonne Fait peut afficher la preuve et les statuts ajoutés");
-const office = memoryHqStore();
-const missionCall = (method, pathname, body, actor = "sales-director", at = new Date("2026-11-05T18:00:00.000Z")) => dispatchHq(office, {
+const hqCall = (method, pathname, body, now, actor = "ceo") => dispatchHq(hqStore, {
   method,
   pathname,
   searchParams: new URLSearchParams(),
   body,
   actorId: actor,
-  now: at,
-  leaseMs: 1000,
+  now,
 });
-const hidden = await missionCall("GET", "/api/hq/clients", {}, "accounting");
-const seen = await missionCall("GET", "/api/hq/clients", {}, "ceo");
-check(hidden.body.clients.length === 0, "Un rôle hors liste ne lit pas les dossiers");
-check(seen.body.clients.length === 2 && !(await missionCall("GET", "/api/hq/clients/cli-reserve", {}, "accounting")).body.client, "Le dossier réservé reste invisible");
+const t0 = new Date("2026-11-05T12:00:00.000Z");
+const leased = await hqCall("POST", "/api/hq/command", { text: "préparer la revue du bac à sable", ownerSlug: "sandbox-klirline" }, t0);
+const leaseId = leased.body.command.id;
+const firstClaim = await hqCall("POST", `/api/hq/commands/${leaseId}/claim`, {}, t0, "office-klirline");
+check(firstClaim.status === 200 && firstClaim.body.outcome === "issued" && firstClaim.body.command.status === "dispatched", "Le premier claim transmet la commande une fois");
+check(typeof firstClaim.body.claimToken === "string" && firstClaim.body.claimToken.length >= 32, "Le premier claim remet un bail");
+check(!JSON.stringify(firstClaim.body.command).includes(firstClaim.body.claimToken) && !firstClaim.body.command.claim.tokenHash, "La réponse de claim ne copie pas le bail dans la commande");
+const storedLease = await hqStore.get(leaseId);
+check(storedLease.claim.tokenHash === hashClaimToken(firstClaim.body.claimToken) && storedLease.claimToken == null, "Le dépôt ne garde que l'empreinte du bail");
+const secondClaim = await hqCall("POST", `/api/hq/commands/${leaseId}/claim`, {}, new Date(t0.getTime() + 1000), "ops-klirline");
+check(secondClaim.status === 200 && secondClaim.body.outcome === "held" && secondClaim.body.command.status === "dispatched", "Le second claim est un no-op");
+check(!Object.hasOwn(secondClaim.body, "claimToken") && !JSON.stringify(secondClaim.body).includes(firstClaim.body.claimToken), "Le second claim ne reçoit pas le bail");
+check(secondClaim.body.command.updatedAt === firstClaim.body.command.updatedAt && (await hqStore.get(leaseId)).claim.tokenHash === storedLease.claim.tokenHash, "Le second claim ne redistribue pas");
+const readLease = await hqCall("GET", `/api/hq/commands/${leaseId}`, {}, t0);
+const listed = await hqCall("GET", "/api/hq/commands", {}, t0);
+check(!JSON.stringify(readLease.body).includes(firstClaim.body.claimToken) && !JSON.stringify(listed.body).includes("tokenHash"), "La file et la fiche ne révèlent pas le bail");
+const leaseAttempt = { attemptId: firstClaim.body.command.claim.attemptId, claimToken: firstClaim.body.claimToken };
+let bareDone;
 try {
-  await missionCall("POST", "/api/hq/missions", { template: "klirprospect-demos", role: "ceo" });
-  check(false, "Un champ de droit est ignoré");
+  bareDone = await hqCall("PATCH", `/api/hq/commands/${leaseId}`, { status: "done" }, t0);
 } catch (error) {
-  check(error.status === 400, "Un champ de droit est refusé");
+  bareDone = { status: error.status };
 }
-const skillEnable = await missionCall("POST", "/api/hq/skills/klir-coordination/enable", {});
-check(skillEnable.status === 403, "Une compétence ne s'active pas elle-même");
-const opened = await missionCall("POST", "/api/hq/missions", { template: "klirprospect-demos" });
-check(opened.status === 201 && opened.body.mission.status === "qualify" && opened.body.mission.validatorId === "ceo" && opened.body.mission.outcomes.demosBooked === 0, "La campagne naît à qualifier, sans démonstration réservée");
-check(opened.body.mission.tasks.every((task) => !task.claimToken), "Le jeton de tâche ne sort pas");
-const missionId = opened.body.mission.id;
-const tasks = opened.body.mission.tasks;
-const ready = await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "ready" });
-check(ready.body.mission.status === "ready", "La campagne peut passer prêt");
+check(bareDone.status === 409 && (await hqStore.get(leaseId)).status === "dispatched", "Clore sans la tentative active est refusé");
+let blankProof;
 try {
-  await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[1].id}/start`, {});
-  check(false, "Une tâche dépendante démarre trop tôt");
+  blankProof = await hqCall("PATCH", `/api/hq/commands/${leaseId}`, { status: "done", ...leaseAttempt, result: "  ", proof: "", agentNote: null }, t0);
 } catch (error) {
-  check(error.status === 409, "Une tâche dépendante démarre trop tôt");
+  blankProof = { status: error.status };
 }
-try {
-  await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[0].id}/start`, { costCents: 1 });
-  check(false, "Une dépense au-dessus du plafond passe");
-} catch (error) {
-  check(error.status === 409, "Une dépense au-dessus du plafond est refusée");
-}
-const limitStore = memoryHqStore();
-const limitOpen = await dispatchHq(limitStore, { method: "POST", pathname: "/api/hq/missions", searchParams: new URLSearchParams(), body: { template: "klirprospect-demos" }, actorId: "sales-director", now: new Date("2026-11-05T18:00:00.000Z"), leaseMs: 1000 });
-const limitId = limitOpen.body.mission.id;
-const limitTask = limitOpen.body.mission.tasks[0].id;
-await dispatchHq(limitStore, { method: "POST", pathname: `/api/hq/missions/${limitId}/transition`, searchParams: new URLSearchParams(), body: { status: "ready" }, actorId: "sales-director", now: new Date("2026-11-05T18:00:00.000Z"), leaseMs: 1000 });
-for (let attempt = 0; attempt < 3; attempt += 1) {
-  const at = new Date(Date.parse("2026-11-05T18:00:00.000Z") + attempt * 1000);
-  const started = await dispatchHq(limitStore, { method: "POST", pathname: `/api/hq/missions/${limitId}/tasks/${limitTask}/start`, searchParams: new URLSearchParams(), body: {}, actorId: "sales-director", now: at, leaseMs: 1000 });
-  check(started.body.started === true, `Tentative ${attempt + 1} refusée`);
-}
-const stopped = await dispatchHq(limitStore, { method: "POST", pathname: `/api/hq/missions/${limitId}/tasks/${limitTask}/start`, searchParams: new URLSearchParams(), body: {}, actorId: "sales-director", now: new Date("2026-11-05T18:00:04.000Z"), leaseMs: 1000 });
-check(stopped.body.reason === "attempt_limit" && stopped.body.mission.status === "blocked", "La quatrième tentative bloque la mission");
-const firstStart = await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[0].id}/start`, {});
-const secondStart = await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[0].id}/start`, {}, "sales-director", new Date("2026-11-05T18:00:00.400Z"));
-check(firstStart.body.started === true && secondStart.body.started === false && secondStart.body.mission.tasks[0].attempts === 1, "Reprendre la même tâche ne lance pas une seconde exécution");
-const proofs = [
-  "Cadrage : cinq démonstrations à préparer, aucune à réserver.",
-  "Liste fictive : Atelier Nord, personne fictive, aucun contact.",
-  "Brouillon : invitation à une démonstration, sans envoi.",
-  "Contrôle : aucun prix inventé, aucun lien externe affirmé.",
-];
-for (let index = 0; index < tasks.length; index += 1) {
-  if (index > 0) await missionCall("POST", `/api/hq/missions/${missionId}/tasks/${tasks[index].id}/start`, {});
-  await missionCall("POST", `/api/hq/missions/${missionId}/deliverables`, { taskId: tasks[index].id, body: proofs[index] });
-}
-const review = await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "in_review" });
-check(review.body.mission.status === "in_review" && review.body.mission.outcomes.demosBooked === 0, "Le dossier passe en validation sans compter de réservation");
-try {
-  await missionCall("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, "sales-director");
-  check(false, "L'auteur valide son dossier");
-} catch (error) {
-  check(error.status === 403, "L'auteur ne valide pas son dossier");
-}
-try {
-  await missionCall("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, "content");
-  check(false, "Un rôle standard valide le dossier");
-} catch (error) {
-  check(error.status === 403, "Un rôle standard ne valide pas le dossier");
-}
-const premature = await missionCall("POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Invitation" }, "ceo");
-check(premature.status === 403 && premature.body.error === "Approbation manquante.", "Un envoi sans approbation est refusé");
-const approved = await missionCall("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Dossier de préparation conforme." }, "ceo");
-check(approved.body.mission.approvalValid === true, "Le CEO valide le dossier préparé");
-const blockedSend = await missionCall("POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Invitation" }, "ceo");
-check(blockedSend.status === 403 && /Envoi désactivé/.test(blockedSend.body.error) && blockedSend.body.mission.drafts.every((draft) => draft.sent === false), "Même approuvé, l'envoi reste fermé");
-const corrected = await missionCall("POST", `/api/hq/missions/${missionId}/deliverables`, { taskId: tasks[3].id, body: "Contrôle révisé : toujours aucun envoi et aucun prix." }, "ceo");
-check(corrected.body.mission.approvalValid === false && corrected.body.mission.status === "rework", "Un livrable modifié invalide l'approbation");
-try {
-  await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "done", result: "Cinq démonstrations réservées." }, "ceo");
-  check(false, "La mission se clôt en contournant la validation");
-} catch (error) {
-  check(error.status === 409 || error.status === 400, "La mission ne se clôt pas sans validation valide");
-}
-await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "running" }, "ceo");
-await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "in_review" }, "ceo");
-await missionCall("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, "ceo");
-try {
-  await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "done", result: "Cinq démonstrations réservées." }, "ceo");
-  check(false, "Des démonstrations réservées sont acceptées");
-} catch (error) {
-  check(error.status === 400, "Des démonstrations non réservées ne sont pas comptées");
-}
-const closed = await missionCall("POST", `/api/hq/missions/${missionId}/transition`, { status: "done", result: "Dossier préparé. Aucune démonstration n'est réservée." }, "ceo");
-check(closed.body.mission.status === "done" && closed.body.mission.outcomes.demosBooked === 0 && closed.body.mission.deliverables.length === 5, "Le dossier se clôt sur la préparation, pas sur des réservations");
-const reread = await missionCall("GET", `/api/hq/missions/${missionId}`, {}, "accounting");
-check(reread.body.mission.status === "done" && reread.body.mission.client === null && reread.body.mission.deliverables.length === 5, "Le dossier relu après coup ne révèle pas le client interdit");
-const rosterNow = await missionCall("GET", "/api/hq/roster", {}, "ceo");
-check(rosterNow.body.roster.every((agent) => agent.executable === false && agent.engine === null), "Aucune carte d'agent n'est présentée comme exécutable");
-check(rosterNow.body.roster.filter((agent) => agent.division === "Trading").every((agent) => agent.operationalPath === false), "Le trading reste hors du premier parcours");
+check(blankProof.status === 400, "Une preuve vide est refusée");
+const proved = await hqCall("PATCH", `/api/hq/commands/${leaseId}`, { status: "done", ...leaseAttempt, proof: "Note de revue déposée" }, new Date(t0.getTime() + 2000));
+check(proved.status === 200 && proved.body.command.status === "done" && proved.body.command.proof === "Note de revue déposée", "Une preuve permet de clore");
+const closedClaim = await hqCall("POST", `/api/hq/commands/${leaseId}/claim`, {}, new Date(t0.getTime() + 3000));
+check(closedClaim.status === 409 && !Object.hasOwn(closedClaim.body, "claimToken"), "Une commande close ne se reprend pas");
+
+const stale = await hqCall("POST", "/api/hq/command", { text: "suivre l'exécution trop longue", ownerSlug: "ops-klirline" }, t0);
+const staleId = stale.body.command.id;
+await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, t0);
+await hqCall("PATCH", `/api/hq/commands/${staleId}`, { status: "running", agentNote: "Démarré" }, t0);
+const staleAt = new Date(t0.getTime() + HQ_LEASE_MS + 1000);
+const blockedRun = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, staleAt);
+check(blockedRun.status === 200 && blockedRun.body.outcome === "blocked" && blockedRun.body.command.status === "blocked", "Un running trop ancien passe bloqué");
+check(!Object.hasOwn(blockedRun.body, "claimToken") && blockedRun.body.command.updatedAt === staleAt.toISOString() && blockedRun.body.command.agentNote.includes("Interruption") && blockedRun.body.command.agentNote.includes("Démarré"), "L'interruption d'un running trop ancien laisse la date et la note");
+const refusedWhileBlocked = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, staleAt);
+check(refusedWhileBlocked.status === 409 && !Object.hasOwn(refusedWhileBlocked.body, "claimToken"), "Une commande bloquée ne se reprend pas toute seule");
+const reopened = await hqCall("PATCH", `/api/hq/commands/${staleId}`, { status: "pending" }, staleAt);
+const reissued = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, new Date(staleAt.getTime() + 1000));
+check(reopened.body.command.status === "pending" && reissued.body.outcome === "issued" && reissued.body.claimToken && reissued.body.claimToken !== firstClaim.body.claimToken, "Une commande bloquée se relance seulement après un pending explicite");
+
+const resumed = await hqCall("POST", "/api/hq/command", { text: "reprendre un envoi transmis", ownerSlug: "all-question" }, t0);
+const resumedId = resumed.body.command.id;
+const oldBail = await hqCall("POST", `/api/hq/commands/${resumedId}/claim`, {}, t0);
+const reclaimAt = new Date(t0.getTime() + HQ_LEASE_MS + 1000);
+const reclaimed = await hqCall("POST", `/api/hq/commands/${resumedId}/claim`, {}, reclaimAt);
+check(reclaimed.status === 200 && reclaimed.body.outcome === "reclaimed" && reclaimed.body.command.status === "dispatched", "Un bail expiré sur une commande transmise se reprend");
+check(reclaimed.body.claimToken && reclaimed.body.claimToken !== oldBail.body.claimToken && !JSON.stringify(reclaimed.body).includes(oldBail.body.claimToken), "La reprise remet un bail neuf");
+check(reclaimed.body.command.agentNote.includes("Reprise documentée") && reclaimed.body.command.updatedAt === reclaimAt.toISOString(), "La reprise est notée");
+
+const halted = await hqCall("POST", "/api/hq/command", { text: "couper le travail en cours", ownerSlug: "noria" }, t0);
+const haltedId = halted.body.command.id;
+await hqCall("POST", `/api/hq/commands/${haltedId}/claim`, {}, t0);
+await hqCall("PATCH", `/api/hq/commands/${haltedId}`, { status: "running" }, t0);
+const haltAt = new Date(t0.getTime() + 5000);
+const interrupted = await hqCall("POST", `/api/hq/commands/${haltedId}/interrupt`, { note: "Processus arrêté avant la preuve." }, haltAt);
+check(interrupted.status === 200 && interrupted.body.command.status === "running" && interrupted.body.command.updatedAt === haltAt.toISOString(), "L'interruption garde le statut et la date");
+check(!Object.hasOwn(interrupted.body, "claimToken") && interrupted.body.command.agentNote === "Processus arrêté avant la preuve.", "L'interruption laisse la note sans rendre le bail");
+const stillHeld = await hqCall("POST", `/api/hq/commands/${haltedId}/claim`, {}, new Date(t0.getTime() + 6000));
+check(stillHeld.body.outcome === "held" && !Object.hasOwn(stillHeld.body, "claimToken"), "L'interruption ne lance pas une seconde exécution");
+const duplicate = await hqCall("PATCH", `/api/hq/commands/${leaseId}`, { status: "done", ...leaseAttempt, proof: "Note de revue déposée" }, new Date(t0.getTime() + 4000));
+check(duplicate.status === 200 && duplicate.body.outcome === "duplicate" && (await hqStore.get(leaseId)).proof === "Note de revue déposée", "Renvoyer le même résultat ne l'écrase pas");
+const overwritten = await hqCall("PATCH", `/api/hq/commands/${leaseId}`, { status: "done", ...leaseAttempt, proof: "Autre texte" }, new Date(t0.getTime() + 5000));
+check(overwritten.status === 409 && (await hqStore.get(leaseId)).proof === "Note de revue déposée", "Un second résultat différent est refusé");
+const lateWrite = await hqCall("PATCH", `/api/hq/commands/${resumedId}`, {
+  status: "done",
+  attemptId: oldBail.body.command.claim.attemptId,
+  claimToken: oldBail.body.claimToken,
+  proof: "Ancienne tentative",
+}, reclaimAt);
+check(lateWrite.status === 409 && (await hqStore.get(resumedId)).status === "dispatched" && (await hqStore.get(resumedId)).proof == null, "L'ancienne tentative ne termine pas après la reprise");
+const freshWrite = await hqCall("PATCH", `/api/hq/commands/${resumedId}`, {
+  status: "done",
+  attemptId: reclaimed.body.command.claim.attemptId,
+  claimToken: reclaimed.body.claimToken,
+  proof: "Tentative reprise",
+}, reclaimAt);
+check(freshWrite.status === 200 && freshWrite.body.command.proof === "Tentative reprise" && freshWrite.body.command.completedAttemptId === reclaimed.body.command.claim.attemptId, "Seule la tentative active peut clore");
+const raced = await hqCall("POST", "/api/hq/command", { text: "deux prises simultanées", ownerSlug: "sandbox-klirline" }, t0);
+const racedId = raced.body.command.id;
+const pair = await Promise.all([
+  hqCall("POST", `/api/hq/commands/${racedId}/claim`, {}, t0, "office-klirline"),
+  hqCall("POST", `/api/hq/commands/${racedId}/claim`, {}, t0, "ops-klirline"),
+]);
+check(pair.filter((item) => item.body.outcome === "issued").length === 1 && pair.filter((item) => item.body.outcome === "held").length === 1, "Deux claims simultanés ne lancent qu'une exécution");
+const forged = await hqCall("PATCH", `/api/hq/commands/${racedId}`, { status: "done", actorId: "ceo", proof: "Falsifié" }, t0, "office-klirline");
+check(forged.status === 400 && (await hqStore.get(racedId)).status === "dispatched", "Un rôle fourni dans le corps ne change pas l'identité");
 const demoUntouched = issueCommand(state, "ceo", "trouver 10 prospects");
 check(demoUntouched.origin === "command" && demoUntouched.ownerId === "prospecting", "La commande de démonstration reste sur les 34 postes");
 

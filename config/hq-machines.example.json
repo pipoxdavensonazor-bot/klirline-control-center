@@ -1,0 +1,14 @@
+[
+  {
+    "id": "executor-klirprospect",
+    "token": "",
+    "actorId": "machine-klirprospect",
+    "scopes": ["work"]
+  },
+  {
+    "id": "reviewer-office",
+    "token": "",
+    "actorId": "coo",
+    "scopes": ["review"]
+  }
+]
