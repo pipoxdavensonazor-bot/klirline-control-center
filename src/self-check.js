@@ -248,19 +248,32 @@ for (const site of PRODUCT_SITES) {
   check(ACCESS_VALUES.has(fields.access), `${site.id} : mode d'accès hors liste`);
   check(Object.hasOwn(site, "adminUrl") && Object.hasOwn(site, "access"), `${site.id} sans adminUrl ou access`);
 }
-check(sitesById.klirbuild.adminUrl === "https://klirline.app/login" && sitesById.klirbuild.healthUrl === "https://klirline.app/api/health" && sitesById.klirbuild.access === "public-login", "KlirBuild garde sa santé et son login");
-check(sitesById.klirpay.adminUrl === "https://pay.klirline.ca/login" && sitesById.klirpay.access === "public-login", "KlirPay pointe vers /login");
-check(sitesById["black-wall-news"].name === "Black Wall News" && sitesById["black-wall-news"].url === "https://www.blackwallnews.com" && sitesById["black-wall-news"].adminUrl === "https://www.blackwallnews.com/admin" && sitesById["black-wall-news"].access === "public-login", "Black Wall News a son site et son admin");
-check(sitesById.noria.name === "NORIA" && sitesById.noria.url === "https://noriaedu.com" && sitesById.noria.adminUrl === "https://noriaedu.com/app#admin" && sitesById.noria.access === "public-login" && new URL(sitesById.noria.adminUrl).hash === "#admin", "NORIA garde le lien admin avec le fragment #admin");
+const cfAccessIds = ["klirline-os", "klirbuild", "klirpay", "klirmarket", "klirsecure", "centia", "klir-ia", "black-wall-news", "noria"];
+for (const id of cfAccessIds) {
+  const fields = productSiteFields(sitesById[id]);
+  check(fields.access === "cf-access" && typeof fields.adminUrl === "string" && fields.adminUrl.startsWith("https://"), `${id} est derrière Cloudflare Access avec un lien admin`);
+}
+check(productSiteFields({ id: "essai", access: "cf-access", adminUrl: "https://exemple.klirline.ca/admin" }).adminUrl === "https://exemple.klirline.ca/admin", "cf-access accepte un adminUrl");
+for (const access of ["cf-challenge", "none"]) {
+  let rejected = false;
+  try {
+    productSiteFields({ id: "essai", access, adminUrl: "https://exemple.klirline.ca/admin" });
+  } catch {
+    rejected = true;
+  }
+  check(rejected, `Un lien admin est refusé pour ${access}`);
+}
+check(sitesById.klirbuild.adminUrl === "https://klirline.app/login" && sitesById.klirbuild.healthUrl === "https://klirline.app/api/health", "KlirBuild garde sa santé et son login");
+check(sitesById.klirpay.adminUrl === "https://pay.klirline.ca/login", "KlirPay pointe vers /login");
+check(sitesById["black-wall-news"].name === "Black Wall News" && sitesById["black-wall-news"].url === "https://www.blackwallnews.com" && sitesById["black-wall-news"].adminUrl === "https://www.blackwallnews.com/admin", "Black Wall News a son site et son admin");
+check(sitesById.noria.name === "NORIA" && sitesById.noria.url === "https://noriaedu.com" && sitesById.noria.adminUrl === "https://noriaedu.com/app#admin" && new URL(sitesById.noria.adminUrl).hash === "#admin", "NORIA garde le lien admin avec le fragment #admin");
+check(sitesById["klirline-os"].adminUrl === "https://www.klirline.ca/admin", "Klirline OS pointe vers /admin");
+check(sitesById.klirmarket.adminUrl === "https://klirline.com/admin", "KlirMarket pointe vers /admin");
+check(sitesById.klirsecure.adminUrl === "https://secure.klirline.ca/", "KlirSecure pointe vers son panneau");
+check(sitesById.centia.adminUrl === "https://centia.app/connexion", "Centia pointe vers /connexion");
+check(sitesById["klir-ia"].skillsUrl === "https://klirline.io/api/skills" && sitesById["klir-ia"].adminUrl === "https://klirline.io/dashboard/admin/credits", "Klir IA garde son catalogue et son panneau crédits");
+check(sitesById.klirlead.adminUrl === null && sitesById.klirlead.access === "none" && sitesById.klirlead.url === "https://scintillating-croissant-147cda.netlify.app", "KlirLead garde l'adresse Netlify, sans admin");
 check(sitesById.klirprospect.url === "https://klirprospect.klirline.ca" && sitesById.klirprospect.adminUrl === "https://klirprospect.klirline.ca/#/login" && sitesById.klirprospect.access === "public-login" && new URL(sitesById.klirprospect.adminUrl).hash === "#/login", "KlirProspect pointe vers la connexion publique #/login");
-check(sitesById["klir-ia"].skillsUrl === "https://klirline.io/api/skills" && sitesById["klir-ia"].adminUrl === null && sitesById["klir-ia"].access === "none", "Klir IA garde son catalogue et n'a pas d'admin");
-for (const id of ["centia", "klirlead", "klirmarket"]) {
-  check(sitesById[id].adminUrl === null && sitesById[id].access === "none", `${id} sans admin`);
-}
-check(sitesById.klirlead.url === "https://scintillating-croissant-147cda.netlify.app", "KlirLead garde l'adresse Netlify");
-for (const id of ["klirline-os", "klirsecure"]) {
-  check(sitesById[id].adminUrl === null && sitesById[id].access === "cf-challenge", `${id} est protégé par un défi, sans lien admin`);
-}
 check(canViewAdminHub("ceo"), "Le CEO voit le hub admin");
 check(!canViewAdminHub("coo") && !canViewAdminHub("pm-klirbuild") && !canViewAdminHub("chief-of-staff"), "Le hub admin n'est pas ouvert aux autres postes");
 check(present(state, "ceo", []).adminHub === true, "Le bootstrap CEO ouvre le hub admin");

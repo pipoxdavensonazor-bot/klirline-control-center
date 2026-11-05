@@ -379,8 +379,8 @@ function adminAccessChip(access) {
   return chip("", "Pas d'admin");
 }
 
-function adminAccessText(access) {
-  if (access === "cf-access") return "Derrière Cloudflare Access. Pas de lien externe.";
+function adminAccessText(access, hasLink) {
+  if (access === "cf-access") return hasLink ? "Panneau derrière Cloudflare Access." : "Derrière Cloudflare Access. Pas de lien externe.";
   if (access === "cf-challenge") return "Page publique derrière un défi Cloudflare. Panneau non retenu.";
   if (access === "public-login") return "Panneau de connexion déjà connu.";
   return "Aucun panneau web retenu.";
@@ -395,12 +395,12 @@ function adminHubHtml() {
   }
   const cards = liveSites.map((site) => {
     const access = site.access || "none";
-    const admin = access === "public-login" ? httpsUrl(site.adminUrl) : "";
+    const admin = access === "public-login" || access === "cf-access" ? httpsUrl(site.adminUrl) : "";
     const link = admin
       ? `<div class="actions"><a class="admin-link" href="${escapeHtml(admin)}" target="_blank" rel="noopener noreferrer">Ouvrir l'admin</a></div>`
       : "";
     const note = site.note ? `<p class="muted">${escapeHtml(site.note)}</p>` : "";
-    return `<article class="card"><div class="chips">${siteChip(site)}${adminAccessChip(access)}</div><h3>${escapeHtml(siteName(site))}</h3><p>${escapeHtml(adminAccessText(access))}</p>${note}${link}</article>`;
+    return `<article class="card"><div class="chips">${siteChip(site)}${adminAccessChip(access)}</div><h3>${escapeHtml(siteName(site))}</h3><p>${escapeHtml(adminAccessText(access, Boolean(admin)))}</p>${note}${link}</article>`;
   }).join("");
   const here = `<article class="card"><div class="chips">${chip("pending_supervisor", "Ce poste")}${adminAccessChip("cf-access")}</div><h3>Klirline Office</h3><p>Ce centre, déjà ouvert dans ce navigateur. Pas de lien externe.</p></article>`;
   return `<h2 class="section-title">Admin produits</h2><p class="muted">Panneaux des logiciels. Le bouton n'apparaît que lorsqu'une adresse d'admin est retenue. Black Wall News est sondé avec les sites ; il ne fait pas partie du jeu des huit plateformes.</p><div class="scope-grid">${cards}${here}</div>`;
