@@ -7,7 +7,7 @@ import { THRESHOLDS, canViewAdminHub } from "./policy.js";
 import { ACCESS_VALUES, PRODUCT_SITES, productSiteFields } from "./product-sites.js";
 import { activeProspects, seedWorld } from "./seed.js";
 import { dataPath } from "./store.js";
-import { accessSettings, bindIdentity, orgObjectName, verifyAccessJwt } from "./access.js";
+import { accessSettings, assertServiceRoute, bindIdentity, HQ_SERVICE_ACTOR, identityFromAccess, orgObjectName, parseServiceClientIds, verifyAccessJwt } from "./access.js";
 import { identifyAccess } from "./hq/machine-auth.js";
 import { HQ_LEASE_MS, hashClaimToken } from "./hq/commands.js";
 import { dispatchHq } from "./hq/dispatch.js";
@@ -251,41 +251,110 @@ try {
 } catch (error) {
   check(error.status === 401, "Un jeton non signé est refusé");
 }
-const serviceName = "a".repeat(32) + ".access";
-const serviceClaims = await verifyAccessJwt(
-  sign({ type: "app", sub: "", common_name: serviceName, aud: "aud-essai", iss: "https://equipe.cloudflareaccess.com", exp: nowMs / 1000 + 60 }),
-  { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs },
-);
-check(serviceClaims.kind === "service" && serviceClaims.commonName === serviceName, "Un jeton de service Access est reconnu sans courriel");
-const accessEnv = {
-  ACCESS_TEAM_DOMAIN: "equipe.cloudflareaccess.com",
-  ACCESS_AUD: "aud-essai",
-  ACCESS_ACCOUNTS: JSON.stringify([{ email: "ada@example.com", role: "ceo", orgId: "klirline" }]),
+check(accepted.kind === "user", "Un jeton humain reste un compte courriel");
+check(trial.serviceClientIds.length === 0, "Sans allowlist, aucun Client ID de service n'est admis");
+const listedId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.access";
+const otherId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.access";
+const withService = accessSettings({
+  ACCESS_TEAM_DOMAIN: trial.teamDomain,
+  ACCESS_AUD: trial.aud,
+  ACCESS_ACCOUNTS: JSON.stringify([
+    { email: "ada@example.com", role: "ceo", orgId: "klirline" },
+    { email: "bea@example.com", role: "coo", orgId: "klirline" },
+  ]),
+  ACCESS_SERVICE_CLIENT_IDS: ` ${listedId.toUpperCase()} , cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc , pas-un-id `,
+});
+check(withService.ready && withService.serviceClientIds.join() === listedId, "L'allowlist ne garde que les Client ID .access");
+check(parseServiceClientIds("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc").length === 0, "Une valeur sans suffixe .access est ignorée");
+const serviceClaims = {
+  type: "app",
+  aud: ["aud-essai"],
+  iss: "https://equipe.cloudflareaccess.com",
+  sub: "",
+  common_name: listedId.toUpperCase(),
+  exp: nowMs / 1000 + 60,
 };
-const machineEnv = {
-  ...accessEnv,
+const serviceOpts = { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs, serviceClientIds: withService.serviceClientIds };
+const serviceJwt = await verifyAccessJwt(sign(serviceClaims), serviceOpts);
+check(serviceJwt.kind === "service" && serviceJwt.clientId === listedId && serviceJwt.email == null, "Un JWT de service allowlisté n'a pas de courriel");
+const machine = identityFromAccess(serviceJwt, withService.accounts);
+check(machine.service && machine.actorId === HQ_SERVICE_ACTOR && machine.orgId === "klirline" && machine.email === HQ_SERVICE_ACTOR, "Le poll ouvre l'organisation unique, comme machine");
+check(machine.actorId !== "ceo" && machine.email !== "ada@example.com", "Le poll ne reprend pas le compte humain");
+const humanStill = identityFromAccess(accepted, withService.accounts);
+check(!humanStill.service && humanStill.actorId === "ceo" && humanStill.email === "ada@example.com", "Le courriel continue de choisir le rôle");
+try {
+  await verifyAccessJwt(sign(serviceClaims), { ...serviceOpts, serviceClientIds: [] });
+  check(false, "Sans allowlist, le JWT de service est refusé");
+} catch (error) {
+  check(error.status === 401, "Sans allowlist, le JWT de service est refusé");
+}
+try {
+  await verifyAccessJwt(sign({ ...serviceClaims, common_name: otherId }), serviceOpts);
+  check(false, "Un Client ID hors allowlist est refusé");
+} catch (error) {
+  check(error.status === 401, "Un Client ID hors allowlist est refusé");
+}
+try {
+  await verifyAccessJwt(sign({ ...serviceClaims, exp: nowMs / 1000 - 10 }), serviceOpts);
+  check(false, "Un JWT de service expiré est refusé");
+} catch (error) {
+  check(error.status === 401, "Un JWT de service expiré est refusé");
+}
+try {
+  await verifyAccessJwt(sign({ ...serviceClaims, sub: "7335d417-61da-459d-899c-0a01c76a2f94" }), serviceOpts);
+  check(false, "Un sujet non vide n'est pas un jeton de service");
+} catch (error) {
+  check(error.status === 401, "Un sujet non vide n'est pas un jeton de service");
+}
+const mixed = await verifyAccessJwt(sign({ ...claims, common_name: listedId, type: "app", sub: "" }), serviceOpts);
+check(mixed.kind === "user" && mixed.email === "ada@example.com", "Un courriel valide reste humain même si common_name est allowlisté");
+try {
+  await verifyAccessJwt(sign({ ...serviceClaims, email: "pas un courriel" }), serviceOpts);
+  check(false, "Un courriel illisible n'ouvre pas le poll");
+} catch (error) {
+  check(error.status === 401, "Un courriel illisible n'ouvre pas le poll");
+}
+const twoOrgs = accessSettings({
+  ACCESS_TEAM_DOMAIN: trial.teamDomain,
+  ACCESS_AUD: trial.aud,
+  ACCESS_ACCOUNTS: JSON.stringify([
+    { email: "ada@example.com", role: "ceo", orgId: "klirline" },
+    { email: "bea@example.com", role: "coo", orgId: "autre" },
+  ]),
+  ACCESS_SERVICE_CLIENT_IDS: listedId,
+});
+try {
+  identityFromAccess(serviceJwt, twoOrgs.accounts);
+  check(false, "Deux organisations refusent le jeton de service");
+} catch (error) {
+  check(error.status === 401, "Deux organisations refusent le jeton de service");
+}
+assertServiceRoute(machine, "/api/hq/commands");
+assertServiceRoute(machine, "/api/hq/commands/hq-00000000-0000-4000-8000-000000000001/claim");
+assertServiceRoute(humanStill, "/api/bootstrap");
+assertServiceRoute(humanStill, "/api/reset");
+for (const path of ["/api/bootstrap", "/api/command", "/api/reset", "/api/hq", "/api/hq/../command"]) {
+  try {
+    assertServiceRoute(machine, path);
+    check(false, `Le poll n'ouvre pas ${path}`);
+  } catch (error) {
+    check(error.status === 403, `Le poll n'ouvre pas ${path}`);
+  }
+}
+const scopedName = "dddddddddddddddddddddddddddddddd.access";
+const scopedEnv = {
+  ACCESS_TEAM_DOMAIN: trial.teamDomain,
+  ACCESS_AUD: trial.aud,
+  ACCESS_ACCOUNTS: JSON.stringify([{ email: "ada@example.com", role: "ceo", orgId: "klirline" }]),
   HQ_MACHINE_IDENTITIES: JSON.stringify([
-    { id: "executor-klirprospect", accessClientId: serviceName, token: "local-only", actorId: "ceo", orgId: "klirline", scopes: ["work"] },
+    { id: "executor-klirprospect", accessClientId: scopedName, actorId: "ceo", orgId: "klirline", scopes: ["work"] },
   ]),
 };
-const machineIdentity = identifyAccess(serviceClaims, machineEnv).identity;
-check(machineIdentity.human === false && machineIdentity.scopes.join() === "work" && machineIdentity.actorId === "ceo", "Le passage Access ne donne pas les droits de revue du rôle");
-check(machineIdentity.orgId === "klirline" && machineIdentity.email === "machine:executor-klirprospect", "La machine reste dans l'organisation déclarée");
-const humanIdentity = identifyAccess(accepted, machineEnv).identity;
-check(humanIdentity.human === true && humanIdentity.scopes.includes("review") && humanIdentity.actorId === "ceo", "Le SSO humain garde ses permissions applicatives");
-const mixed = await verifyAccessJwt(
-  sign({ ...claims, type: "app", sub: "", common_name: serviceName }),
-  { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs },
-);
-const mixedIdentity = identifyAccess(mixed, machineEnv).identity;
-check(mixedIdentity.human === true && mixedIdentity.email === "ada@example.com" && mixedIdentity.scopes.includes("review"), "Un courriel Access prime sur le nom de service");
-check(identifyAccess(serviceClaims, accessEnv).status === 403, "Un jeton de service sans fiche machine est refusé");
-try {
-  await verifyAccessJwt(sign({ type: "app", sub: "", common_name: "pas-un-client", aud: "aud-essai", iss: "https://equipe.cloudflareaccess.com", exp: nowMs / 1000 + 60 }), { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs });
-  check(false, "Un common_name hors service est refusé");
-} catch (error) {
-  check(error.status === 401, "Un common_name hors service est refusé");
-}
+const scopedIdentity = identifyAccess({ kind: "service", commonName: scopedName }, scopedEnv).identity;
+check(scopedIdentity.human === false && scopedIdentity.scopes.join() === "work" && scopedIdentity.actorId === "ceo", "Une fiche machine ne reçoit pas le droit de revue du rôle");
+const mappedHuman = identifyAccess({ kind: "human", email: "ada@example.com" }, scopedEnv).identity;
+check(mappedHuman.human === true && mappedHuman.scopes.includes("review") && mappedHuman.actorId === "ceo", "Le courriel garde les permissions du poste");
+check(identifyAccess({ kind: "service", commonName: scopedName }, { ...scopedEnv, HQ_MACHINE_IDENTITIES: "" }).status === 403, "Sans fiche, le mappeur applicatif ne donne pas de droit");
 
 const liveFeed = readProspectFeed({
   prospects: [{ company: "Atelier Nord", product: "Construction", score: 80, action: "Visite", public_email: "secret@example.com" }],

@@ -34,7 +34,7 @@ Le navigateur parle à `/api/*`. En local, `src/server.js` garde l'état dans `d
 
 ## Cloudflare Access
 
-Aucune valeur n'est fournie dans le dépôt. Tant que les trois secrets manquent, les routes du dossier d'entreprise répondent `503` et ignorent le rôle du navigateur. La santé, les pages publiques et les playbooks ne portent pas cet état.
+Aucune valeur n'est fournie dans le dépôt. Tant que `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` ou `ACCESS_ACCOUNTS` manque, les routes du dossier d'entreprise répondent `503` et ignorent le rôle du navigateur. La santé, les pages publiques et les playbooks ne portent pas cet état.
 
 À configurer dans Cloudflare, avec les vraies valeurs du compte, puis à poser comme secrets du Worker `klirline-control-center` :
 
@@ -43,6 +43,7 @@ Aucune valeur n'est fournie dans le dépôt. Tant que les trois secrets manquent
 | `ACCESS_TEAM_DOMAIN` | Nom d'équipe déjà existant, de la forme `<équipe>.cloudflareaccess.com`, sans `https://` |
 | `ACCESS_AUD` | Balise d'audience (AUD) de l'application Access qui protège `centre.klirline.com` |
 | `ACCESS_ACCOUNTS` | JSON des comptes réellement autorisés |
+| `ACCESS_SERVICE_CLIENT_IDS` | Facultatif. CSV des Client ID publics (suffixe `.access`) autorisés à interroger le bureau. Jamais le Client Secret. |
 
 Forme de `ACCESS_ACCOUNTS`, sans exemple réel :
 
@@ -52,18 +53,29 @@ Forme de `ACCESS_ACCOUNTS`, sans exemple réel :
 
 `role` doit être un poste déjà défini, par exemple `ceo`. `orgId` est un slug (`klirline` pour l'organisation actuelle). Deux `orgId` distincts n'ouvrent pas le même objet durable. Le nom `api-rate` est réservé au compteur de requêtes.
 
+Un JWT humain porte un courriel. Il est inchangé : le rôle vient de `ACCESS_ACCOUNTS`. Un JWT de jeton de service n'a pas de courriel. Cloudflare y met le Client ID dans `common_name` (suffixe `.access`, sujet vide, `type` `app`). Le Worker l'accepte seulement si ce Client ID est dans `ACCESS_SERVICE_CLIENT_IDS`. L'identité est alors la machine `service:hq-poll`, sur l'unique `orgId` de `ACCESS_ACCOUNTS`, et seulement pour `/api/hq/*`. Elle ne signe pas, ne recommence pas la journée, et n'ouvre pas le dossier de démonstration. Un Client ID absent de la liste, ou plusieurs `orgId` dans `ACCESS_ACCOUNTS`, répond `401`. Ce n'est pas un contournement d'Access : la signature, l'émetteur et l'audience restent vérifiés.
+
+`ACCESS_SERVICE_CLIENT_IDS` ne contient pas de secret. Ne pas y mettre le Client Secret (il n'a pas le suffixe `.access` et serait ignoré). Ne pas l'écrire dans git. Le Client ID public déjà utilisé par le poll Office commence par `9e6fc590` et finit par `.access` : coller l'identifiant complet.
+
+Après merge : poser `ACCESS_SERVICE_CLIENT_IDS` au Client ID public complet (`9e6fc590….access`), puis redéployer. Sans cette variable, les personnes continuent de passer par le courriel et le poll reste refusé. Une variable de Worker équivaut au secret ci-dessous. Ne pas y mettre le Client Secret.
+
+```bash
+npx wrangler secret put ACCESS_SERVICE_CLIENT_IDS
+```
+
 Étapes, à faire par l'opérateur :
 
 1. Dans Cloudflare Zero Trust, créer une application Access auto-hébergée pour `centre.klirline.com` et une politique qui n'admet que les personnes voulues.
 2. Copier le domaine d'équipe et la balise AUD de cette application.
-3. Poser les trois secrets, par exemple `npx wrangler secret put ACCESS_TEAM_DOMAIN`. Ne pas les écrire dans git.
-4. Déployer seulement après cette configuration. Ce dépôt ne déploie pas et ne crée pas l'application Access.
+3. Poser les secrets des comptes, par exemple `npx wrangler secret put ACCESS_TEAM_DOMAIN`. Ne pas les écrire dans git.
+4. Pour le poll Office, poser `ACCESS_SERVICE_CLIENT_IDS` avec le Client ID public complet, puis redéployer. Ne pas y mettre le Client Secret.
+5. Déployer seulement après cette configuration. Ce dépôt ne déploie pas et ne crée pas l'application Access.
 
-Une machine ne remplace pas ce SSO. Elle n'entre qu'avec un jeton de service Access déjà accepté par la politique, puis avec une fiche `HQ_MACHINE_IDENTITIES` dont les `scopes` sont écrits explicitement. Le modèle vide est `config/hq-machines.example.json`. Le champ `token` sert au serveur local. Le Worker lit `accessClientId`, le `common_name` du jeton Access.
+Une fiche `HQ_MACHINE_IDENTITIES` ne remplace pas cette liste. Le Client ID doit d'abord être dans `ACCESS_SERVICE_CLIENT_IDS`. S'il a aussi une fiche, les `scopes` viennent de la fiche et le jeton reste limité à `/api/hq/*`. Sans fiche, l'identité reste `service:hq-poll`. Le modèle vide est `config/hq-machines.example.json`. Le champ `token` sert au serveur local.
 
 ## Limites des routes
 
-Chaque route `/api/*` compte dans une fenêtre de 60 secondes et de 60 requêtes. La clé est l'adresse de connexion, puis le courriel vérifié pour les routes du dossier. Le rôle et l'`orgId` n'entrent pas dans la clé. Un corps de plus de 32 Ko répond `413`. Un JSON illisible répond `400`. Un dépassement répond `429` avec `Retry-After`.
+Chaque route `/api/*` compte dans une fenêtre de 60 secondes et de 60 requêtes. La clé est l'adresse de connexion, puis le courriel vérifié pour les routes du dossier. Le poll machine compte à part, sous `service:hq-poll`. Le rôle et l'`orgId` n'entrent pas dans la clé. Un corps de plus de 32 Ko répond `413`. Un JSON illisible répond `400`. Un dépassement répond `429` avec `Retry-After`.
 
 ## Limites connues
 

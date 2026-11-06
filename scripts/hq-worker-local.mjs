@@ -69,6 +69,7 @@ function options() {
       ACCESS_ACCOUNTS: JSON.stringify([
         { email: "revue@example.com", role: "coo", orgId: "klirline" },
       ]),
+      ACCESS_SERVICE_CLIENT_IDS: `${serviceName},${"cd".repeat(16)}.access`,
       HQ_MACHINE_IDENTITIES: JSON.stringify([
         { id: "executor-klirprospect", accessClientId: serviceName, actorId: "machine-klirprospect", orgId: "klirline", scopes: ["work"] },
         { id: "reviewer-only", accessClientId: `${"cd".repeat(16)}.access`, actorId: "coo", orgId: "klirline", scopes: ["review"] },

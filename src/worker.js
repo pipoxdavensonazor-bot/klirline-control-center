@@ -1,8 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
-import { accessSettings, verifyAccessJwt } from "./access.js";
+import { accessSettings, assertServiceRoute, identityFromAccess, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
 import { decideClaim, decideCompletion, decideInterrupt } from "./hq/commands.js";
-import { identifyAccess } from "./hq/machine-auth.js";
+import { accessScopes, resolveServiceMachine } from "./hq/machine-auth.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { runMissionOperation } from "./hq/missions.js";
 import { HQ_INDEX, HQ_INSERT, HQ_MISSION_INDEX, HQ_MISSION_INSERT, HQ_MISSION_SCHEMA, HQ_MISSION_SELECT, HQ_MISSION_UPDATE, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
@@ -62,19 +62,29 @@ async function authenticate(request, env) {
     error.status = 401;
     throw error;
   }
-  const claims = await verifyAccessJwt(token, {
+  const verified = await verifyAccessJwt(token, {
     teamDomain: settings.teamDomain,
     aud: settings.aud,
     keys: await accessKeys(settings.teamDomain),
     nowMs: Date.now(),
+    serviceClientIds: settings.serviceClientIds,
   });
-  const identified = identifyAccess(claims, env);
-  if (!identified.identity) {
-    const error = new Error(identified.error || "Jeton refusé.");
-    error.status = identified.status || 401;
-    throw error;
+  if (verified.kind === "service") {
+    const machine = resolveServiceMachine(verified.clientId, env);
+    if (machine) {
+      return {
+        actorId: machine.actorId,
+        orgId: machine.orgId,
+        email: `machine:${machine.id}`,
+        human: false,
+        service: true,
+        scopes: machine.scopes,
+      };
+    }
+    return { ...identityFromAccess(verified, settings.accounts), human: false };
   }
-  return identified.identity;
+  const human = identityFromAccess(verified, settings.accounts);
+  return { ...human, human: true, scopes: accessScopes(human.actorId) };
 }
 
 async function readJson(request) {
@@ -317,6 +327,7 @@ export default {
       }
 
       const identity = await authenticate(request, env);
+      assertServiceRoute(identity, url.pathname);
       const emailLimit = await limiter.consume(rateKey({ email: identity.email }), Date.now());
       if (!emailLimit.allowed) return json(429, { error: "Trop de requêtes." }, { "Retry-After": String(emailLimit.retryAfter) });
 
