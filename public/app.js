@@ -551,7 +551,8 @@ function bureauHtml() {
       ? `<p class="muted">Sans agent dédié : ${agent.covers.map((item) => escapeHtml(item.name)).join(", ")}.</p>`
       : "";
     const status = last ? chip(hqTone(last.status), hqStatusLabel[last.status] || last.status) : chip("", "Aucune commande");
-    return `<article class="card" data-hq-agent="${escapeHtml(agent.id)}"><div class="chips">${chip("", agent.division)}${status}</div><h3>${escapeHtml(agent.name)}</h3><p>${escapeHtml(agent.mission)}</p>${link}${covers}</article>`;
+    const idle = agent.executable === false ? chip("blocked", "Non exécutable") : "";
+    return `<article class="card" data-hq-agent="${escapeHtml(agent.id)}"><div class="chips">${chip("", agent.division)}${status}${idle}</div><h3>${escapeHtml(agent.name)}</h3><p>${escapeHtml(agent.mission)}</p>${agent.engineNote ? `<p class="muted">${escapeHtml(agent.engineNote)}</p>` : ""}${link}${covers}</article>`;
   }).join("");
   const owners = [`<option value="">Répartition automatique</option>`].concat(hqRoster.map((agent) => `<option value="${escapeHtml(agent.id)}" ${agent.id === hqOwner ? "selected" : ""}>${escapeHtml(agent.name)} — ${escapeHtml(agent.division)}</option>`)).join("");
   const lane = (title, items, empty) => `<section class="lane"><h3>${title}</h3>${items.length ? items.map(hqCommandCard).join("") : `<p class="muted">${empty}</p>`}</section>`;
@@ -559,7 +560,8 @@ function bureauHtml() {
   const done = visibleCommands.filter((command) => command.status === "done");
   const blocked = visibleCommands.filter((command) => command.status === "blocked" || command.status === "cancelled" || command.status === "failed");
   const waiting = !hqRoster.length && !hqError ? `<article class="card"><p class="muted">Chargement du bureau.</p></article>` : "";
-  return `<div class="banner">Bureau réel. Une commande est enregistrée ici. Le statut se met à jour sur la carte, ou Office Klirline le renvoie. Le rapport du jour reste la démonstration des 34 postes. Ce Worker n'envoie rien vers les agents.</div>
+  return `<div class="banner">Bureau réel. Une commande est enregistrée ici. Une session Access peut mettre le statut à jour sur la carte. Le menu de démonstration ne donne aucun droit sur ces routes. Le rapport du jour reste la démonstration des 34 postes. Ce Worker n'envoie rien vers les agents.</div>
+  <article class="card"><h3>Modes d'exécution</h3><p><strong>Préparation manuelle.</strong> Une personne dépose un texte. Aucun programme ne le produit.</p><p><strong>Exécution déterministe.</strong> Un script lit une procédure épinglée et écrit un livrable. Ce n'est pas un agent qui utilise un modèle.</p><p><strong>Exécution par modèle.</strong> Bloquée. Le plafond est 0 $. Un script réussi ne rend pas un modèle actif.</p></article>
   <article class="card"><h3>Nouvelle commande</h3><textarea id="hq-text" placeholder="Exemple : rédiger l'article Black Wall News">${escapeHtml(hqDraft)}</textarea>
   <div class="hq-compose"><label>Agent<select id="hq-owner">${owners}</select></label><label>Priorité<select id="hq-priority"><option value="basse" ${hqPriority === "basse" ? "selected" : ""}>Basse</option><option value="normale" ${hqPriority === "normale" ? "selected" : ""}>Normale</option><option value="haute" ${hqPriority === "haute" ? "selected" : ""}>Haute</option></select></label></div>
   <div class="actions"><button id="hq-send">Enregistrer la commande</button><button class="ghost" id="hq-refresh">Actualiser</button></div>
@@ -662,7 +664,7 @@ function bind() {
     hqDraft = text;
     hqOwner = ownerSlug;
     hqPriority = priority;
-    postHq({ text, priority, actorId, ...(ownerSlug ? { ownerSlug } : {}) });
+    postHq({ text, priority, ...(ownerSlug ? { ownerSlug } : {}) });
   });
   document.querySelector("#hq-refresh")?.addEventListener("click", () => refreshHq({ force: true }));
   document.querySelectorAll("[data-hq-field]").forEach((field) => field.addEventListener("input", (event) => {

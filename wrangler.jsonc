@@ -32,6 +32,20 @@
       }
     ]
   },
+  // Les branches autres que le tronc sont construites avec `wrangler preview`.
+  // Sans ce bloc, la commande s'arrête avant de publier. Le domaine
+  // centre.klirline.com reste sur le déploiement de production.
+  // Chaque aperçu reçoit son propre espace Durable Object pour COMPANY.
+  "previews": {
+    "durable_objects": {
+      "bindings": [
+        {
+          "name": "COMPANY",
+          "class_name": "CompanyState"
+        }
+      ]
+    }
+  },
   "exports": {
     "CompanyState": {
       "type": "durable-object",

@@ -1,9 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
 import { accessSettings, assertServiceRoute, identityFromAccess, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
+import { decideClaim, decideCompletion, decideInterrupt } from "./hq/commands.js";
+import { accessScopes, resolveServiceMachine } from "./hq/machine-auth.js";
 import { dispatchHq } from "./hq/dispatch.js";
-import { decideClaim, decideInterrupt } from "./hq/commands.js";
-import { HQ_INDEX, HQ_INSERT, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
+import { runMissionOperation } from "./hq/missions.js";
+import { HQ_INDEX, HQ_INSERT, HQ_MISSION_INDEX, HQ_MISSION_INSERT, HQ_MISSION_SCHEMA, HQ_MISSION_SELECT, HQ_MISSION_UPDATE, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
 import { COMPANY } from "./policy.js";
 import { freshState } from "./fresh-state.js";
 import { API_LIMITS, RATE_OBJECT_NAME, nextWindow, rateKey } from "./limits.js";
@@ -67,7 +69,22 @@ async function authenticate(request, env) {
     nowMs: Date.now(),
     serviceClientIds: settings.serviceClientIds,
   });
-  return identityFromAccess(verified, settings.accounts);
+  if (verified.kind === "service") {
+    const machine = resolveServiceMachine(verified.clientId, env);
+    if (machine) {
+      return {
+        actorId: machine.actorId,
+        orgId: machine.orgId,
+        email: `machine:${machine.id}`,
+        human: false,
+        service: true,
+        scopes: machine.scopes,
+      };
+    }
+    return { ...identityFromAccess(verified, settings.accounts), human: false };
+  }
+  const human = identityFromAccess(verified, settings.accounts);
+  return { ...human, human: true, scopes: accessScopes(human.actorId) };
 }
 
 async function readJson(request) {
@@ -101,6 +118,8 @@ export class CompanyState extends DurableObject {
     );
     this.ctx.storage.sql.exec(HQ_SCHEMA);
     this.ctx.storage.sql.exec(HQ_INDEX);
+    this.ctx.storage.sql.exec(HQ_MISSION_SCHEMA);
+    this.ctx.storage.sql.exec(HQ_MISSION_INDEX);
   }
 
   hqList(filter = {}) {
@@ -150,6 +169,42 @@ export class CompanyState extends DurableObject {
 
   hqInterrupt(id, options) {
     return this.hqApply(id, decideInterrupt(this.hqGet(id), options));
+  }
+
+  hqComplete(id, input, options) {
+    return this.hqApply(id, decideCompletion(this.hqGet(id), input, options));
+  }
+
+  hqMissionList() {
+    return this.ctx.storage.sql.exec(HQ_MISSION_SELECT).toArray().map((row) => JSON.parse(row.body));
+  }
+
+  hqMissionGet(id) {
+    const rows = this.ctx.storage.sql.exec("SELECT body FROM hq_mission WHERE id = ?", id).toArray();
+    if (!rows.length) return null;
+    return JSON.parse(rows[0].body);
+  }
+
+  hqMissionInsert(mission) {
+    this.ctx.storage.sql.exec(HQ_MISSION_INSERT, mission.id, mission.status, mission.ownerSlug, mission.createdAt, JSON.stringify(mission));
+    return mission;
+  }
+
+  hqMissionReplace(mission) {
+    this.ctx.storage.sql.exec(HQ_MISSION_UPDATE, mission.status, mission.ownerSlug, JSON.stringify(mission), mission.id);
+    return mission;
+  }
+
+  hqMissionOperate(id, operation, input, actorId, options = {}) {
+    try {
+      const result = runMissionOperation(this.hqMissionGet(id), this.hqList({}), operation, input || {}, { ...options, actorId });
+      if (result.insertCommand) this.hqInsert(result.command);
+      else if (result.replaceCommand && result.command) this.hqReplace(result.command);
+      if (result.changed && result.mission) this.hqMissionReplace(result.mission);
+      return { ok: true, result };
+    } catch (error) {
+      return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
+    }
   }
 
   read() {
@@ -216,6 +271,30 @@ async function playbookCatalog(request, env) {
   return response.json();
 }
 
+export function hqDurableStore(company) {
+  return {
+    list: (filter) => company.hqList(filter),
+    get: (id) => company.hqGet(id),
+    insert: (command) => company.hqInsert(command),
+    replace: (command) => company.hqReplace(command),
+    claim: (id, options) => company.hqClaim(id, options),
+    interrupt: (id, options) => company.hqInterrupt(id, options),
+    complete: (id, input, options) => company.hqComplete(id, input, options),
+    missionList: () => company.hqMissionList(),
+    missionGet: (id) => company.hqMissionGet(id),
+    missionInsert: (mission) => company.hqMissionInsert(mission),
+    missionOperate: async (id, operation, input, actorId, options) => {
+      const stored = await company.hqMissionOperate(id, operation, input, actorId, options || {});
+      if (!stored?.ok) {
+        const error = new Error(stored?.error || "Erreur");
+        error.status = stored?.status || 500;
+        throw error;
+      }
+      return stored.result;
+    },
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -257,20 +336,15 @@ export default {
       if (url.pathname.startsWith("/api/hq/")) {
         const payload = request.method === "GET" ? {} : await readJson(request);
         const result = await dispatchHq(
-          {
-            list: (filter) => company.hqList(filter),
-            get: (id) => company.hqGet(id),
-            insert: (command) => company.hqInsert(command),
-            replace: (command) => company.hqReplace(command),
-            claim: (id, options) => company.hqClaim(id, options),
-            interrupt: (id, options) => company.hqInterrupt(id, options),
-          },
+          hqDurableStore(company),
           {
             method: request.method,
             pathname: url.pathname,
             searchParams: url.searchParams,
             body: payload,
             actorId: identity.actorId,
+            scopes: identity.scopes,
+            human: identity.human === true,
           },
         );
         return json(result.status, result.body);

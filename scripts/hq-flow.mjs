@@ -15,10 +15,20 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-async function request(method, pathname, body) {
+const machineToken = "local-test-executor";
+const reviewToken = "local-test-reviewer";
+const machineIdentities = JSON.stringify([
+  { id: "executor-test", token: machineToken, actorId: "machine-klirprospect", scopes: ["work"] },
+  { id: "reviewer-test", token: reviewToken, actorId: "coo", scopes: ["review"] },
+]);
+
+async function request(method, pathname, body, token = machineToken) {
   const response = await fetch(`${base}${pathname}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(5000),
   });
@@ -41,7 +51,7 @@ async function waitForHealth(child) {
 
 const child = spawn(process.execPath, ["src/server.js"], {
   cwd: root,
-  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile },
+  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile, HQ_MACHINE_IDENTITIES: machineIdentities },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
@@ -68,14 +78,15 @@ try {
   assert(secondClaim.payload.claimToken === undefined && !JSON.stringify(secondClaim.payload).includes(firstClaim.payload.claimToken), "le second claim renvoie le bail");
   assert(secondClaim.payload.command.updatedAt === firstClaim.payload.command.updatedAt, "le second claim réécrit la date");
 
+  const attempt = { attemptId: firstClaim.payload.command.claim.attemptId, claimToken: firstClaim.payload.claimToken };
   const bare = await request("PATCH", `/api/hq/commands/${id}`, { status: "done" });
-  assert(bare.status === 400, `clore sans preuve a répondu ${bare.status}`);
-  const blank = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", result: " ", proof: "", agentNote: "" });
+  assert(bare.status === 409, `clore sans tentative a répondu ${bare.status}`);
+  const blank = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", ...attempt, result: " ", proof: "", agentNote: "" });
   assert(blank.status === 400, "une preuve vide est acceptée");
   const stillOpen = await request("GET", `/api/hq/commands/${id}`);
   assert(stillOpen.payload.command.status === "dispatched" && !JSON.stringify(stillOpen.payload).includes(firstClaim.payload.claimToken), "le refus de clôture a changé la commande");
 
-  const patched = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", result: "Article prêt", agentNote: "BWN Rédaction", proof: "Brouillon déposé au bureau" });
+  const patched = await request("PATCH", `/api/hq/commands/${id}`, { status: "done", ...attempt, result: "Article prêt", agentNote: "BWN Rédaction", proof: "Brouillon déposé au bureau" });
   assert(patched.status === 200 && patched.payload.command.status === "done" && patched.payload.command.proof === "Brouillon déposé au bureau", "PATCH done a échoué");
 
   const again = await request("GET", `/api/hq/commands/${id}`);
@@ -85,22 +96,22 @@ try {
   assert(roster.payload.roster.length >= 14, "roster trop court");
   assert(roster.payload.roster.find((agent) => agent.id === "bwn-redaction").lastCommand.status === "done", "la carte ne suit pas le statut");
 
-  const human = await request("POST", "/api/hq/command", { text: "relire la page d'accueil Klirline" });
+  const human = await request("POST", "/api/hq/command", { text: "relire la page d'accueil Klirline" }, reviewToken);
   assert(human.status === 201, `création humaine ${human.status}`);
   const humanId = human.payload.command.id;
-  const running = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "running" });
+  const running = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "running" }, reviewToken);
   assert(running.status === 200 && running.payload.command.status === "running", "passage en cours");
-  const review = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "awaiting_validation" });
+  const review = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "awaiting_validation" }, reviewToken);
   assert(review.status === 200 && review.payload.command.status === "awaiting_validation", "passage à valider");
-  const blocked = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "blocked", agentNote: "Il manque la source." });
+  const blocked = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "blocked", agentNote: "Il manque la source." }, reviewToken);
   assert(blocked.status === 200 && blocked.payload.command.status === "blocked" && blocked.payload.command.agentNote === "Il manque la source.", "passage bloqué");
-  const failed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "failed", agentNote: "La source est injoignable." });
+  const failed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "failed", agentNote: "La source est injoignable." }, reviewToken);
   assert(failed.status === 200 && failed.payload.command.status === "failed" && failed.payload.command.agentNote === "La source est injoignable.", "passage en échec");
-  const refused = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", result: "", proof: "", agentNote: "" });
+  const refused = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", result: "", proof: "", agentNote: "" }, reviewToken);
   assert(refused.status === 400 && typeof refused.payload.error === "string", "clôture humaine sans preuve");
-  const closed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", proof: "Capture du bureau" });
+  const closed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", proof: "Capture du bureau" }, reviewToken);
   assert(closed.status === 200 && closed.payload.command.status === "done" && closed.payload.command.proof === "Capture du bureau", "clôture humaine avec preuve");
-  const listed = await request("GET", "/api/hq/commands");
+  const listed = await request("GET", "/api/hq/commands", undefined, reviewToken);
   const found = listed.payload.commands.find((command) => command.id === humanId);
   assert(found && found.status === "done" && found.proof === "Capture du bureau", "la liste Fait n'expose pas la preuve");
 
@@ -113,6 +124,8 @@ try {
   const page = await fetch(`${base}/app.js`, { signal: AbortSignal.timeout(5000) });
   const source = await page.text();
   assert(source.includes("Bureau") && source.includes("Plateformes") && source.includes("Admin produits") && source.includes("Preuve."), "l'interface a perdu le bureau, les plateformes ou la preuve");
+  assert(source.includes("Préparation manuelle") && source.includes("Exécution déterministe") && source.includes("Exécution par modèle") && source.includes("Non exécutable"), "l'interface confond les modes d'exécution");
+  assert(!source.includes("agent IA opérationnel"), "l'interface annonce un agent IA opérationnel");
   assert(source.includes("Passer en cours") && source.includes("Marquer fait") && source.includes("À valider") && source.includes("Marquer bloqué") && source.includes("Clore — fait") && source.includes("Confirmer l'échec"), "les actions de statut manquent sur les cartes");
   assert(source.includes('method: "PATCH"') && source.includes('credentials: "same-origin"') && source.includes("/api/hq/commands/"), "le statut ne part pas en PATCH same-origin");
 

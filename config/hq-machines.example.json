@@ -1,0 +1,18 @@
+[
+  {
+    "id": "executor-klirprospect",
+    "accessClientId": "",
+    "actorId": "machine-klirprospect",
+    "orgId": "klirline",
+    "scopes": ["work"],
+    "token": ""
+  },
+  {
+    "id": "reviewer-office",
+    "accessClientId": "",
+    "actorId": "coo",
+    "orgId": "klirline",
+    "scopes": ["review"],
+    "token": ""
+  }
+]

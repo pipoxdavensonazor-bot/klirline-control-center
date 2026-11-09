@@ -1,4 +1,5 @@
-import { decideClaim, decideInterrupt, matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideCompletion, decideInterrupt, matchesFilter, sortCommands } from "./commands.js";
+import { runMissionOperation } from "./missions.js";
 
 function missing() {
   const error = new Error("Commande introuvable");
@@ -16,6 +17,7 @@ function commit(commands, id, decision) {
 
 export function memoryHqStore(seed = []) {
   const commands = seed.map((command) => ({ ...command }));
+  const missions = [];
   return {
     async list(filter) {
       return sortCommands(commands.filter((command) => matchesFilter(command, filter)));
@@ -38,6 +40,31 @@ export function memoryHqStore(seed = []) {
     async interrupt(id, options) {
       const current = commands.find((command) => command.id === id) || null;
       return commit(commands, id, decideInterrupt(current, options));
+    },
+    async complete(id, input, options) {
+      const current = commands.find((command) => command.id === id) || null;
+      return commit(commands, id, decideCompletion(current, input, options));
+    },
+    async missionList() {
+      return missions.map((mission) => JSON.parse(JSON.stringify(mission)));
+    },
+    async missionGet(id) {
+      const found = missions.find((mission) => mission.id === id);
+      return found ? JSON.parse(JSON.stringify(found)) : null;
+    },
+    async missionInsert(mission) {
+      missions.push(JSON.parse(JSON.stringify(mission)));
+    },
+    async missionOperate(id, operation, input, actorId, options = {}) {
+      const index = missions.findIndex((mission) => mission.id === id);
+      const result = runMissionOperation(index < 0 ? null : missions[index], commands, operation, input, { ...options, actorId });
+      if (result.insertCommand) commands.push({ ...result.command });
+      else if (result.replaceCommand && result.command) {
+        const commandIndex = commands.findIndex((command) => command.id === result.command.id);
+        if (commandIndex >= 0) commands[commandIndex] = { ...result.command };
+      }
+      if (result.changed && index >= 0) missions[index] = JSON.parse(JSON.stringify(result.mission));
+      return result;
     },
   };
 }

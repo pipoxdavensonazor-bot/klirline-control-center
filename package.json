@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "check": "node src/self-check.js",
     "check:hq": "node scripts/hq-flow.mjs",
+    "check:do": "node scripts/hq-do-check.mjs",
     "stage": "node scripts/stage-assets.mjs",
     "deploy": "node scripts/stage-assets.mjs && wrangler deploy"
   },

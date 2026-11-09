@@ -84,9 +84,11 @@ export function publicCommand(command) {
   if (command.claim && typeof command.claim === "object") {
     copy.claim = {
       holder: String(command.claim.holder || ""),
+      attemptId: command.claim.attemptId || null,
       claimedAt: command.claim.claimedAt || null,
       leaseUntil: command.claim.leaseUntil || null,
     };
+    delete copy.completedTokenHash;
   } else {
     copy.claim = null;
   }
@@ -111,6 +113,7 @@ function leaseActive(command, nowMs) {
 
 function issueLease(command, options, now, note, systemNote) {
   const token = randomUUID();
+  const attemptId = randomUUID();
   const claimedAt = now.toISOString();
   const next = {
     ...command,
@@ -119,6 +122,7 @@ function issueLease(command, options, now, note, systemNote) {
     agentNote: systemNote ? joinNotes(command.agentNote, note, systemNote) : note ? joinNotes(command.agentNote, note) : command.agentNote,
     claim: {
       tokenHash: hashClaimToken(token),
+      attemptId,
       holder: String(options.actorId || ""),
       claimedAt,
       leaseUntil: new Date(now.getTime() + HQ_LEASE_MS).toISOString(),
@@ -183,6 +187,77 @@ export function applyHqPatch(command, input, options = {}) {
   }
   if (!LEASED.has(next.status)) next.claim = null;
   return next;
+}
+
+const IMPERSONATION = ["actorId", "role", "orgId", "validatorId", "createdBy", "readers", "permissions", "makeAdmin"];
+
+export function rejectImpersonation(input) {
+  if (!input || typeof input !== "object") return;
+  for (const key of IMPERSONATION) {
+    if (Object.hasOwn(input, key)) fail(400, "Ce champ ne change pas l'identité ni le propriétaire.");
+  }
+}
+
+function credentialMatches(claim, attemptId, token) {
+  if (!claim?.tokenHash || !claim.attemptId) return false;
+  if (String(attemptId || "") !== claim.attemptId) return false;
+  if (!token) return false;
+  return hashClaimToken(token) === claim.tokenHash;
+}
+
+export function decideCompletion(command, input, options = {}) {
+  if (!command) return { http: 404, persist: false, body: { error: "Commande introuvable" } };
+  try {
+    rejectImpersonation(input);
+    if (Object.hasOwn(input || {}, "ownerSlug")) fail(400, "Ce champ ne change pas le propriétaire.");
+  } catch (error) {
+    return { http: error.status || 400, persist: false, body: { error: error.message } };
+  }
+  const status = String(input?.status || command.status);
+  const writesResult = status === "done" || status === "failed" || Object.hasOwn(input || {}, "result") || Object.hasOwn(input || {}, "proof");
+  if (!writesResult) {
+    try {
+      const next = applyHqPatch(command, input, options);
+      return { http: 200, persist: true, command: next, body: { mode: "hq", outcome: "updated", command: publicCommand(next) } };
+    } catch (error) {
+      return { http: error.status || 500, persist: false, body: { error: error.message } };
+    }
+  }
+  const attemptId = input?.attemptId;
+  const token = input?.claimToken;
+  if (command.status === "done") {
+    const sameAttempt = credentialMatches(
+      { tokenHash: command.completedTokenHash, attemptId: command.completedAttemptId },
+      attemptId,
+      token,
+    );
+    const sameResult = (input?.result == null || String(input.result).trim() === String(command.result || "").trim())
+      && (input?.proof == null || String(input.proof).trim() === String(command.proof || "").trim());
+    if (sameAttempt && sameResult) {
+      return { http: 200, persist: false, body: { mode: "hq", outcome: "duplicate", command: publicCommand(command) } };
+    }
+    return {
+      http: 409,
+      persist: false,
+      body: { mode: "hq", outcome: "rejected", error: "Le résultat est déjà enregistré.", command: publicCommand(command) },
+    };
+  }
+  const reviewer = options.human === true || (Array.isArray(options.scopes) && options.scopes.includes("review"));
+  if (!reviewer && !credentialMatches(command.claim, attemptId, token)) {
+    return {
+      http: 409,
+      persist: false,
+      body: { mode: "hq", outcome: "rejected", error: "Cette tentative ne peut plus écrire le résultat.", command: publicCommand(command) },
+    };
+  }
+  try {
+    const next = applyHqPatch(command, input, options);
+    next.completedAttemptId = command.claim?.attemptId || null;
+    next.completedTokenHash = command.claim?.tokenHash || null;
+    return { http: 200, persist: true, command: next, body: { mode: "hq", outcome: "completed", command: publicCommand(next) } };
+  } catch (error) {
+    return { http: error.status || 500, persist: false, body: { error: error.message } };
+  }
 }
 
 export function decideClaim(command, options = {}) {

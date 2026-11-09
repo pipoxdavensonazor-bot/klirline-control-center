@@ -71,6 +71,8 @@ npx wrangler secret put ACCESS_SERVICE_CLIENT_IDS
 4. Pour le poll Office, poser `ACCESS_SERVICE_CLIENT_IDS` avec le Client ID public complet, puis redéployer. Ne pas y mettre le Client Secret.
 5. Déployer seulement après cette configuration. Ce dépôt ne déploie pas et ne crée pas l'application Access.
 
+Une fiche `HQ_MACHINE_IDENTITIES` ne remplace pas cette liste. Le Client ID doit d'abord être dans `ACCESS_SERVICE_CLIENT_IDS`. S'il a aussi une fiche, les `scopes` viennent de la fiche et le jeton reste limité à `/api/hq/*`. Sans fiche, l'identité reste `service:hq-poll`. Le modèle vide est `config/hq-machines.example.json`. Le champ `token` sert au serveur local.
+
 ## Limites des routes
 
 Chaque route `/api/*` compte dans une fenêtre de 60 secondes et de 60 requêtes. La clé est l'adresse de connexion, puis le courriel vérifié pour les routes du dossier. Le poll machine compte à part, sous `service:hq-poll`. Le rôle et l'`orgId` n'entrent pas dans la clé. Un corps de plus de 32 Ko répond `413`. Un JSON illisible répond `400`. Un dépassement répond `429` avec `Retry-After`.

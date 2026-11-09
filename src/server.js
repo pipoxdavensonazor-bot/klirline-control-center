@@ -3,6 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
 import { dispatchHq } from "./hq/dispatch.js";
+import { authenticateMachine } from "./hq/machine-auth.js";
 import { fileHqStore } from "./hq/file-store.js";
 import { agents, assertOrganization } from "./org/index.js";
 import { COMPANY } from "./policy.js";
@@ -121,13 +122,20 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { id, body });
     }
     if (url.pathname.startsWith("/api/hq/")) {
+      const machine = authenticateMachine(req.headers.authorization, process.env);
+      if (!machine) {
+        return send(res, 401, { error: "Identité machine manquante. Un rôle annoncé par le navigateur n'est pas accepté." });
+      }
       const payload = req.method === "GET" ? {} : await readBody(req);
       const result = await dispatchHq(fileHqStore(), {
         method: req.method,
         pathname: url.pathname,
         searchParams: url.searchParams,
         body: payload,
-        actorId: payload.actorId || "ceo",
+        actorId: machine.actorId,
+        machineId: machine.id,
+        scopes: machine.scopes,
+        human: false,
       });
       return send(res, result.status, result.body);
     }
