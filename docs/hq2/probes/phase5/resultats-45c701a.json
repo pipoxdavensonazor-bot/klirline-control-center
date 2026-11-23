@@ -1,0 +1,153 @@
+{
+  "harnais": "phase5-grokbot",
+  "version": 2,
+  "ref": "origin/cursor/klirline-control-center",
+  "sha": "45c701abd8aebcae18a44e8980bfec35c15fd3a3",
+  "runtime": "local : wrangler dev --local (workerd, DO SQLite) + Node",
+  "production": false,
+  "executeLe": "2026-11-23T20:34:34.462Z",
+  "heartbeatRoute": "/api/hq/commands/:id/heartbeat",
+  "fatal": null,
+  "results": [
+    {
+      "id": "I1",
+      "nom": "Identité du jeton de service Access hors HQ_MACHINE_IDENTITIES",
+      "verdict": "vulnérable",
+      "observe": "actorId=service:hq-poll, scopes=undefined, human=undefined",
+      "preuve": "access.js identityFromAccess → bindServiceIdentity ; worker.js authenticate (repli lignes ~72-85 sur 45c701a)"
+    },
+    {
+      "id": "I2",
+      "nom": "Une identité machine peut-elle porter un rôle humain validateur (coo/ceo) ?",
+      "verdict": "vulnérable",
+      "observe": "coo={\"id\":\"m1\",\"actorId\":\"coo\",\"orgId\":\"klirline\",\"scopes\":[\"review\"],\"human\":false} ; ceo={\"id\":\"m2\",\"actorId\":\"ceo\",\"orgId\":\"klirline\",\"scopes\":[\"work\",\"review\"],\"human\":false}",
+      "preuve": "machine-auth.js resolveServiceMachine n'interdit aucun actorId"
+    },
+    {
+      "id": "I3",
+      "nom": "JWT de service : liste d'autorisation",
+      "verdict": "protégé",
+      "observe": "autorisé={\"kind\":\"service\",\"clientId\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.access\"} ; non autorisé={\"err\":401}",
+      "preuve": "verifyAccessJwt avec clé RSA locale"
+    },
+    {
+      "id": "I4",
+      "nom": "Jeton de service hors /api/hq/*",
+      "verdict": "protégé",
+      "observe": "/api/bootstrap → refusé 403",
+      "preuve": "assertServiceRoute"
+    },
+    {
+      "id": "I5",
+      "nom": "Quota par identité (60 req/min) partagé par tous les jetons de service",
+      "verdict": "partiel",
+      "observe": "clé=email:service:hq-poll (identique pour tout client de service non déclaré) ; refus à la requête n°61",
+      "preuve": "limits.js take/rateKey"
+    },
+    {
+      "id": "T1",
+      "nom": "Reprise d'une commande sans jeton",
+      "verdict": "vulnérable",
+      "observe": "claim A=200/issued/dispatched ; PATCH done B sans jeton=409/rejected/dispatched « Cette tentative ne peut plus écrire le résultat. » ; PATCH pending B sans jeton=200/updated/pending ; claim B=200/issued/dispatched",
+      "preuve": "bail de A actif (T0) pendant toute la séquence"
+    },
+    {
+      "id": "T2",
+      "nom": "Deux exécutants sur une même commande",
+      "verdict": "partiel",
+      "observe": "10 claims concurrents : issued=1 ; via PATCH queued (service:hq-poll) puis claim B : deux jetons émis=true (200/issued/dispatched)",
+      "preuve": "attemptId A≠B, bail A non expiré"
+    },
+    {
+      "id": "T3",
+      "nom": "Approbation par machine (coo, human=false)",
+      "verdict": "vulnérable",
+      "observe": "approval machine=200 approvalValid=true ; clôture done par la même machine=200 statut=done ; contrôle positif (humain coo)=non nécessaire",
+      "preuve": "voir aussi I2 ; « non testable » si l'humain est lui aussi refusé"
+    },
+    {
+      "id": "T4",
+      "nom": "Annulation sans permission",
+      "verdict": "vulnérable",
+      "observe": "commande scopes=[]=200/updated/cancelled ; commande service:hq-poll (portées absentes)=200/updated/cancelled ; interrupt scopes=[]=200/interrupted/dispatched ; mission annulée par un tiers work=403",
+      "preuve": "commande prise par A, bail actif"
+    },
+    {
+      "id": "T5",
+      "nom": "Création de commandes en doublon",
+      "verdict": "vulnérable",
+      "observe": "POST identiques simultanés → ids distincts=true (201,201) ; avec Idempotency-Key → ids distincts=true",
+      "preuve": ""
+    },
+    {
+      "id": "T6",
+      "nom": "Heartbeat d'une mauvaise identité",
+      "verdict": "non testable",
+      "observe": "route /api/hq/commands/:id/heartbeat → 404 (aucun heartbeat) ; substitut : PATCH running par B sans jeton=200/updated/running, titulaire=agent-a, leaseUntil inchangé=true",
+      "preuve": "défaut : pas de heartbeat ; un tiers peut changer le statut d'une commande louée"
+    },
+    {
+      "id": "T7",
+      "nom": "Heartbeat après expiration",
+      "verdict": "non testable",
+      "observe": "route heartbeat 404 ; substitut : PATCH running après expiration=200/updated/running puis claim C=200/blocked/blocked (la commande passe bloquée au lieu d'être reprise)",
+      "preuve": "bail 30 min, horloge T0+31 min"
+    },
+    {
+      "id": "T8",
+      "nom": "Écriture avec une ancienne tentative",
+      "verdict": "partiel",
+      "observe": "reprise B=200/reclaimed/dispatched ; done avec ancien jeton=409/rejected/dispatched « Cette tentative ne peut plus écrire le résultat. » ; blocked avec ancienne tentative sans jeton=200/updated/blocked",
+      "preuve": "hq-do-check couvre aussi le livrable de mission (409)"
+    },
+    {
+      "id": "T9",
+      "nom": "Reprise d'une commande terminale",
+      "verdict": "vulnérable",
+      "observe": "done=200/completed/done ; claim direct=409/refused/done « Cette commande n'est plus prenable. » ; PATCH done→pending sans jeton (service:hq-poll)=200/updated/pending ; claim ensuite=200/issued/dispatched",
+      "preuve": ""
+    },
+    {
+      "id": "T10",
+      "nom": "Injection d'instructions dans le texte",
+      "verdict": "partiel",
+      "observe": "champ createdBy forcé=400 « Ce champ ne change pas l'identité ni le propriétaire. » ; status/claim forcés ignorés → statut=pending, claim=null, createdBy=agent-a ; routage déduit du texte : ownerSlug=all-question (routedBy=triage) ; texte restitué tel quel=true",
+      "preuve": "le serveur ne donne aucun droit au texte ; la défense contre l'obéissance d'un modèle relève du distributeur (non testable ici)"
+    },
+    {
+      "id": "T11",
+      "nom": "Dépassement du budget",
+      "verdict": "partiel",
+      "observe": "start costCents=1 (plafond 0)=409 « Plafond de dépense atteint. » ; costCents=\"abc\"=200 started=true ; coût enregistré={\"spentCents\":0,\"capCents\":0}",
+      "preuve": "le coût est déclaré par l'appelant ; les commandes hors mission n'ont aucun budget"
+    },
+    {
+      "id": "T12",
+      "nom": "Dépôt d'un livrable falsifié",
+      "verdict": "vulnérable",
+      "observe": "contrôle positif (livrable légitime A)=200 ; B sans jeton (tâche en cours)=409 ; machine coo sans jeton=200 ; B sans jeton après livraison légitime=200 état=rework livrables=2 ; PATCH done par machine review sans jeton=200/completed/done",
+      "preuve": "decideCompletion : la portée review ou human contourne le jeton ; addDeliverable : commande done → révision sans jeton"
+    },
+    {
+      "id": "T13",
+      "nom": "Arrêt et redémarrage (workerd local)",
+      "verdict": "partiel",
+      "observe": "après redémarrage : tentative conservée=true ; claim B à +5 min=200/held/dispatched ; à +31 min=200/reclaimed/dispatched ; ancien jeton=409/rejected/dispatched « Cette tentative ne peut plus écrire le résultat. » ; nouveau jeton=200/completed/done ; commande running expirée → claim=200/blocked/blocked ; commande abandonnée 3 h après, sans appel : statut=dispatched, leaseUntil=2026-11-23T15:30:00.000Z (aucune alarme ne clôt ni ne signale)",
+      "preuve": "redémarrage réel du processus wrangler, même dossier --persist-to"
+    },
+    {
+      "id": "T14",
+      "nom": "Indisponibilité de l'API HQ",
+      "verdict": "partiel",
+      "observe": "pendant l'arrêt : GET=0 (ECONNREFUSED) ; PATCH=0 ; après reprise : statut=dispatched ; réécriture avec le même jeton=200/completed/done",
+      "preuve": "comportement côté serveur seulement ; aucune file locale ni relance bornée côté distributeur (routine sans code)"
+    },
+    {
+      "id": "E1",
+      "nom": "Livrable légitime après 205 commandes (fenêtre de 200)",
+      "verdict": "vulnérable",
+      "observe": "HTTP 409 La commande de la tâche est introuvable.",
+      "preuve": "P9 de la phase 0"
+    }
+  ]
+}
