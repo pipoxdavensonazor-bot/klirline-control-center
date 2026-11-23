@@ -1,0 +1,5 @@
+# Faux positifs connus, écartés par empreinte exacte (commit:fichier:règle:ligne).
+# Il s'agit de l'identifiant interne du Worker Cloudflare (pas un secret, n'ouvre aucun accès),
+# détecté par la règle generic-api-key. Toute autre occurrence, ou tout autre fichier, reste signalée.
+d754179bab2222417ab76a992c8b7712c03671f4:knowledge/bureau-exploitation.md:generic-api-key:56
+bbb5a771e73e8c95624d8d6ef318c88a66fbe92c:knowledge/bureau-exploitation.md:generic-api-key:44

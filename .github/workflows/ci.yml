@@ -1,0 +1,88 @@
+# CI Klirline Control Center : tests locaux et scan de secrets.
+# Aucun secret requis, lecture seule. Ne déploie rien (Workers Builds reste seul à publier).
+# Les noms de jobs « ci / tests » et « ci / secret-scan » sont les contextes exacts
+# attendus par le ruleset proposé (docs/hq2/distributeur-spec.md §4).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - cursor/klirline-control-center
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: ci / tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Node 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Dépendances (lockfile)
+        run: npm ci --no-audit --no-fund
+
+      - name: self-check
+        run: node src/self-check.js
+
+      - name: hq-flow (serveur local)
+        run: node scripts/hq-flow.mjs
+
+      - name: hq-execution-check (mission de bout en bout)
+        run: node scripts/hq-execution-check.mjs
+
+      - name: hq-do-check (Durable Object, workerd local)
+        # Port 8791 fixé dans le script : libre sur un runner neuf.
+        # Note : ce test exige encore l'approbation d'une mission par « coo » sans identité humaine.
+        # À corriger dans le chantier 4 (une machine n'approuve jamais A3), pas ici.
+        run: node scripts/hq-do-check.mjs
+
+      - name: npm audit (informatif, non bloquant)
+        run: |
+          npm audit --audit-level=high || echo "::warning title=npm audit::Vulnérabilités hautes dans l'outillage (wrangler/miniflare). Voir le journal."
+
+  secret-scan:
+    name: ci / secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: "8.21.2"
+      GITLEAKS_SHA256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
+    steps:
+      - name: Checkout (historique complet)
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Installer gitleaks (somme SHA-256 vérifiée)
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -sSfL -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks version
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: gitleaks — tout l'historique (toutes les refs + HEAD de la PR)
+        # .gitleaksignore n'écarte que deux empreintes précises (faux positif connu : identifiant
+        # de Worker Cloudflare dans knowledge/bureau-exploitation.md, voir PR #12, docs/hq2/audit.md §6).
+        run: gitleaks git --log-opts="--all" --redact --verbose --exit-code 1 .
