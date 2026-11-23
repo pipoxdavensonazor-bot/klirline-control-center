@@ -1,0 +1,66 @@
+{
+  "runtime": "local-workerd (wrangler dev --local)",
+  "root": "<worktree d754179>",
+  "results": [
+    {
+      "id": "P1",
+      "label": "10 claims concurrents",
+      "defectPresent": false,
+      "evidence": "issued=1, held=9"
+    },
+    {
+      "id": "P2",
+      "label": "PATCH status=pending sans jeton par un autre agent, puis re-claim",
+      "defectPresent": true,
+      "evidence": "claim A=issued; PATCH B=200; claim B=issued (deux jetons valides émis pendant le bail de A)"
+    },
+    {
+      "id": "P3",
+      "label": "PATCH status=cancelled par identité scopes=[]",
+      "defectPresent": true,
+      "evidence": "HTTP 200, statut=cancelled"
+    },
+    {
+      "id": "P3b",
+      "label": "cancelled → pending (état terminal réversible)",
+      "defectPresent": true,
+      "evidence": "HTTP 200, statut=pending"
+    },
+    {
+      "id": "P4",
+      "label": "POST command et interrupt avec scopes=[]",
+      "defectPresent": true,
+      "evidence": "POST command=201; interrupt=200 (statut après=dispatched)"
+    },
+    {
+      "id": "P5",
+      "label": "approbation par machine actorId=coo, scopes=[review], human=false",
+      "defectPresent": true,
+      "evidence": "HTTP 200, approvalValid=true"
+    },
+    {
+      "id": "P6",
+      "label": "route heartbeat",
+      "defectPresent": true,
+      "evidence": "HTTP 404"
+    },
+    {
+      "id": "P7",
+      "label": "bail expiré sans réveil (pas d'alarme)",
+      "defectPresent": true,
+      "evidence": "statut 2 h après = dispatched, leaseUntil=2026-11-23T15:30:00.000Z"
+    },
+    {
+      "id": "P8",
+      "label": "double POST identique",
+      "defectPresent": true,
+      "evidence": "ids distincts=true"
+    },
+    {
+      "id": "P9",
+      "label": "livrable d'une tâche dont la commande est hors des 200 plus récentes",
+      "defectPresent": true,
+      "evidence": "HTTP 409 La commande de la tâche est introuvable."
+    }
+  ]
+}

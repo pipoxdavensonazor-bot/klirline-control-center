@@ -27,3 +27,20 @@ Chaque phase se fait sur sa propre branche avec une PR en brouillon vers `cursor
 ## Hors périmètre tant que Philippe n'a pas donné son accord
 
 Merge, `wrangler deploy`, migration ou écriture distante dans le DO de production, création ou rotation de secrets, activation de Queues ou d'un plan payant, appels de modèle facturés, tout envoi (courriel, SMS, social), toute écriture KlirPay.
+
+## Réestimation du 23 nov. 2026 (après la réconciliation et l'audit du distributeur)
+
+Le commit `d52f17b` n'est pas sur GitHub. Rien de son contenu n'a pu être réutilisé, et l'estimation part donc de `d754179`. Lot « sécurisation avant les agents » (chantiers 1 à 5 d'Office) :
+
+| Lot | Effort |
+| --- | --- |
+| CI GitHub Actions (tests et gitleaks) et ruleset (`distributeur-spec.md` §4) | 0,5–1 j |
+| Correctifs P2, P3, P3b, P4 et P9, avec états terminaux irréversibles | 1–1,5 j |
+| Approbation réservée aux humains (P5), avec mise à jour des tests qui l'exigent | 0,5 j |
+| Heartbeat et alarme DO idempotente (P6, P7) | 1,5–2 j |
+| Idempotence à la création (P8) | 0,5–1 j |
+| Journal d'audit persistant | 1,5–2 j |
+| Distributeur v2 : identité `dispatch`, route `/brief`, baux, skill v2, tests D1 à D18 | 2–3 j |
+| **Total** | **7,5–11 j** |
+
+Si `d52f17b` corrige vraiment une partie des défauts P2, P3, P4 et P9, on peut retirer 1 à 2 jours, une fois les sondes rejouées. Le total HQ 2.0 (27 à 41 jours) ne change pas : ce lot remplace en grande partie la phase 2 et commence la phase 7.
