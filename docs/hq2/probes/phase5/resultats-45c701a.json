@@ -1,10 +1,11 @@
 {
   "harnais": "phase5-grokbot",
+  "version": 2,
   "ref": "origin/cursor/klirline-control-center",
   "sha": "45c701abd8aebcae18a44e8980bfec35c15fd3a3",
   "runtime": "local : wrangler dev --local (workerd, DO SQLite) + Node",
   "production": false,
-  "executeLe": "2026-11-23T20:22:17.161Z",
+  "executeLe": "2026-11-23T20:34:34.462Z",
   "heartbeatRoute": "/api/hq/commands/:id/heartbeat",
   "fatal": null,
   "results": [
@@ -13,7 +14,7 @@
       "nom": "Identité du jeton de service Access hors HQ_MACHINE_IDENTITIES",
       "verdict": "vulnérable",
       "observe": "actorId=service:hq-poll, scopes=undefined, human=undefined",
-      "preuve": "access.js identityFromAccess → bindServiceIdentity ; worker.js authenticate (repli lignes ~72-85) ne fixe pas de portées"
+      "preuve": "access.js identityFromAccess → bindServiceIdentity ; worker.js authenticate (repli lignes ~72-85 sur 45c701a)"
     },
     {
       "id": "I2",
@@ -61,8 +62,8 @@
       "id": "T3",
       "nom": "Approbation par machine (coo, human=false)",
       "verdict": "vulnérable",
-      "observe": "approval=200 approvalValid=true ; clôture done par la même machine=200 statut=done",
-      "preuve": "voir aussi I2 (une machine peut être déclarée coo/ceo)"
+      "observe": "approval machine=200 approvalValid=true ; clôture done par la même machine=200 statut=done ; contrôle positif (humain coo)=non nécessaire",
+      "preuve": "voir aussi I2 ; « non testable » si l'humain est lui aussi refusé"
     },
     {
       "id": "T4",
@@ -124,7 +125,7 @@
       "id": "T12",
       "nom": "Dépôt d'un livrable falsifié",
       "verdict": "vulnérable",
-      "observe": "B sans jeton (tâche en cours)=409 ; machine coo sans jeton=200 ; B sans jeton après livraison légitime=200 état=rework livrables=2 ; PATCH done par machine review sans jeton=200/completed/done",
+      "observe": "contrôle positif (livrable légitime A)=200 ; B sans jeton (tâche en cours)=409 ; machine coo sans jeton=200 ; B sans jeton après livraison légitime=200 état=rework livrables=2 ; PATCH done par machine review sans jeton=200/completed/done",
       "preuve": "decideCompletion : la portée review ou human contourne le jeton ; addDeliverable : commande done → révision sans jeton"
     },
     {

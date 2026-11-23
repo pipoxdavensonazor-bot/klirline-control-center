@@ -17,12 +17,15 @@ Ce que valent les preuves :
 | PR d'audit #12 (`cursor/hq2-phase0-audit`) | `688ae79` avant ce document | Documentation et sondes | Relue (§1.1) |
 | Branche Codex `fix/office-reliability` | **inaccessible** | Correctifs annoncés | **Non testable.** Absente de GitHub (`git ls-remote` : 30 références, aucune `office-reliability`). `GET /commits/<sha>` → 422 pour `d52f17b`, `371deb0`, `23af27f`, `aeddce2`, `db0cb96` et `eddbf4a` |
 
-**Incohérence à signaler (PH5-15).** Trois têtes différentes ont été annoncées pour la même branche : `d52f17b` (réconciliation de la phase 0), `371deb0` (« rebasée sur 45c701a » : `23af27f`, `aeddce2`, `db0cb96`), puis `eddbf4a` (brief de la phase 5). Aucune n'est publiée. Le bundle que déposera Philippe doit permettre de trancher : `git bundle verify`, `git log --oneline 45c701a..<tête>`, puis vérifier que la tête retenue descend bien de `45c701a`. **Rien n'est conclu sur les corrections de Codex** : aucun défaut ci-dessous n'est réputé présent ni absent dans sa branche.
+**Incohérence à signaler (PH5-15).** Quatre têtes différentes ont été annoncées pour la même branche : `d52f17b` (réconciliation de la phase 0), `371deb0` (« rebasée sur 45c701a » : `23af27f`, `aeddce2`, `db0cb96`), `eddbf4a` (brief de la phase 5), puis **`1ab1a24`**, annoncée par Philippe le 23 nov. à 15 h 31 comme commit final de Codex, sur la base `45c701a`. `1ab1a24` n'est pas non plus publiée sur GitHub. C'est la tête retenue pour la certification : `verify-bundle.sh` refusera tout bundle dont la tête n'est pas `1ab1a24` ou dont le prérequis n'est pas `45c701a`. Aucune n'est publiée. Le bundle que déposera Philippe doit permettre de trancher : `git bundle verify`, `git log --oneline 45c701a..<tête>`, puis vérifier que la tête retenue descend bien de `45c701a`. **Rien n'est conclu sur les corrections de Codex** : aucun défaut ci-dessous n'est réputé présent ni absent dans sa branche.
 
 ### 1.1 Relecture des documents de la PR #12
 
 - `audit.md`, `reconciliation.md` et `probes/resultats-d754179.json` restent exacts pour 45c701a, puisque le code est identique. Le harnais de la phase 5 reproduit P2, P3, P3b, P4, P5, P6, P7, P8 et P9, et confirme P1 (un seul `issued` sur 10 claims concurrents).
-- `distributeur-spec.md` §4 indique que le ruleset n'est « non activé » : c'est **toujours vrai**. La tentative du 23 nov. (10 h 45) a reçu un 403, parce que le jeton n'a pas la permission `administration=write`. `GET /rulesets` renvoie `[]`.
+- **Correction (23 nov., 15 h 40).** La première version de ce rapport disait que le ruleset était « non activé », en s'appuyant sur un `GET /rulesets` vide fait à 10 h 45. C'était faux à l'heure du rapport : Philippe a créé les deux rulesets à 10 h 52, après ce contrôle, et je ne l'avais pas relu. Relecture faite à 15 h 35 par `GET /rules/branches/…` et `GET /rulesets/<id>`, qui n'exigent pas la permission Administration :
+  - `27914655` `production-klirline-control-center` est **actif** sur `refs/heads/cursor/klirline-control-center`, avec `bypass_actors: []`. Règles : `deletion`, `non_fast_forward`, `required_linear_history`, `pull_request` (0 approbation, `dismiss_stale_reviews_on_push`, `required_review_thread_resolution`) et `required_status_checks` en mode strict (`ci / tests`, `ci / secret-scan`, `Workers Builds: klirline-control-center`).
+  - `27914662` `main-frozen` est **actif** sur `refs/heads/main`, avec les règles `deletion`, `non_fast_forward` et `update`, et `bypass_actors: []`.
+  - La production est sur `45c701a` et exige une PR et les 3 checks. Aucun accès Administration n'est demandé ni nécessaire pour ces vérifications.
 - `reconciliation.md` ne cite que `d52f17b`. Voir PH5-15 ci-dessus.
 - Collision de noms : dans `distributeur-spec.md` §1.6, « P1 » désigne le risque d'injection, alors que dans les sondes P1 désigne la course aux claims. Dans ce document, l'injection est **T10** et la course **T2**.
 - Le test `scripts/hq-do-check.mjs:167-168` **exige** qu'une machine `coo` approuve (voir PH5-03). Il faudra l'inverser en même temps que le correctif. Il n'a pas été touché.
@@ -155,7 +158,7 @@ Pour toutes les fiches, la reproduction se fait avec `node docs/hq2/probes/phase
 | PH5-12 | Moyenne | Box : `/home/box/agent-data/secrets/` | §4.1 | Seul le distributeur peut lire son secret | Lisible par les 215 processus `box` | `secret-access-rotation.md` §3, options B ou C. Rotation selon le §4.3 | Un autre agent ne peut pas lire le fichier (contrôle `stat` et accès refusé) |
 | PH5-13 | Élevée | Skill `pont-hq-centre-agents` (étapes 3-4) | §3.2 | Le `claimToken` n'apparaît jamais dans un contexte de modèle ni dans un transcript | Il est renvoyé dans la sortie de l'outil et recopié dans le brief | Assistant local déterministe (§4.2, point 4), ou jeton lié à `holder` côté serveur | Recherche du motif UUID du jeton dans les transcripts d'un cycle complet : 0 occurrence |
 | PH5-14 | Faible | `src/hq/missions.js:43-51` (`contentHash` FNV-1a 32 bits) | Revue de code | Approbation liée à un hash résistant aux collisions | FNV 32 bits (collision triviale à calculer) | SHA-256 (`crypto.subtle.digest`) sur un JSON canonique | Test unitaire : deux contenus distincts, même FNV → hashes différents |
-| PH5-15 | Processus | Branche Codex | §1 | Une tête unique, publiée ou fournie en bundle vérifiable | Trois têtes annoncées (`d52f17b`, `371deb0`, `eddbf4a`), aucune sur GitHub | Bundle vérifié avec `git bundle verify` et la tête confirmée par Codex | `git merge-base --is-ancestor 45c701a <tête>` → vrai ; harnais exécuté sur cette tête |
+| PH5-15 | Processus | Branche Codex | §1 | Une tête unique, publiée ou fournie en bundle vérifiable | Quatre têtes annoncées (`d52f17b`, `371deb0`, `eddbf4a`, puis `1ab1a24`, dite finale et basée sur `45c701a`), aucune sur GitHub | Bundle vérifié par `probes/phase5/verify-bundle.sh` (SHA-256, `git bundle verify`, prérequis `45c701a`, tête `1ab1a24`) | `verify-bundle.sh <bundle> 1ab1a24` : réception `ok: true`, puis la matrice de comparaison est produite |
 
 ## 7. Plan d'optimisation du polling (0 $, sans nouvelle infrastructure)
 
@@ -194,9 +197,17 @@ Un agent (distributeur ou exécutant) n'est certifié qu'après **tous** les cri
 | Production `45c701a`, en tant que socle multi-agents autonome | **NO-GO** | PH5-01 à PH5-05 sont reproduits en local. Aucune des 14 attaques n'est entièrement protégée |
 | Distributeur actuel (skill et routine), pour une extension à de nouveaux agents ou à des actions réelles | **NO-GO** | Il dépend de PH5-01 et PH5-02, le jeton passe par le modèle, il n'a ni heartbeat ni alerte. Le maintien de l'usage actuel, supervisé et limité aux briefs, relève de Philippe |
 | Branche Codex `fix/office-reliability` | **Non testable / en attente** | Aucune tête n'est accessible (PH5-15). Dès réception du bundle : `node docs/hq2/probes/phase5/harness.mjs --ref <tête> --out docs/hq2/probes/phase5/resultats-<sha>.json`, puis comparaison avec `resultats-45c701a.json` |
-| Ruleset de la branche de production | **En attente** | Création refusée par un 403 (`administration=write` manquant sur le jeton). Rien n'est activé |
+| Rulesets | **Actifs** (créés par Philippe le 23 nov. à 10 h 52) | `27914655` exige une PR et les 3 checks sur la production, avec 0 approbation ; `27914662` fige `main`. Il reste à ajouter une revue humaine indépendante : `distributeur-v2-spec.md` §8 |
 
 ### Rejouer sur la branche Codex (dès que le bundle est disponible)
+
+Méthode recommandée, en une seule commande :
+
+```bash
+docs/hq2/probes/phase5/verify-bundle.sh <fichier>.bundle 1ab1a24
+```
+
+Le script calcule le SHA-256, lance `git bundle verify` et `list-heads`, et contrôle que le prérequis est `45c701a` et la tête `1ab1a24`. Il importe le bundle dans un clone isolé (`/workspace/hq2/codex-verify`), fait un scan gitleaks des nouveaux commits et lance les tests du dépôt, puis le harnais. Il produit enfin `comparaison-45c701a-1ab1a24.json` : la matrice des 14 attaques et le verdict final. Une exécution à blanc sur un bundle de test a fonctionné, ainsi que deux refus (mauvaise tête, mauvais prérequis). Méthode manuelle équivalente :
 
 ```bash
 cd <clone klirline-control-center>

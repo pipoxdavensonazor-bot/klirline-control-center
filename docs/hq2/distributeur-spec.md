@@ -169,7 +169,9 @@ Les cas marqués « actuel » ont été sondés sur `d754179` (voir `reconciliat
 | D17 | Fuite : `claimToken` dans un `SendToAgent` | Test statique sur le skill et le gabarit de brief | Non applicable |
 | D18 | 205 commandes, puis retour d'une tâche ancienne | Accepté | **409** (P9) |
 
-## 4. Ruleset proposé pour `cursor/klirline-control-center` (révision t73u, **non activé**)
+## 4. Ruleset proposé pour `cursor/klirline-control-center` (révision t73u)
+
+> **Mise à jour du 23 nov. 2026 à 15 h 40 (heure de Toronto).** Philippe a activé ce ruleset (`27914655`) et `main-frozen` (`27914662`) le 23 nov. à 10 h 52. Les règles relues par l'API correspondent au §4.2. Le constat ci-dessous décrit l'état d'avant cette activation. Pour la revue humaine, voir `distributeur-v2-spec.md` §8.
 
 Constat (API GitHub, en lecture) : aucun ruleset (`GET /rulesets` → `[]`, `GET /rules/branches/cursor%2Fklirline-control-center` → `[]`), pas de `.github/`, pas de CI. Le seul contrôle est le check « Workers Builds: klirline-control-center ». Décisions t73u : le ruleset s'active **après** la CI, sur validation de ce texte exact. `main` est conservée.
 

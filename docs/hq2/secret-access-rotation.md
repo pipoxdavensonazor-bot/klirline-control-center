@@ -36,6 +36,8 @@ Recommandation : **A tout de suite, puis B, puis C** quand le réveil par évén
 
 ## 4. Procédure de rotation contrôlée
 
+> Version finale, découpée en étapes avec un OK de Philippe à chacune et alignée sur l'identité `office-distributor` : `distributeur-v2-spec.md` §6 (23 nov. 2026). La procédure ci-dessous reste la référence pour le principe et le retour arrière.
+
 Prérequis : l'option A est en place (sinon le nouveau secret aurait les mêmes pouvoirs que l'ancien). Fenêtre conseillée : hors heures de poll (avant 9 h ou après 18 h 30, heure de Toronto), ou routine suspendue.
 
 **Chaque étape demande l'approbation de Philippe.** L'agent prépare et vérifie. Philippe, ou un agent qu'il désigne nommément pour cette étape, exécute.
