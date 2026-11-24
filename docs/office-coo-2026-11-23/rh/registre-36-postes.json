@@ -1,0 +1,2664 @@
+{
+  "meta": {
+    "titre": "Registre des 36 postes — Klirline Office HQ 2.0",
+    "date": "23 novembre 2026, 21:35 America/Toronto (UTC-5)",
+    "auteur": "COO (Office Klirline · Ops Klirline), chantier ressources humaines numériques",
+    "perimetre": "Fichiers locaux uniquement sous /workspace/hq2/coo-2026-11-23/rh/. Aucun envoi, aucune création ou modification d'agent, routine, skill, profil, connecteur ou secret. Budget 0 $.",
+    "sources": [
+      "Structure cible fournie par le CEO (36 postes, 8 départements, 8 postes prioritaires).",
+      "Clone local /workspace/hq2/klirline-control-center : src/hq/roster.js (15 cartes), src/org/* (34 postes de démonstration, dont le CEO humain), docs/hq2 (roles.js prévu, fichier absent), knowledge/.",
+      "PR #12 (docs d'architecture/plan/audit seulement sur le diff 45c701a...pr/12). Pas de src/hq/roles.js.",
+      "15 profils Grok Bot dans /home/box/agent-data/agents.",
+      "Usage Grok Bot 7 j et 30 j, transcripts en lecture, routines visibles dans le rapport d'usage.",
+      "GET live /api/hq/roster : échec 403 Cloudflare 1010 à 21:16 America/Toronto le 23 nov. 2026 ; non relancé.",
+      "Décisions CEO t100u du 23 nov. 2026 (organisation du bureau validée)."
+    ],
+    "regle_disponibilite": {
+      "actif": "Preuve d'usage ou de transcript dans les 7 derniers jours (17-23 nov. 2026, America/Toronto).",
+      "dormant": "Teammate existant, sans preuve dans cette fenêtre de 7 jours (la dernière preuve connue est datée).",
+      "inexistant": "Pas de teammate Grok Bot pour ce poste (ou, pour Codex, désignation sans preuve de disponibilité).",
+      "disponible": "Un poste n'est « disponible » que s'il a un titulaire nommé ET un statut actif prouvé. Codex n'est pas disponible au sens de cette règle.",
+      "note_t100u": "La validation du registre comme architecture cible ne rend pas un poste vacant « disponible ». Codex reste désigné CTO, disponibilité non prouvée comme teammate Grok Bot."
+    },
+    "comptages": {
+      "postes": 36,
+      "hors_ceo_humain": true,
+      "pourvus": 8,
+      "vacants": 28,
+      "prioritaires": 8,
+      "prioritaires_vacants": 5,
+      "pourvus_ids": [
+        "coo",
+        "cto",
+        "agent-commercial",
+        "responsable-reseaux-sociaux",
+        "pm-klirprospect",
+        "pm-noria",
+        "pm-klirbuild",
+        "assistant-administratif"
+      ],
+      "note_pourvus": "8 postes pourvus après t100u : COO (actif) ; CTO Codex (désigné, disponibilité non prouvée) ; responsable réseaux sociaux (Klirline Social, actif, publication autonome interdite) ; responsable KlirProspect (actif) ; agent commercial KlirProspect (même agent, profil prospection distinct, actif) ; responsables NORIA et KlirBuild (actifs) ; assistant administratif (All Question, actif, triage seulement). 28 vacants. Parmi les 8 prioritaires, restent vacants : Chief of Staff, directeur commercial, directeur marketing (activation « responsable marketing Klir IA »), responsable sécurité, ingénieur QA."
+    },
+    "cellules_hors_36": {
+      "trading": "IC MARKET (actif le 23 nov. 2026) et CMCMarkets (dormant 7 j, activité 30 j). Hors bureau commercial, conformément à l'ordre. operationalPath=false dans src/hq/roster.js.",
+      "media": "Black wall news (actif le 23 nov. 2026), BWN Rédaction (dormant, avant le 25 oct. 2026), YouTube Channel (dormant depuis le 20 sept. 2026) restent hors des 36 postes, sauf décision ultérieure. Klirline Social n'est plus une proposition : responsable réseaux sociaux confirmé, sans publication autonome.",
+      "sandbox": "Sandbox Klirline (dormant, dernière preuve le 5 nov. 2026). Carte HQ « Autres », pas un ingénieur QA.",
+      "kontak": "Teammate actif, créé le 21 nov. 2026. Le CEO a décidé le 23 nov. 2026 (t100u) de l'intégrer au roster HQ, initialement en lecture et préparation seulement. Cette décision est enregistrée ici ; la carte HQ n'est pas ajoutée au code dans ce chantier (Codex). Pas un 37e poste : exécutant du portefeuille des autres produits."
+    },
+    "mise_a_jour": {
+      "date": "23 novembre 2026, 21:35 America/Toronto (UTC-5)",
+      "source": "t100u",
+      "decisions_integrees": [
+        "Le registre de 36 postes est validé comme architecture cible.",
+        "Démarrage avec les huit postes prioritaires.",
+        "Kontak est ajouté au roster, initialement en lecture et préparation seulement (documentation RH ; implémentation code = Codex).",
+        "Klirline Social est désigné responsable des réseaux sociaux, sans publication autonome.",
+        "KlirProspect assure responsable produit et prospection, avec deux profils de permissions distincts.",
+        "All Question est limité au tri, à la classification et à l'orientation (plus d'outreach)."
+      ],
+      "non_implemente_ici": [
+        "Aucun agent, routine, skill, profil, connecteur ou secret créé ou modifié.",
+        "Le fichier src/hq/roles.js et la carte HQ Kontak ne sont pas ajoutés au dépôt (travail Codex, PR brouillon).",
+        "Les routines d'outreach LinkedIn d'All Question n'ont pas été mises en pause ici (modification de routine interdite dans ce chantier)."
+      ]
+    }
+  },
+  "interdits_communs": [
+    "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+    "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+    "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+    "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+    "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+    "Une machine n'approuve pas une opération réservée au CEO.",
+    "Ne pas présenter des données simulées comme des résultats de production.",
+    "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+    "Ne pas modifier ses propres évaluations de certification.",
+    "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+  ],
+  "escalade_commune": [
+    "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+    "GO ou NO-GO technique ou commercial.",
+    "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+    "Toute exception aux interdits ci-dessus."
+  ],
+  "postes": [
+    {
+      "id": "coo",
+      "departement": "Direction et stratégie",
+      "departement_id": "direction",
+      "titre": "COO",
+      "reports_to": "CEO (humain)",
+      "titulaire": "Office Klirline · Ops Klirline",
+      "titulaire_id": "8d5f5562-675c-4f66-8057-c66d817f8cbc",
+      "cartes_hq": [
+        "office-klirline",
+        "ops-klirline"
+      ],
+      "statut_disponibilite": "actif",
+      "preuve": "Mission COO en cours le 23 nov. 2026, 21:35 America/Toronto. Usage : [indicateur interne non publié]. Routine « Poll commandes HQ centre » ~30 exécutions/semaine. Décisions t100u intégrées au registre RH le même jour.",
+      "rattachement": "confirmé par le CEO (t97u / recommandations HQ 2.0)",
+      "prioritaire": true,
+      "mission": "Diriger les opérations du bureau : coordonner les agents, tenir la matrice des travaux, certifier indépendamment les livraisons de Codex, préparer les missions pilotes et la continuité, sans fusionner, déployer, ni dépenser.",
+      "objectifs": [
+        "Tenir à jour le registre des 36 postes et l'état réel de disponibilité.",
+        "Certifier les PR et tests de Codex sans se substituer à l'approbation humaine.",
+        "Préparer les missions pilotes A/B/C sans envoi externe automatique.",
+        "Alerter le CEO seulement pour les décisions nécessaires."
+      ],
+      "kpis": [
+        "Registre des postes à jour (pourvu/vacant + preuve de disponibilité datée).",
+        "Toute PR Codex examinée avant recommandation, avec preuves de tests relus (pas inventés).",
+        "Zéro envoi externe, merge, déploiement ou rotation de secret non autorisé.",
+        "Budget tenu à 0 $.",
+        "Délai de signalement d'un bloqueur réel au CEO < 1 jour ouvré."
+      ],
+      "competences": [
+        "Orchestration et handoff",
+        "Lecture de preuves GitHub/CI",
+        "Contrôle qualité indépendant",
+        "Rédaction de rapports GO/NO-GO",
+        "Politique d'accès et d'escalade"
+      ],
+      "outils_autorises": "Observés sur le bot COO (Office Klirline · Ops Klirline) au 23 nov. 2026, catalogue de session : GitHub (cursor-github), Gmail, Slack, Stripe, Supabase, Vercel, Cloudflare (docs, bindings, builds, observability), Figma, Canva, Clerk, Atlassian, Zapier, Neon, Azure, Firebase, AWS (knowledge, MCP, serverless, IAC, pricing, CloudWatch), X, Playwright, Mailgun, et d'autres connecteurs documentaires (Circle, eToro docs, Forge, Ads, etc.). Présence d'un connecteur ≠ autorisation d'écrire ou de dépenser. Ces connecteurs ne sont pas attribués aux autres agents par cette liste. Skills locales vérifiées : handoff-agent-klirline, ex-cuter-un-objectif-klirline, pont-hq-centre-agents, v-rifier-admin-produit-klirline.",
+      "livrables": [
+        "Rapports de certification",
+        "Registre RH et fiches de poste",
+        "Revues de PR (avis, pas une approbation humaine)",
+        "Plans de missions pilotes et de continuité"
+      ],
+      "remplacant": "Vacant (Chief of Staff, prioritaire non pourvu). En intérim court : le CEO seulement pour les décisions ; pas de second bot COO. All Question peut trier, pas piloter.",
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "chief-of-staff",
+      "departement": "Direction et stratégie",
+      "departement_id": "direction",
+      "titre": "Chief of Staff",
+      "reports_to": "CEO (humain)",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate Grok Bot ni carte HQ dédiée. Poste prioritaire non pourvu.",
+      "rattachement": "vacant — prioritaire selon le CEO",
+      "prioritaire": true,
+      "mission": "Suivre les missions transverses, préparer les dossiers et le rapport hebdomadaire au CEO, aligner les départements, sans prendre les décisions réservées au CEO ni remplacer le COO sur la certification technique.",
+      "objectifs": [
+        "Tenir le tableau des missions et dépendances",
+        "Produire le rapport stratégique hebdomadaire (mission pilote C) une fois le poste activé",
+        "Préparer les demandes d'autorisation regroupées"
+      ],
+      "kpis": [
+        "Rapport hebdomadaire livré à l'échéance, avec sources citées",
+        "Aucune mission prioritaire sans owner ni échéance",
+        "Taux de dossiers CEO complets (contexte, options, recommandation, preuves)"
+      ],
+      "competences": [
+        "Synthèse",
+        "Suivi de portefeuille de missions",
+        "Rédaction de notes décisionnelles",
+        "Coordination inter-départements"
+      ],
+      "livrables": [
+        "Rapport hebdomadaire CEO",
+        "Tableau des missions",
+        "Briefs d'escalade"
+      ],
+      "remplacant": "Intérim de suivi uniquement par le COO, sans auto-approbation. Pas de titulaire temporaire inventé.",
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "analyste-strategique",
+      "departement": "Direction et stratégie",
+      "departement_id": "direction",
+      "titre": "Analyste stratégique",
+      "reports_to": "Chief of Staff",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. Le registre de démonstration src/org a un poste « analytics », distinct et non incarné.",
+      "rattachement": "vacant",
+      "mission": "Analyser marchés, priorités et risques à partir de sources nommées, pour éclairer le CEO et le Chief of Staff. Pas d'exécution commerciale ni technique.",
+      "objectifs": [
+        "Notes d'analyse sourcées sur KlirProspect, Klir IA et le portefeuille",
+        "Éclairer le rapport hebdomadaire"
+      ],
+      "kpis": [
+        "Chaque recommandation cite des sources datées",
+        "Zéro fait inventé",
+        "Délai d'une note demandée ≤ 5 jours ouvrés une fois le poste activé"
+      ],
+      "competences": [
+        "Recherche sourcée",
+        "Synthèse stratégique",
+        "Séparation faits / interprétation"
+      ],
+      "livrables": [
+        "Notes d'analyse",
+        "Comparatifs",
+        "Inputs du rapport hebdomadaire"
+      ],
+      "remplacant": "Chief of Staff (vacant) puis COO pour une note ponctuelle, sans pourvoir le poste.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "chef-de-projet",
+      "departement": "Direction et stratégie",
+      "departement_id": "direction",
+      "titre": "Chef de projet",
+      "reports_to": "Chief of Staff",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié.",
+      "rattachement": "vacant",
+      "mission": "Planifier les jalons, dépendances et preuves des chantiers (dont les missions pilotes), sans exécuter le travail métier à la place des propriétaires.",
+      "objectifs": [
+        "Tenir un plan unique des chantiers autorisés",
+        "Détecter les missions bloquées et les dépendances manquantes"
+      ],
+      "kpis": [
+        "Chaque chantier a owner, critère de succès, échéance et preuves attendues",
+        "Signalement d'un blocage < 1 jour ouvré au COO/CoS"
+      ],
+      "competences": [
+        "Planification",
+        "Suivi de dépendances",
+        "Gestion de risques projet"
+      ],
+      "livrables": [
+        "Plans de chantier",
+        "Revues d'avancement",
+        "Alertes de blocage"
+      ],
+      "remplacant": "COO pour le suivi d'ensemble, Chief of Staff une fois pourvu.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "cto",
+      "departement": "Technologie",
+      "departement_id": "technologie",
+      "titre": "CTO",
+      "reports_to": "CEO (humain)",
+      "titulaire": "Codex (désigné, hors teammates Grok Bot)",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun profil Grok Bot, aucun usage, aucune carte HQ nommé Codex. Désignation CEO seulement. Disponibilité à confirmer sur un autre canal. Ne pas comptabiliser comme « disponible ».",
+      "rattachement": "désigné par le CEO comme CTO ; disponibilité non prouvée",
+      "prioritaire": true,
+      "mission": "Terminer l'implémentation technique de HQ 2.0 sur des branches dédiées et des PR brouillon : registre des rôles, orchestrateur, distributeur V2, adaptateurs, interface, tests. Aucune fusion ni déploiement sans autorisation.",
+      "objectifs": [
+        "Réconcilier le code et les 36 postes",
+        "Corriger les P0/P1 déjà identifiés",
+        "Livrer des PR brouillon avec résultats de tests réels"
+      ],
+      "kpis": [
+        "PR brouillon avec liste de commits et fichiers",
+        "Tests unitaires/intégration/sécurité relançables et résultats non inventés",
+        "Zéro merge/deploy/secret non autorisé",
+        "Obstacles humains regroupés, pas de spam d'autorisations"
+      ],
+      "competences": [
+        "Architecture Worker/DO",
+        "Sécurité (Access, secrets, impersonation)",
+        "Tests et non-régression",
+        "Lecture des spécifications HQ 2.0"
+      ],
+      "outils_autorises": "Outils de développement de Codex (non inventoriés ici, hors Grok Bot). Interdit : production, secrets, appels payants, fusion. Revues indépendantes par le COO.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL).",
+        "Spécifications docs/hq2 (architecture, plan, distributeur v2), audit déjà réalisé — ne pas le recommencer."
+      ],
+      "livrables": [
+        "Code sur branches dédiées",
+        "PR brouillon",
+        "Rapport de préparation au GO technique",
+        "Tableau d'avancement"
+      ],
+      "remplacant": "Aucun remplaçant technique automatique. En indisponibilité : le COO documente le blocage et escalade au CEO. Les agents produit ne deviennent pas CTO.",
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "architecte",
+      "departement": "Technologie",
+      "departement_id": "technologie",
+      "titre": "Architecte",
+      "reports_to": "CTO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate Grok Bot dédié. Des agents produit font aujourd'hui leur propre développement : ce n'est pas une incarnation de ce poste.",
+      "rattachement": "vacant",
+      "mission": "Concevoir et faire tenir l'architecture HQ 2.0 et des produits, en cohérence avec les principes déjà écrits (un Worker, décision pure, humain prouvé, pas d'auto-élévation).",
+      "objectifs": [
+        "Concevoir et faire tenir l'architecture HQ 2.0 et des produits, en cohérence avec les principes déjà écrits (un Worker, décision pure, humain prouvé, pas d'auto-élévation)."
+      ],
+      "kpis": [
+        "Écarts architecture documentés avant codage",
+        "Pas de second système d'orchestration improvisé",
+        "Revues d'architecture sourcées sur le code réel"
+      ],
+      "competences": [
+        "Architecture cloud/Workers",
+        "Modélisation de données",
+        "Frontières de confiance"
+      ],
+      "livrables": [
+        "Notes d'architecture",
+        "Revues de conception",
+        "Contrats d'API"
+      ],
+      "remplacant": "CTO (disponibilité non prouvée) ; à défaut le COO escalade au CEO. Pas d'intérim improvisé par un agent produit, sauf mission ponctuelle écrite.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "dev-frontend",
+      "departement": "Technologie",
+      "departement_id": "technologie",
+      "titre": "Développeur frontend",
+      "reports_to": "CTO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate Grok Bot dédié. Des agents produit font aujourd'hui leur propre développement : ce n'est pas une incarnation de ce poste.",
+      "rattachement": "vacant",
+      "mission": "Implémenter l'interface du bureau et des produits concernés, en préservant l'UI existante quand c'est possible.",
+      "objectifs": [
+        "Implémenter l'interface du bureau et des produits concernés, en préservant l'UI existante quand c'est possible."
+      ],
+      "kpis": [
+        "Livrables UI sur branche, avec captures ou tests",
+        "Pas de régression visible sur les parcours déjà certifiés, une fois testés"
+      ],
+      "competences": [
+        "Interfaces web",
+        "Accessibilité de base",
+        "Intégration d'API en lecture/écriture contrôlée"
+      ],
+      "livrables": [
+        "Code UI sur branche",
+        "Preuves de rendu",
+        "Notes de non-régression"
+      ],
+      "remplacant": "CTO (disponibilité non prouvée) ; à défaut le COO escalade au CEO. Pas d'intérim improvisé par un agent produit, sauf mission ponctuelle écrite.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "dev-backend",
+      "departement": "Technologie",
+      "departement_id": "technologie",
+      "titre": "Développeur backend",
+      "reports_to": "CTO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate Grok Bot dédié. Des agents produit font aujourd'hui leur propre développement : ce n'est pas une incarnation de ce poste.",
+      "rattachement": "vacant",
+      "mission": "Implémenter APIs, politique serveur et persistance (DO/SQLite) selon les spécifications, sans changement de schéma inutile.",
+      "objectifs": [
+        "Implémenter APIs, politique serveur et persistance (DO/SQLite) selon les spécifications, sans changement de schéma inutile."
+      ],
+      "kpis": [
+        "Contrôles d'accès côté serveur, pas seulement dans l'UI",
+        "Tests d'autorisation et d'usurpation relus",
+        "Pas de secret dans le dépôt"
+      ],
+      "competences": [
+        "APIs HTTP",
+        "Politique d'accès",
+        "Tests d'intégration"
+      ],
+      "livrables": [
+        "Code backend sur branche",
+        "Résultats de tests réels"
+      ],
+      "remplacant": "CTO (disponibilité non prouvée) ; à défaut le COO escalade au CEO. Pas d'intérim improvisé par un agent produit, sauf mission ponctuelle écrite.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "devops",
+      "departement": "Technologie",
+      "departement_id": "technologie",
+      "titre": "DevOps",
+      "reports_to": "CTO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate Grok Bot dédié. Des agents produit font aujourd'hui leur propre développement : ce n'est pas une incarnation de ce poste.",
+      "rattachement": "vacant",
+      "mission": "Préparer CI, observabilité et procédures de déploiement, sans déployer ni fusionner sans autorisation.",
+      "objectifs": [
+        "Préparer CI, observabilité et procédures de déploiement, sans déployer ni fusionner sans autorisation."
+      ],
+      "kpis": [
+        "CI verte sur les branches concernées, résultats réels",
+        "Aucun déploiement de production non autorisé",
+        "Runbooks de reprise documentés"
+      ],
+      "competences": [
+        "GitHub Actions / Workers Builds",
+        "Observabilité",
+        "Gestion d'environnements"
+      ],
+      "livrables": [
+        "Config CI",
+        "Runbooks",
+        "Constats d'échec/succès de build"
+      ],
+      "remplacant": "CTO (disponibilité non prouvée) ; à défaut le COO escalade au CEO. Pas d'intérim improvisé par un agent produit, sauf mission ponctuelle écrite.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "ingenieur-ia",
+      "departement": "Technologie",
+      "departement_id": "technologie",
+      "titre": "Ingénieur IA",
+      "reports_to": "CTO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate Grok Bot dédié. Des agents produit font aujourd'hui leur propre développement : ce n'est pas une incarnation de ce poste.",
+      "rattachement": "vacant",
+      "mission": "Préparer les compétences, garde-fous et éventuels adaptateurs IA, sans activer d'exécution autonome non autorisée et sans quota payant.",
+      "objectifs": [
+        "Préparer les compétences, garde-fous et éventuels adaptateurs IA, sans activer d'exécution autonome non autorisée et sans quota payant."
+      ],
+      "kpis": [
+        "Aucune compétence nouvelle créée sans accord",
+        "Plafond de coût respecté (0 $)",
+        "Prompts et skills examinés contre l'injection d'instructions"
+      ],
+      "competences": [
+        "Conception de skills",
+        "Évaluation de sorties",
+        "Isolation des secrets vis-à-vis des conversations"
+      ],
+      "livrables": [
+        "Spécifications de compétences (propositions)",
+        "Grilles d'évaluation"
+      ],
+      "remplacant": "CTO (disponibilité non prouvée) ; à défaut le COO escalade au CEO. Pas d'intérim improvisé par un agent produit, sauf mission ponctuelle écrite.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "ingenieur-donnees",
+      "departement": "Technologie",
+      "departement_id": "technologie",
+      "titre": "Ingénieur données",
+      "reports_to": "CTO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate Grok Bot dédié. Des agents produit font aujourd'hui leur propre développement : ce n'est pas une incarnation de ce poste.",
+      "rattachement": "vacant",
+      "mission": "Documenter sources, qualités et accès aux données (CRM, produits, journaux), sans exfiltrer de données personnelles et sans schéma inutile.",
+      "objectifs": [
+        "Documenter sources, qualités et accès aux données (CRM, produits, journaux), sans exfiltrer de données personnelles et sans schéma inutile."
+      ],
+      "kpis": [
+        "Inventaire des sources avec propriétaire",
+        "Pas de PII dans les traces",
+        "Requêtes limitées au besoin"
+      ],
+      "competences": [
+        "Modélisation",
+        "Qualité de données",
+        "Minimisation des données"
+      ],
+      "livrables": [
+        "Inventaires de sources",
+        "Contrats de données",
+        "Contrôles de qualité"
+      ],
+      "remplacant": "CTO (disponibilité non prouvée) ; à défaut le COO escalade au CEO. Pas d'intérim improvisé par un agent produit, sauf mission ponctuelle écrite.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "directeur-commercial",
+      "departement": "Ventes",
+      "departement_id": "ventes",
+      "titre": "Directeur commercial",
+      "reports_to": "COO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. KlirProspect et All Question font aujourd'hui une partie du travail commercial : chevauchement, pas un titulaire.",
+      "rattachement": "vacant — prioritaire. Intérim de cadre seulement par le COO. L'exécution de préparation commerciale KlirProspect passe par le profil prospection de l'agent KlirProspect.",
+      "prioritaire": true,
+      "mission": "Piloter l'acquisition, prioriser les segments (agences web Québec pour KlirProspect en priorité), valider les files de prospection et les dossiers de démo, sans envoyer de messages externes ni fixer les prix.",
+      "objectifs": [
+        "Cadre de la mission pilote A (développement commercial KlirProspect)",
+        "Owner unique des files commerciales",
+        "Préparer les décisions de prix/paiement pour le CEO"
+      ],
+      "kpis": [
+        "File de prospects avec prochaine action, sans envoi auto",
+        "Nombre de dossiers de démo prêts (pas de démos « réservées » inventées)",
+        "Zéro sollicitation non autorisée"
+      ],
+      "competences": [
+        "Pilotage des ventes",
+        "Qualification",
+        "Conformité LCAP/CASL",
+        "Priorisation de pipeline"
+      ],
+      "livrables": [
+        "Plan d'acquisition",
+        "Revue de pipeline",
+        "Dossiers de démo prêts à autoriser"
+      ],
+      "remplacant": "COO pour le cadre seulement. Exécution préparatoire : profil prospection KlirProspect. Pas d'envoi.",
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "prospecteur",
+      "departement": "Ventes",
+      "departement_id": "ventes",
+      "titre": "Prospecteur",
+      "reports_to": "Directeur commercial",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Pas de titulaire nommé. All Question exécute des routines d'outreach LinkedIn KlirBuild (preuve 21 nov. 2026) : activité réelle, mais ce n'est pas le poste, et ces envois sortent du cadre « aucun envoi externe automatique » du bureau HQ 2.0.",
+      "rattachement": "vacant comme poste distinct. La fonction de constitution de listes est couverte, pour le démarrage, par le profil de permissions « prospection » de KlirProspect (t100u), sans envoi autonome.",
+      "proposition_ceo": false,
+      "mission": "Construire et qualifier des listes de prospects (priorité : agences web, Québec, pour KlirProspect), sans envoi automatique.",
+      "objectifs": [
+        "Listes sourcées et dédupliquées",
+        "Critères de qualification écrits",
+        "Remise au responsable CRM / agent commercial"
+      ],
+      "kpis": [
+        "Qualité de liste (champs complets, doublons, source)",
+        "Zéro envoi par ce poste tant que le CEO ne l'autorise pas",
+        "Volume de fiches qualifiées, pas d'invitations non autorisées"
+      ],
+      "competences": [
+        "Recherche de comptes",
+        "Qualité de données",
+        "LCAP/CASL"
+      ],
+      "livrables": [
+        "Listes et fiches",
+        "Notes de qualification",
+        "Demandes d'autorisation d'outreach"
+      ],
+      "remplacant": "Profil prospection de KlirProspect (préparation seulement). Pas All Question (outreach retiré par t100u).",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ]
+    },
+    {
+      "id": "agent-commercial",
+      "departement": "Ventes",
+      "departement_id": "ventes",
+      "titre": "Agent commercial KlirProspect",
+      "reports_to": "Directeur commercial",
+      "titulaire": "KlirProspect",
+      "titulaire_id": "4a1aba88-b927-4b54-a4b8-975c25c3d18e",
+      "cartes_hq": [
+        "klirprospect"
+      ],
+      "statut_disponibilite": "actif",
+      "preuve": "Même teammate que le responsable produit (Usage : [indicateur interne non publié], transcript GO/NO-GO). Pourvu par décision t100u pour la fonction prospection, avec un profil de permissions distinct. L'activité récente de l'agent est surtout produit / GO commercial ; aucun envoi KlirProspect n'est autorisé par t100u.",
+      "rattachement": "confirmé par le CEO (t100u) : fonction prospection de KlirProspect, permissions distinctes du profil produit",
+      "prioritaire": true,
+      "proposition_ceo": false,
+      "mission": "Préparer les approches et démonstrations KlirProspect (dossiers, scripts, suivis et brouillons), présenter les prix et conditions au CEO avant validation définitive, sans aucun envoi tant que le CEO ne l'autorise pas.",
+      "objectifs": [
+        "Mission pilote A : dossiers de démo prêts",
+        "Aucune démo comptée comme bookée sans preuve humaine",
+        "Respect du statut « démos seulement » tant que prix/paiement ne sont pas confirmés"
+      ],
+      "kpis": [
+        "Nombre de dossiers de démo complets (cible, offre, script, preuves produit)",
+        "0 envoi auto",
+        "0 contrat ou prix engagé"
+      ],
+      "competences": [
+        "Entretien de découverte (préparation)",
+        "Démo produit",
+        "Rédaction de brouillons commerciaux (non envoyés)",
+        "Qualification"
+      ],
+      "sources_donnees": [
+        "Fiches prospects et prochaine action, à des fins de préparation seulement.",
+        "Faits produit fournis par le profil produit (limites réelles, 0 client pilote constaté, tests encore à la charge du CEO).",
+        "Minimisation des données personnelles ; pas d'affichage inutile de listes nominatives dans les chats.",
+        "Pas d'accès aux secrets, ni aux outils de paiement en écriture."
+      ],
+      "livrables": [
+        "Dossiers de démo",
+        "Brouillons à faire approuver",
+        "Suivi de pipeline interne"
+      ],
+      "remplacant": "Directeur commercial (vacant, intérim de cadre par le COO). Le profil produit du même agent ne reprend pas les envois.",
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Profil « klirprospect-prospection » : Préparation de dossiers de démo, scripts et brouillons (non envoyés). Lecture et hygiène interne de listes et de pipeline (CRM / fichiers internes déjà accessibles). Liens Calendly ou produit uniquement comme contenu de brouillon, pas comme envoi. Handoff vers le directeur commercial (vacant), le COO, la conformité et le CEO pour toute autorisation d'envoi. Interdit dans ce profil : envoi autonome LinkedIn, InMail, courriel, SMS, appel, publication ; création ou relance de routine d'outreach ; Sales Nav en écriture (invitation, message) tant que le CEO n'a pas autorisé un envoi nommé.",
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "profil_permissions_id": "klirprospect-prospection",
+      "double_casquette": "Même agent que le poste pm-klirprospect, permissions distinctes."
+    },
+    {
+      "id": "responsable-crm",
+      "departement": "Ventes",
+      "departement_id": "ventes",
+      "titre": "Responsable CRM",
+      "reports_to": "Directeur commercial",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. KlirProspect porte déjà une partie du pipeline produit.",
+      "rattachement": "vacant",
+      "mission": "Tenir la qualité du CRM et du pipeline interne (champs, doublons, prochaine action), sans campagne d'envoi.",
+      "objectifs": [
+        "Référentiel unique des fiches",
+        "Pas de double saisie entre agents"
+      ],
+      "kpis": [
+        "Taux de fiches avec prochaine action",
+        "Doublons détectés/corrigés",
+        "Aucune exportation non autorisée de données personnelles"
+      ],
+      "competences": [
+        "Hygiène CRM",
+        "Protection des données",
+        "Définition de champs"
+      ],
+      "livrables": [
+        "Règles CRM",
+        "Rapports de qualité de liste",
+        "Exports internes autorisés seulement"
+      ],
+      "remplacant": "Directeur commercial (vacant) ; appoint lecture par KlirProspect sur son produit seulement.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "customer-success",
+      "departement": "Ventes",
+      "departement_id": "ventes",
+      "titre": "Customer Success",
+      "reports_to": "Directeur commercial",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. Aucun client pilote KlirProspect actif n'a été prouvé (constat de l'agent KlirProspect).",
+      "rattachement": "vacant",
+      "mission": "Préparer l'accueil et le suivi des clients réels, une fois qu'un client existe. Tant qu'il n'y a pas de client, préparer les plans d'onboarding sans les envoyer.",
+      "objectifs": [
+        "Plan d'accueil KlirProspect prêt",
+        "Escalade claire vers le produit et le support"
+      ],
+      "kpis": [
+        "Plan d'accueil écrit par produit vendable",
+        "0 geste commercial (remise, avoir) sans CEO et finance",
+        "Délai de première réponse une fois le poste actif"
+      ],
+      "competences": [
+        "Onboarding",
+        "Rétention",
+        "Communication client (brouillons)"
+      ],
+      "livrables": [
+        "Plans d'accueil",
+        "Fiches comptes (quand des clients existeront)",
+        "Brouillons de messages"
+      ],
+      "remplacant": "Responsable support (vacant) pour les tickets ; directeur commercial pour la relation.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "directeur-marketing",
+      "departement": "Marketing",
+      "departement_id": "marketing",
+      "titre": "Directeur marketing",
+      "reports_to": "COO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. Klirline Social et Black wall news sont actifs mais ne sont pas directeur marketing.",
+      "rattachement": "vacant — prioritaire (campagne Klir IA). Intérim de préparation : brouillons par Klirline Social, cadre par le COO, aucune publication autonome.",
+      "mission": "Piloter le cadre des campagnes, en priorité la préparation de la campagne Klir IA (mission pilote B et pack canal par canal), sans publication automatique ni autonome.",
+      "objectifs": [
+        "Cadrage de la mission pilote B",
+        "Calendrier unique, owners uniques par canal"
+      ],
+      "kpis": [
+        "Campagne préparée avec messages, canaux, preuves et points d'approbation humaine",
+        "0 publication auto",
+        "Pas de conflit de calendrier non signalé"
+      ],
+      "competences": [
+        "Pilotage marketing",
+        "Positionnement",
+        "Gouvernance de marque"
+      ],
+      "livrables": [
+        "Brief de campagne",
+        "Calendrier",
+        "Demandes d'approbation de publication"
+      ],
+      "remplacant": "COO pour le cadre. Klirline Social prépare les brouillons et le pack canal par canal, sans publier.",
+      "prioritaire": true,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false,
+      "alias_lancement": "Responsable marketing Klir IA (intitulé du poste prioritaire CEO ; correspond à l'activation de ce siège des 36, pas à un 37e poste)."
+    },
+    {
+      "id": "redacteur",
+      "departement": "Marketing",
+      "departement_id": "marketing",
+      "titre": "Rédacteur",
+      "reports_to": "Directeur marketing",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "BWN Rédaction existe mais est dormant (aucune activité après le 25 oct. 2026) et son profil est limité à Black Wall News, pas au marketing Klir IA.",
+      "rattachement": "vacant — BWN Rédaction reste dans la cellule média, hors de ce poste, sauf décision CEO",
+      "proposition_ceo": true,
+      "mission": "Rédiger brouillons de pages, courriels et contenus de campagne (Klir IA en priorité), prêts à faire approuver, sans publier.",
+      "objectifs": [
+        "Textes de campagne Klir IA prêts",
+        "Sources citées, faits non inventés"
+      ],
+      "kpis": [
+        "Brouillons livrés à l'échéance interne",
+        "0 publication",
+        "Liste « à vérifier » pour les chiffres"
+      ],
+      "competences": [
+        "Rédaction",
+        "Vérification de sources",
+        "Ton de marque"
+      ],
+      "livrables": [
+        "Brouillons",
+        "Versions corrigées",
+        "Sources"
+      ],
+      "remplacant": "Directeur marketing (vacant). BWN Rédaction uniquement pour des textes BWN, s'il redevient actif.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ]
+    },
+    {
+      "id": "designer",
+      "departement": "Marketing",
+      "departement_id": "marketing",
+      "titre": "Designer",
+      "reports_to": "Directeur marketing",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. Des visuels ont été produits par d'autres agents (ex. flyers NORIA via Social/NORIA) : ce n'est pas un poste designer pourvu.",
+      "rattachement": "vacant",
+      "mission": "Préparer visuels et déclinaisons de marque pour les campagnes et produits, sans publication.",
+      "objectifs": [
+        "Kit de campagne Klir IA (propositions visuelles)",
+        "Cohérence de marque"
+      ],
+      "kpis": [
+        "Livrables aux formats demandés",
+        "0 publication auto",
+        "Versions sourcées (fichier, date)"
+      ],
+      "competences": [
+        "Conception graphique",
+        "Déclinaisons multi-formats",
+        "Respect de charte"
+      ],
+      "livrables": [
+        "Visuels de brouillon",
+        "Déclinaisons",
+        "Fichiers sources internes"
+      ],
+      "remplacant": "Directeur marketing (vacant) ; appoint ponctuel par l'agent produit concerné pour un visuel de son produit, avec owner marketing une fois pourvu.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "responsable-reseaux-sociaux",
+      "departement": "Marketing",
+      "departement_id": "marketing",
+      "titre": "Responsable réseaux sociaux",
+      "reports_to": "Directeur marketing",
+      "titulaire": "Klirline Social",
+      "titulaire_id": "1baca53c-8b84-44cc-a3c7-067c926f0feb",
+      "cartes_hq": [
+        "klirline-social"
+      ],
+      "statut_disponibilite": "actif",
+      "preuve": "Usage : [indicateur interne non publié]. Transcript du 23 nov. 2026 : flyers NORIA sur cinq comptes ; routine TikTok prévue le 24 nov. 2026 vers 9 h America/Toronto. Session Facebook Page non connectée (fait rapporté, non ré-testé ici).",
+      "rattachement": "confirmé par le CEO (t100u) : responsable des réseaux sociaux, sans publication autonome",
+      "proposition_ceo": false,
+      "mission": "Préparer la présence sociale de Klirline (pas Black Wall News, pas YouTube). Aucune publication autonome : tout post attend un accord explicite du CEO. Signaler les sessions déconnectées sans les contourner.",
+      "objectifs": [
+        "Calendrier social des produits Klirline, brouillons seulement jusqu'à accord.",
+        "Préparer le pack de campagne Klir IA canal par canal, pour approbation.",
+        "Préparer la reconnexion Facebook et lister les étapes qui exigent le CEO.",
+        "Signaler les sessions déconnectées, sans les contourner."
+      ],
+      "kpis": [
+        "Brouillons prêts avant l'heure prévue.",
+        "0 publication sans accord explicite du CEO (publication autonome interdite, t100u).",
+        "Incidents d'accès (ex. Facebook Page) signalés, pas masqués."
+      ],
+      "competences": [
+        "Calendrier social",
+        "Rédaction courte",
+        "Vérification de session / connecteur"
+      ],
+      "livrables": [
+        "Brouillons de posts",
+        "Calendrier",
+        "Pack Klir IA canal par canal (préparation)",
+        "Liste des étapes Facebook nécessitant le CEO",
+        "Preuves de publication seulement si l'envoi a été autorisé"
+      ],
+      "remplacant": "Directeur marketing (vacant, désormais prioritaire pour la campagne Klir IA). YouTube Channel et Black wall news ne remplacent pas ce poste.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "publication_autonome": false
+    },
+    {
+      "id": "analyste-seo",
+      "departement": "Marketing",
+      "departement_id": "marketing",
+      "titre": "Analyste SEO",
+      "reports_to": "Directeur marketing",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. YouTube Channel (SEO vidéo) est dormant depuis le 20 sept. 2026 et hors de ce poste web.",
+      "rattachement": "vacant",
+      "mission": "Auditer le référencement des sites Klirline à partir de données réelles, proposer des corrections, sans modifier la production sans autorisation.",
+      "objectifs": [
+        "États SEO sourcés des propriétés prioritaires",
+        "Recommandations actionnables"
+      ],
+      "kpis": [
+        "Chaque constat cite l'URL et la date de mesure",
+        "0 modification prod non autorisée"
+      ],
+      "competences": [
+        "SEO technique et éditorial",
+        "Mesure",
+        "Priorisation"
+      ],
+      "livrables": [
+        "Audits",
+        "Backlogs SEO",
+        "Suivis de positions si un outil autorisé existe — sinon le dire"
+      ],
+      "remplacant": "Directeur marketing (vacant).",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "cfo",
+      "departement": "Finance",
+      "departement_id": "finance",
+      "titre": "CFO",
+      "reports_to": "CEO (humain)",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié.",
+      "rattachement": "vacant",
+      "mission": "Préparer la visibilité des coûts, plafonds et risques financiers. Le plafond actuel est 0 $. Aucun paiement, avoir ou contrat sans le CEO.",
+      "objectifs": [
+        "Tableau des plafonds (aujourd'hui 0 $)",
+        "Préparer le contrôle des coûts des missions"
+      ],
+      "kpis": [
+        "Aucun dépassement de plafond",
+        "Toute dépense proposée a un dossier d'autorisation",
+        "Séparation nette simulation / réel"
+      ],
+      "competences": [
+        "Contrôle financier",
+        "Budgets",
+        "Lecture de facturation / usage"
+      ],
+      "livrables": [
+        "Tableau des plafonds",
+        "Avis sur les demandes de dépense",
+        "Points finance du rapport hebdo"
+      ],
+      "remplacant": "Contrôleur des coûts (vacant) ; intérim de vigilance par le COO (constat d'usage, pas de décision de dépense).",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "analyste-financier",
+      "departement": "Finance",
+      "departement_id": "finance",
+      "titre": "Analyste financier",
+      "reports_to": "CFO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. Le poste « financial-analyst » de src/org n'est pas incarné.",
+      "rattachement": "vacant",
+      "mission": "Analyser usage, coûts et scénarios, sans engager de dépense et sans lire des secrets de paiement au-delà du besoin.",
+      "objectifs": [
+        "Notes d'usage / coût sourcées",
+        "Éclairer le CFO et le CEO"
+      ],
+      "kpis": [
+        "Chiffres datés et sourcés",
+        "0 ordre de paiement"
+      ],
+      "competences": [
+        "Analyse",
+        "Modélisation simple",
+        "Traçabilité des sources"
+      ],
+      "livrables": [
+        "Notes d'analyse",
+        "Tableaux de scénarios"
+      ],
+      "remplacant": "CFO (vacant) ; le COO peut rapporter l'usage Grok Bot déjà observé (73,9 % du plafond hebdomadaire au 23 nov. 2026, remise à zéro le 27 nov. 2026 à 20:12 America/Toronto) sans pourvoir ce poste.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "controleur-couts",
+      "departement": "Finance",
+      "departement_id": "finance",
+      "titre": "Contrôleur des coûts",
+      "reports_to": "CFO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié.",
+      "rattachement": "vacant",
+      "mission": "Vérifier que les missions restent au plafond 0 $ et signaler tout risque d'appel payant ou de double exécution coûteuse.",
+      "objectifs": [
+        "Alerte précoce sur le quota",
+        "Prévention des exécutions multiples"
+      ],
+      "kpis": [
+        "Alerte avant épuisement du quota hebdomadaire",
+        "Zéro appel payant non autorisé détecté a posteriori sans signalement"
+      ],
+      "competences": [
+        "Contrôle",
+        "Suivi de plafonds",
+        "Détection d'anomalies"
+      ],
+      "livrables": [
+        "Alertes de quota",
+        "Registre des risques de coût"
+      ],
+      "remplacant": "CFO (vacant) ; vigilance COO en attendant.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "pm-klirprospect",
+      "departement": "Produits",
+      "departement_id": "produits",
+      "titre": "Responsable KlirProspect",
+      "reports_to": "COO",
+      "titulaire": "KlirProspect",
+      "titulaire_id": "4a1aba88-b927-4b54-a4b8-975c25c3d18e",
+      "cartes_hq": [
+        "klirprospect"
+      ],
+      "statut_disponibilite": "actif",
+      "preuve": "Usage : [indicateur interne non publié]. Transcript : rapport GO/NO-GO, 0 client pilote, check-list de tests prod à faire par le CEO, liens de paiement Pro/Équipe encore actifs.",
+      "rattachement": "confirmé par le CEO (t100u) comme responsable produit, avec un profil de permissions distinct de la fonction prospection",
+      "proposition_ceo": false,
+      "mission": "Faire avancer le produit KlirProspect (qualité, admin, preuves techniques) et fournir au commercial les faits produit. Les actions de prospection relèvent exclusivement du profil de permissions « prospection », pas de ce profil.",
+      "objectifs": [
+        "Preuves produit à jour",
+        "Soutien à la mission pilote A (faits, pas d'envois)",
+        "Clarifier ce qui est en production réellement"
+      ],
+      "kpis": [
+        "Écarts prod/test documentés, non inventés",
+        "0 envoi commercial auto",
+        "0 prix ou lien de paiement modifié sans CEO"
+      ],
+      "competences": [
+        "Connaissance produit",
+        "Admin / accès",
+        "Preuves de tests",
+        "Handoff vers ventes et QA"
+      ],
+      "sources_donnees": [
+        "Code, documentation, journaux de tests et état réel de production du produit.",
+        "Admin produit, dans la limite des accès déjà existants.",
+        "Faits de pipeline en lecture, uniquement pour documenter le produit (limites, incidents, preuves).",
+        "Pas de liste de prospection utilisée pour un envoi. Pas de secrets de paiement affichés. Pas d'export de données personnelles."
+      ],
+      "livrables": [
+        "États produit",
+        "Preuves de correctifs",
+        "Inputs des dossiers de démo"
+      ],
+      "remplacant": "COO pour l'escalade ; agent commercial (vacant) pour la démo, pas pour le code produit.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Profil « klirprospect-produit » : Dépôt et environnements du produit KlirProspect (branches, PR, tests) dans le périmètre déjà autorisé. Admin produit et diagnostic d'accès (skill Vérifier admin produit), sans contourner Access. Lecture du centre et des procédures knowledge/procedures/klirprospect-*.md. Handoff vers commercial, QA, support et COO. Interdit dans ce profil : Sales Navigator, InMail, envoi LinkedIn/courriel/SMS/social, modification de routines d'outreach.",
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "profil_permissions_id": "klirprospect-produit",
+      "double_casquette": "Même agent que le poste agent-commercial, permissions distinctes (voir profils dans ce registre)."
+    },
+    {
+      "id": "pm-klirpay",
+      "departement": "Produits",
+      "departement_id": "produits",
+      "titre": "Responsable KlirPay",
+      "reports_to": "COO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Pas d'agent dédié. HQ_ROSTER : KlirPay est « couvert » par la carte Office Klirline (lecture de couverture, pas une preuve d'exploitation dédiée). Accès prévu en lecture seule dans le plan des adaptateurs.",
+      "rattachement": "vacant — couverture Office uniquement, sans en faire un titulaire permanent",
+      "mission": "Tenir la fiche produit KlirPay, documenter les API et limites, en lecture. Aucun paiement, remboursement ou changement d'offre sans le CEO et la finance.",
+      "objectifs": [
+        "Fiche produit et risques à jour",
+        "Préparer l'adaptateur lecture seule, sans l'activer en production sans accord"
+      ],
+      "kpis": [
+        "Documentation des permissions réelles",
+        "0 transaction initiée par l'agent",
+        "Lecture seule respectée"
+      ],
+      "competences": [
+        "Paiements (connaissance)",
+        "Conformité",
+        "Lecture d'API"
+      ],
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL).",
+        "https://pay.klirline.ca",
+        "knowledge/procedures/klirpay-payment-reconciliation.md"
+      ],
+      "livrables": [
+        "Fiche produit",
+        "Notes de limites",
+        "Demandes d'accès lecture"
+      ],
+      "remplacant": "COO (couverture actuelle, temporaire). Pas d'intérim par un agent trading ni par KlirMarket sans brief.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "pm-noria",
+      "departement": "Produits",
+      "departement_id": "produits",
+      "titre": "Responsable NORIA",
+      "reports_to": "COO",
+      "titulaire": "NORIA",
+      "titulaire_id": "f3916b88-0101-4cac-9058-3f08bf1fbf99",
+      "cartes_hq": [
+        "noria"
+      ],
+      "statut_disponibilite": "actif",
+      "preuve": "Usage : [indicateur interne non publié]. Transcript récent : flyer écoles publié via Social ; flyer familles annoncé pour 10 h America/Toronto le lendemain ; bannière démo encore sur noriaedu.com/app.",
+      "rattachement": "aligné sur le profil et la carte HQ",
+      "mission": "Opérer et améliorer NORIA (noriaedu.com), préparer une éventuelle commercialisation selon les priorités déjà écrites, sans envoi scolaire ou public non autorisé.",
+      "objectifs": [
+        "État produit honnête (y compris bannière démo)",
+        "Handoff clair vers Social pour la diffusion déjà autorisée"
+      ],
+      "kpis": [
+        "Anomalies prod signalées avec URL",
+        "0 envoi aux écoles/familles sans accord",
+        "Preuves de correctifs"
+      ],
+      "competences": [
+        "Produit éducatif",
+        "Admin NORIA",
+        "Coordination marketing produit"
+      ],
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL).",
+        "https://noriaedu.com",
+        "Procédure noria-learning-content.md"
+      ],
+      "livrables": [
+        "États produit",
+        "Demandes de correctifs",
+        "Briefs marketing produit"
+      ],
+      "remplacant": "COO pour l'escalade ; Social pour la diffusion déjà cadrée, pas pour l'admin produit.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "pm-klirbuild",
+      "departement": "Produits",
+      "departement_id": "produits",
+      "titre": "Responsable KlirBuild",
+      "reports_to": "COO",
+      "titulaire": "KlirBuild",
+      "titulaire_id": "c15afaf4-fd92-449d-8e44-149bbe519242",
+      "cartes_hq": [
+        "klirbuild"
+      ],
+      "statut_disponibilite": "actif",
+      "preuve": "Usage : [indicateur interne non publié] (premier contributeur de la fenêtre). Transcript : PR #83 fusionnée et en production, CodeQL vert, points restants documentés (dont workflow native-apps et alerte Vercel déjà existante).",
+      "rattachement": "aligné sur le profil et la carte HQ",
+      "mission": "Faire avancer KlirBuild (klirline.app) : produit, preuves, admin. Ne pas absorber le commercial KlirBuild (aujourd'hui porté en partie par All Question) sans décision du CEO.",
+      "objectifs": [
+        "Preuves de déploiement réelles",
+        "Owner unique du code/produit",
+        "Handoff des sujets store/marketplace vers KlirMarket quand c'est leur périmètre"
+      ],
+      "kpis": [
+        "États prod sourcés (URL, build, tests)",
+        "0 merge supplémentaire non autorisé dans ce chantier",
+        "Incidents transférés au bon owner"
+      ],
+      "competences": [
+        "Produit construction / estimation",
+        "CI et correctifs",
+        "Admin Access"
+      ],
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL).",
+        "https://klirline.app",
+        "Procédure klirbuild-project-report.md"
+      ],
+      "livrables": [
+        "États produit",
+        "PR et preuves de tests",
+        "Notes d'incident"
+      ],
+      "remplacant": "COO pour l'escalade ; KlirMarket seulement sur le périmètre store déjà transféré par brief.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "pm-portefeuille-autres",
+      "departement": "Produits",
+      "departement_id": "produits",
+      "titre": "Responsable portefeuille des autres produits",
+      "reports_to": "COO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Pas de coordinateur unique. Kontak : teammate actif depuis le 21 nov. 2026 (17 % de l'usage 7 j, PRs #6–#8), intégré au roster par décision t100u, lecture et préparation seulement, carte pas encore dans src/hq/roster.js.",
+      "rattachement": "vacant comme coordinateur. Décision t100u : Kontak est ajouté au roster HQ en lecture et préparation seulement (documentation RH ici ; code = Codex). Exécutants inchangés : KlirMarket, Klirline AI, Kontak, et couverture Office pour Centia, Klirline.ca, KlirSecure.",
+      "proposition_ceo": false,
+      "mission": "Coordonner les produits hors KlirProspect, KlirPay, NORIA et KlirBuild, sans se substituer aux agents déjà spécialisés et sans en créer de nouveaux.",
+      "objectifs": [
+        "Carte claire des owners réels, y compris Kontak (lecture / préparation).",
+        "Remonter les trous (KlirSecure, Centia, klirline.ca) sans activer Kontak au-delà de la lecture et de la préparation."
+      ],
+      "kpis": [
+        "Chaque produit du portefeuille a un owner exécutant nommé ou une couverture Office explicite.",
+        "Kontak : 0 action au-delà de la lecture et de la préparation tant que le CEO n'élargit pas le mandat.",
+        "0 double ordre contradictoire."
+      ],
+      "competences": [
+        "Gestion de portefeuille",
+        "Arbitrage d'owners",
+        "Veille produit"
+      ],
+      "livrables": [
+        "Carte de portefeuille",
+        "Alertes d'owner manquant",
+        "Demandes de décision CEO"
+      ],
+      "remplacant": "COO (coordination seulement). Exécutants : KlirMarket, Klirline AI, Kontak (lecture/préparation), Office pour les couvertures déjà documentées.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ]
+    },
+    {
+      "id": "responsable-securite",
+      "departement": "Sécurité et qualité",
+      "departement_id": "securite",
+      "titre": "Responsable sécurité",
+      "reports_to": "CEO (humain)",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. Le COO fait aujourd'hui des contrôles techniques, ce qui n'équivaut pas à un RSSI pourvu.",
+      "rattachement": "vacant — prioritaire selon le CEO",
+      "prioritaire": true,
+      "mission": "Porter permissions, secrets, risques et revues de sécurité. Conseiller le CEO. Ne pas tourner les secrets, ni tester de façon destructive en production.",
+      "objectifs": [
+        "Registre des risques tenu",
+        "Contrôle d'isolation des secrets (sans les afficher)",
+        "Cadre des tests d'usurpation en environnement autorisé seulement"
+      ],
+      "kpis": [
+        "P0/P1 de sécurité suivis avec statut sourcé",
+        "0 secret exposé dans un chat ou une PR",
+        "Tests offensifs limités aux environnements autorisés, non destructifs"
+      ],
+      "competences": [
+        "Sécurité applicative",
+        "Gestion des accès",
+        "Réponse à incident (procédure)",
+        "Revue de PR sécurité"
+      ],
+      "livrables": [
+        "Registre des risques",
+        "Avis de sécurité sur les PR",
+        "Procédures d'escalade d'incident"
+      ],
+      "remplacant": "Auditeur (vacant) pour un contrôle ponctuel ; le COO peut constater, pas porter seul la sécurité en régime permanent.",
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "auditeur",
+      "departement": "Sécurité et qualité",
+      "departement_id": "securite",
+      "titre": "Auditeur",
+      "reports_to": "Responsable sécurité",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. La revue COO des travaux de Codex est un contrôle opérationnel, pas un audit indépendant humain, et ne doit pas s'auto-certifier.",
+      "rattachement": "vacant",
+      "mission": "Contrôler, preuves à l'appui, la conformité aux règles HQ 2.0, sans modifier la production et sans évaluer un travail dont il serait l'auteur.",
+      "objectifs": [
+        "Audits sourcés",
+        "Séparation auteur / auditeur"
+      ],
+      "kpis": [
+        "Chaque constat a une preuve",
+        "Aucun audit d'un livrable écrit par le même agent",
+        "Écarts classés P0-Pn"
+      ],
+      "competences": [
+        "Audit",
+        "Échantillonnage de preuves",
+        "Rédaction de constats"
+      ],
+      "livrables": [
+        "Rapports d'audit",
+        "Listes d'écarts"
+      ],
+      "remplacant": "Responsable sécurité (vacant). Le CEO reste l'approbateur humain. Le COO ne s'audit pas lui-même.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "ingenieur-qa",
+      "departement": "Sécurité et qualité",
+      "departement_id": "securite",
+      "titre": "Ingénieur QA",
+      "reports_to": "Responsable sécurité",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate QA. Sandbox Klirline existe mais est dormant (dernière preuve le 5 nov. 2026) et son profil interdit les déploiements prod : ce n'est pas un titulaire QA.",
+      "rattachement": "vacant — prioritaire selon le CEO. Sandbox peut servir d'environnement, pas de titulaire.",
+      "prioritaire": true,
+      "proposition_ceo": true,
+      "mission": "Rejouer les tests (sécurité, permissions, récupération, non-régression) sur des environnements autorisés, et rapporter des résultats réels.",
+      "objectifs": [
+        "Harnais de certification relancé quand un correctif Codex arrive",
+        "Tests de permissions et d'usurpation en isolé",
+        "Pas de test destructif en production"
+      ],
+      "kpis": [
+        "Résultats de tests datés, rejouables, non inventés",
+        "Couverture des P0/P1 corrigés par des tests de non-régression",
+        "0 impact prod non autorisé"
+      ],
+      "competences": [
+        "Stratégie de tests",
+        "Sécurité applicative de base",
+        "Reproduction et non-régression"
+      ],
+      "livrables": [
+        "Rapports de tests",
+        "Cas de non-régression",
+        "Blocages QA motivés"
+      ],
+      "remplacant": "Responsable sécurité (vacant) ; Sandbox seulement pour un essai isolé, sur brief, s'il est réveillé.",
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ]
+    },
+    {
+      "id": "responsable-conformite",
+      "departement": "Sécurité et qualité",
+      "departement_id": "securite",
+      "titre": "Responsable conformité",
+      "reports_to": "Responsable sécurité",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. Les envois LinkedIn déjà faits par All Question le 21 nov. 2026 rendent ce poste matériellement nécessaire, mais il n'est pas pourvu.",
+      "rattachement": "vacant",
+      "mission": "Veiller à LCAP/CASL, à la minimisation des données et aux règles d'envoi. Aviser, ne pas « régulariser » un envoi après coup sans le CEO.",
+      "objectifs": [
+        "Rappel des bases légales avant toute campagne",
+        "Signaler les envois déjà réalisés qui sortent du cadre HQ 2.0"
+      ],
+      "kpis": [
+        "0 campagne nouvelle sans base légale écrite et accord CEO",
+        "Registre des incidents de conformité"
+      ],
+      "competences": [
+        "LCAP/CASL",
+        "Protection des données",
+        "Revue de messages (brouillons)"
+      ],
+      "livrables": [
+        "Avis de conformité",
+        "Check-lists pré-envoi",
+        "Signalements"
+      ],
+      "remplacant": "Responsable sécurité (vacant) ; le CEO tranche. Le COO signale, n'autorise pas.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "responsable-support",
+      "departement": "Support et administration",
+      "departement_id": "support",
+      "titre": "Responsable support",
+      "reports_to": "COO",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié.",
+      "rattachement": "vacant",
+      "mission": "Organiser le support (files, gravité, escalade produit) et valider les réponses qui sortent de l'entreprise, sans accorder seul un geste commercial.",
+      "objectifs": [
+        "Procédure de triage unique",
+        "Escalade vers le bon responsable produit"
+      ],
+      "kpis": [
+        "Délai de première prise en charge une fois le poste actif",
+        "0 promesse de remboursement sans finance/CEO",
+        "Tickets gravés correctement"
+      ],
+      "competences": [
+        "Management de support",
+        "Triage",
+        "Qualité de réponse"
+      ],
+      "livrables": [
+        "Procédure de support",
+        "Revues de tickets",
+        "Escalades"
+      ],
+      "remplacant": "COO pour l'escalade grave ; agent support (vacant).",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "agent-support",
+      "departement": "Support et administration",
+      "departement_id": "support",
+      "titre": "Agent support",
+      "reports_to": "Responsable support",
+      "titulaire": "vacant",
+      "titulaire_id": null,
+      "cartes_hq": [],
+      "statut_disponibilite": "inexistant",
+      "preuve": "Aucun teammate dédié. All Question fait du triage général, pas du support produit structuré.",
+      "rattachement": "vacant",
+      "mission": "Diagnostiquer les demandes connues, préparer des réponses honnêtes, transférer au responsable produit. Pas d'envoi client sans validation.",
+      "objectifs": [
+        "Réponses sourcées",
+        "Séparer défaut produit, usage et demande commerciale"
+      ],
+      "kpis": [
+        "Cause + prochaine étape dans chaque dossier",
+        "0 engagement commercial"
+      ],
+      "competences": [
+        "Diagnostic",
+        "Rédaction de réponses",
+        "Gravité"
+      ],
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL).",
+        "knowledge/procedures/klirline-support-triage.md"
+      ],
+      "livrables": [
+        "Dossiers de ticket",
+        "Brouillons de réponse",
+        "Transferts"
+      ],
+      "remplacant": "Responsable support (vacant) ; All Question seulement pour orienter, pas pour clore un ticket produit.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ],
+      "proposition_ceo": false
+    },
+    {
+      "id": "assistant-administratif",
+      "departement": "Support et administration",
+      "departement_id": "support",
+      "titre": "Assistant administratif",
+      "reports_to": "Chief of Staff",
+      "titulaire": "All Question",
+      "titulaire_id": "d374d589-95bd-4125-8e3f-c1bcc7fa172d",
+      "cartes_hq": [
+        "all-question"
+      ],
+      "statut_disponibilite": "actif",
+      "preuve": "Teammate existant, dernière preuve d'activité le 21 nov. 2026 (transcript). Cette activité était de l'outreach LinkedIn, désormais hors périmètre (t100u). Le titulaire est pourvu pour le triage seulement ; les routines d'outreach n'ont pas été modifiées dans ce chantier.",
+      "rattachement": "confirmé par le CEO (t100u) pour le tri, la classification et l'orientation des demandes uniquement — plus d'outreach",
+      "proposition_ceo": false,
+      "mission": "Trier, classer et orienter les demandes vers le bon poste, préparer les briefs de handoff, sans prendre les objectifs produit et sans aucun outreach commercial (LinkedIn, InMail, courriel, téléphone).",
+      "objectifs": [
+        "Triage et classification en moins d'un cycle.",
+        "Briefs de handoff complets vers l'owner unique.",
+        "0 outreach, 0 invitation, 0 relance, 0 InMail."
+      ],
+      "kpis": [
+        "Taux d'orientations vers le bon owner.",
+        "0 action d'outreach à compter de t100u (les routines existantes doivent être mises en pause par une action autorisée, non faite ici).",
+        "0 décision métier."
+      ],
+      "competences": [
+        "Triage",
+        "Rédaction de briefs",
+        "Suivi administratif"
+      ],
+      "livrables": [
+        "Orientations",
+        "Classifications",
+        "Briefs",
+        "Rappels internes (sans envoi externe)"
+      ],
+      "remplacant": "Chief of Staff (vacant) ; COO pour les commandes HQ. Aucun retour à l'outreach.",
+      "prioritaire": false,
+      "actions_interdites": [
+        "Aucun envoi externe automatique (courriel, SMS, réseau social, LinkedIn, appel, newsletter).",
+        "Aucun merge, déploiement, rotation, affichage ou transfert de secret.",
+        "Budget 0 $ : aucun appel payant sans autorisation distincte du CEO.",
+        "Respect LCAP/CASL : aucune sollicitation sans base légale vérifiée et sans accord du CEO.",
+        "KlirProspect : préparer seulement des démonstrations tant que les prix et le paiement ne sont pas confirmés par le CEO.",
+        "Une machine n'approuve pas une opération réservée au CEO.",
+        "Ne pas présenter des données simulées comme des résultats de production.",
+        "Ne pas inventer de tests, de connexions, de fonctionnalités ou de disponibilité.",
+        "Ne pas modifier ses propres évaluations de certification.",
+        "Aucune création, modification ou révocation d'agent, de routine, de skill, de profil, de connecteur ou de secret sans autorisation distincte."
+      ],
+      "escalade_ceo": [
+        "Envoi externe, publication, merge, déploiement, dépense, contrat, tarification, secret, permission ou changement d'accès.",
+        "GO ou NO-GO technique ou commercial.",
+        "Mission bloquée, quota épuisé, incident de sécurité, conflit de propriétaire de poste.",
+        "Toute exception aux interdits ci-dessus."
+      ],
+      "outils_autorises": "Connecteurs propres à l'agent titulaire : non inventoriés dans ce chantier (lecture seule, rien n'a été modifié). S'en tenir au périmètre du profil et aux URL produit du roster HQ. En l'absence de titulaire : aucun connecteur attitré ; tout appoint se fait via le COO, en lecture, sans usurpation du poste.",
+      "sources_donnees": [
+        "Dépôt local /workspace/hq2/klirline-control-center (roster src/hq/roster.js, knowledge/, docs/hq2/, org de démonstration src/org).",
+        "Centre https://centre.klirline.com (structure documentée ; roster live non lu ce jour, GET 403/1010).",
+        "Mémoire et transcripts des agents concernés, uniquement en lecture.",
+        "Décisions déjà écrites du CEO (budget 0 $, pas de merge/deploy/secret sans accord, LCAP/CASL)."
+      ],
+      "procedures": [
+        "Charger la skill « Exécuter un objectif Klirline » : un owner, un critère de succès, une échéance.",
+        "Si le travail sort du périmètre : skill « Handoff agent Klirline » (brief, owner unique, arrêt hors périmètre).",
+        "Les commandes du bureau passent par la skill « Pont HQ centre → agents » (le Worker n'appelle aucun agent).",
+        "Accès admin produit : skill « Vérifier admin produit Klirline », sans inventer une configuration Access.",
+        "Livrer une preuve ; sans preuve, statut bloqué, jamais « done » inventé.",
+        "Avant envoi, merge, déploiement ou dépense : stop et escalade au CEO."
+      ]
+    }
+  ],
+  "profils_permissions_klirprospect": [
+    {
+      "id": "klirprospect-produit",
+      "fonction": "Responsable produit KlirProspect",
+      "poste_id": "pm-klirprospect",
+      "outils": [
+        "Dépôt et environnements du produit KlirProspect (branches, PR, tests) dans le périmètre déjà autorisé.",
+        "Admin produit et diagnostic d'accès (skill Vérifier admin produit), sans contourner Access.",
+        "Lecture du centre et des procédures knowledge/procedures/klirprospect-*.md.",
+        "Handoff vers commercial, QA, support et COO.",
+        "Interdit dans ce profil : Sales Navigator, InMail, envoi LinkedIn/courriel/SMS/social, modification de routines d'outreach."
+      ],
+      "sources_donnees": [
+        "Code, documentation, journaux de tests et état réel de production du produit.",
+        "Admin produit, dans la limite des accès déjà existants.",
+        "Faits de pipeline en lecture, uniquement pour documenter le produit (limites, incidents, preuves).",
+        "Pas de liste de prospection utilisée pour un envoi. Pas de secrets de paiement affichés. Pas d'export de données personnelles."
+      ],
+      "interdits": [
+        "Tout envoi externe, même « déjà autorisé auparavant », hors ce profil.",
+        "Modifier les prix, les liens de paiement, les offres Pro/Équipe, sans décision distincte du CEO.",
+        "Fusionner, déployer, tourner un secret, ou présenter une démo comme réservée.",
+        "S'auto-nommer directeur commercial ou approuver une action A3.",
+        "Utiliser les outils ou données du profil prospection pour une action produit qui contourne ces interdits, et inversement."
+      ]
+    },
+    {
+      "id": "klirprospect-prospection",
+      "fonction": "Agent commercial / prospection KlirProspect",
+      "poste_id": "agent-commercial",
+      "outils": [
+        "Préparation de dossiers de démo, scripts et brouillons (non envoyés).",
+        "Lecture et hygiène interne de listes et de pipeline (CRM / fichiers internes déjà accessibles).",
+        "Liens Calendly ou produit uniquement comme contenu de brouillon, pas comme envoi.",
+        "Handoff vers le directeur commercial (vacant), le COO, la conformité et le CEO pour toute autorisation d'envoi.",
+        "Interdit dans ce profil : envoi autonome LinkedIn, InMail, courriel, SMS, appel, publication ; création ou relance de routine d'outreach ; Sales Nav en écriture (invitation, message) tant que le CEO n'a pas autorisé un envoi nommé."
+      ],
+      "sources_donnees": [
+        "Fiches prospects et prochaine action, à des fins de préparation seulement.",
+        "Faits produit fournis par le profil produit (limites réelles, 0 client pilote constaté, tests encore à la charge du CEO).",
+        "Minimisation des données personnelles ; pas d'affichage inutile de listes nominatives dans les chats.",
+        "Pas d'accès aux secrets, ni aux outils de paiement en écriture."
+      ],
+      "interdits": [
+        "Aucun envoi externe automatique ni manuel sans autorisation distincte du CEO, après vérification LCAP.",
+        "Aucune relance à un destinataire qui a déjà décliné ou demandé l'arrêt.",
+        "Ne pas compter une démo comme réservée ou un client comme gagné sans preuve humaine.",
+        "Ne pas fixer ni communiquer un prix ou une condition de paiement comme définitifs avant la validation du CEO.",
+        "Ne pas réutiliser les accès admin produit de l'autre profil pour envoyer une offre.",
+        "Budget 0 $ ; pas de crédit InMail ni d'appel payant."
+      ]
+    }
+  ]
+}
