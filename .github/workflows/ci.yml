@@ -66,6 +66,29 @@ jobs:
       - name: hq-isolation-local (isolation interorganisation, Worker + Durable Object local)
         run: node scripts/hq-isolation-local.mjs
 
+      - name: ci-couverture-check (toute suite du dépôt est exécutée par la CI)
+        run: node scripts/ci-couverture-check.mjs
+
+      - name: hq-regression-lot2 (approbation v2, permissions, heartbeat, audit, sauvegarde, identités ; mémoire)
+        run: node scripts/hq-regression-lot2.mjs
+
+      - name: hq-worker-local (Worker complet + Durable Object local)
+        run: node scripts/hq-worker-local.mjs
+
+      - name: hq-worker-lot2 (quota par identité, catalogue par organisation)
+        run: node scripts/hq-worker-lot2.mjs
+
+      - name: hq-do-lot2 (atomicité, audit en ajout seul, sauvegarde/restauration ; Durable Object local)
+        run: node scripts/hq-do-lot2.mjs
+
+      - name: hq-distributor-check (contrat du distributeur, simulation)
+        run: node scripts/hq-distributor-check.mjs
+
+      - name: wrangler deploy --dry-run (empaquetage, sans identifiants, ne publie rien)
+        run: |
+          node scripts/stage-assets.mjs
+          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/dry-run"
+
       - name: npm audit (informatif, non bloquant)
         run: |
           npm audit --audit-level=high || echo "::warning title=npm audit::Vulnérabilités hautes dans l'outillage (wrangler/miniflare). Voir le journal."
