@@ -210,9 +210,18 @@ export class CompanyState extends DurableObject {
     return mission;
   }
 
+  // E1 (banc phase 5) : les commandes d'une mission sont lues par identifiant, sans la fenêtre de
+  // 200 de hqList (au-delà, un livrable légitime était refusé : « commande introuvable »).
+  hqMissionCommands(mission) {
+    if (!mission) return [];
+    const ids = [...new Set((mission.tasks || []).map((task) => task.commandId).filter(Boolean))];
+    return ids.map((commandId) => this.hqGet(commandId)).filter(Boolean);
+  }
+
   hqMissionOperate(id, operation, input, actorId, options = {}) {
     try {
-      const result = runMissionOperation(this.hqMissionGet(id), this.hqList({}), operation, input || {}, { ...options, actorId });
+      const mission = this.hqMissionGet(id);
+      const result = runMissionOperation(mission, this.hqMissionCommands(mission), operation, input || {}, { ...options, actorId });
       if (result.insertCommand) this.hqInsert(result.command);
       else if (result.replaceCommand && result.command) this.hqReplace(result.command);
       if (result.changed && result.mission) this.hqMissionReplace(result.mission);

@@ -88,6 +88,27 @@ test("T5", "Deux POST simultanés avec la même clé ne créent qu'une commande 
   assert(conflict.status === 409, `même clé, autre commande ${conflict.status}`);
 });
 
+// ---------- E1 : livrable légitime au-delà de la fenêtre de 200 commandes ----------
+test("E1", "Une tâche dont la commande sort de la fenêtre de 200 reste livrable par sa tentative", async () => {
+  const t0 = "2026-11-23T10:00:00.000Z";
+  const created = await call("POST", "/api/hq/missions", { template: "klirprospect-synthese" }, { now: t0 });
+  assert(created.status === 201, `mission ${created.status}`);
+  const mid = created.payload.mission.id; const tid = created.payload.mission.tasks[0].id;
+  await call("POST", `/api/hq/missions/${mid}/transition`, { status: "ready" }, { now: t0 });
+  const st = await call("POST", `/api/hq/missions/${mid}/tasks/${tid}/start`, {}, { now: t0 });
+  assert(st.status === 200 && st.payload.claimToken, `démarrage ${st.status}`);
+  for (let i = 0; i < 205; i += 1) {
+    const filler = await call("POST", "/api/hq/command", { text: `Remplissage ${i}`, ownerSlug: "sandbox-klirline" }, { now: new Date(Date.parse("2026-11-23T10:05:00.000Z") + i * 1000).toISOString() });
+    assert(filler.status === 201, `remplissage ${i} ${filler.status}`);
+  }
+  const listed = await call("GET", "/api/hq/commands", {});
+  assert(listed.payload.commands.length === 200 && !listed.payload.commands.some((c) => c.missionId === mid), "la commande de la tâche devrait être hors de la liste de 200 (condition du test)");
+  const dl = await call("POST", `/api/hq/missions/${mid}/deliverables`, { taskId: tid, attemptId: st.payload.attemptId, claimToken: st.payload.claimToken, body: "Livrable après 205 commandes." }, { now: "2026-11-23T10:20:00.000Z" });
+  assert(dl.status === 200 && dl.payload.mission.deliverables.length === 1, `livrable ${dl.status} ${dl.payload.error || ""}`);
+  const forged = await call("POST", `/api/hq/missions/${mid}/deliverables`, { taskId: tid, body: "Révision sans jeton." }, { actor: "agent-b", now: "2026-11-23T10:21:00.000Z" });
+  assert(forged.status === 409, `révision sans jeton hors fenêtre ${forged.status}`);
+});
+
 let failed = 0;
 let session = start();
 try {
