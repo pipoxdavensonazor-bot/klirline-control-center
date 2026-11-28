@@ -377,6 +377,16 @@ export function decideInterrupt(command, options = {}) {
   if (!command) {
     return { http: 404, persist: false, body: { error: "Commande introuvable" } };
   }
+  // T4 (banc phase 5) : interruption réservée au titulaire du bail, à un humain ou à la revue.
+  const supervisor = options.human === true || (Array.isArray(options.scopes) && options.scopes.includes("review"));
+  const holder = Boolean(command.claim?.holder) && command.claim.holder === String(options.actorId || "");
+  if (!supervisor && !holder) {
+    return {
+      http: 403,
+      persist: false,
+      body: { mode: "hq", outcome: "refused", error: "Seul le titulaire, un humain ou la revue interrompt cette commande." },
+    };
+  }
   if (!LEASED.has(command.status)) {
     return {
       http: 409,

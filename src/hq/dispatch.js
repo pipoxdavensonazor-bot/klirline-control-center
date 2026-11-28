@@ -26,6 +26,14 @@ function allows(scopes, needed) {
   return Array.isArray(scopes) && scopes.includes(needed);
 }
 
+// T4 (banc phase 5) : toute écriture sur une commande exige une portée explicite. Des portées
+// absentes (undefined, ancien repli service:hq-poll) ou vides ne donnent aucun droit.
+function writes(scopes) {
+  return allows(scopes, "work") || allows(scopes, "review");
+}
+
+const NO_SCOPE = { status: 403, body: { error: "Cette identité n'a pas ce droit." } };
+
 export async function dispatchHq(store, { method, pathname, searchParams, body, actorId, now, scopes, human }) {
   const clock = now instanceof Date ? now : new Date();
   if (method !== "GET" && body && typeof body === "object") {
@@ -106,6 +114,7 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
     return { status: 200, body: { mode: "hq", commands: commands.map(present) } };
   }
   if (method === "POST" && pathname === "/api/hq/command") {
+    if (!writes(scopes)) return NO_SCOPE;
     const command = buildHqCommand(body, actorId, { now: clock });
     await store.insert(command);
     return { status: 201, body: { mode: "hq", command: present(command) } };
@@ -115,7 +124,7 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   if (claimRoute) {
     if (claimRoute.error) return claimRoute.error;
     if (method !== "POST") return { status: 404, body: { error: "Introuvable" } };
-    if (Array.isArray(scopes) && !scopes.includes("work")) {
+    if (!allows(scopes, "work")) {
       return { status: 403, body: { error: "Cette identité ne peut pas prendre une commande." } };
     }
     try {
@@ -134,9 +143,12 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   if (interruptRoute) {
     if (interruptRoute.error) return interruptRoute.error;
     if (method !== "POST") return { status: 404, body: { error: "Introuvable" } };
+    if (!writes(scopes)) return NO_SCOPE;
     return store.interrupt(interruptRoute.id, {
       actorId,
       now: clock,
+      scopes,
+      human,
       note: body?.note ?? body?.agentNote,
     });
   }
@@ -148,6 +160,7 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   if (!current) return { status: 404, body: { error: "Commande introuvable" } };
   if (method === "GET") return { status: 200, body: { mode: "hq", command: present(current) } };
   if (method === "PATCH") {
+    if (!writes(scopes)) return NO_SCOPE;
     try {
       rejectImpersonation(body);
     } catch (error) {

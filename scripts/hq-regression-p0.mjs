@@ -109,6 +109,36 @@ test("T3", "Une machine (human=false) n'approuve ni ne clôt une mission A3 ; un
   assert(closeHuman.status === 200 && closeHuman.body.mission.status === "done", `clôture humaine ${closeHuman.status} ${closeHuman.body.error || ""}`);
 });
 
+// ---------- T4 : annulation / interruption sans permission ----------
+test("T4", "Annulation et interruption refusées sans portée ou hors titulaire ; titulaire et humain acceptés", async () => {
+  const h = harness();
+  const id1 = await h.cmd("T4 annulation"); const a1 = await h.claim(id1, A);
+  assert(a1.body.outcome === "issued", "claim A");
+  const c1 = await h.patch(id1, { status: "cancelled" }, EMPTY);
+  assert(c1.status === 403, `annulation scopes=[] ${c1.status}`);
+  const c2 = await h.patch(id1, { status: "cancelled" }, SVC);
+  assert(c2.status === 403, `annulation sans portées (service:hq-poll) ${c2.status}`);
+  const i1 = await h.call("POST", `/api/hq/commands/${id1}/interrupt`, { note: "sonde" }, EMPTY);
+  assert(i1.status === 403, `interruption scopes=[] ${i1.status}`);
+  const i2 = await h.call("POST", `/api/hq/commands/${id1}/interrupt`, { note: "sonde" }, SVC);
+  assert(i2.status === 403, `interruption sans portées ${i2.status}`);
+  const i3 = await h.call("POST", `/api/hq/commands/${id1}/interrupt`, { note: "sonde" }, B);
+  assert(i3.status === 403, `interruption par un tiers work ${i3.status}`);
+  const still = await h.get(id1);
+  assert(still.body.command.status === "dispatched" && still.body.command.claim.holder === "agent-a", "la commande a changé");
+  const iA = await h.call("POST", `/api/hq/commands/${id1}/interrupt`, { note: "arrêt demandé par le titulaire" }, A);
+  assert(iA.status === 200, `contrôle positif : interruption par le titulaire ${iA.status}`);
+  const iH = await h.call("POST", `/api/hq/commands/${id1}/interrupt`, { note: "arrêt humain" }, COO_HUMAN);
+  assert(iH.status === 200, `contrôle positif : interruption humaine ${iH.status}`);
+  const cA = await h.patch(id1, { status: "cancelled", attemptId: a1.body.command.claim.attemptId, claimToken: a1.body.claimToken }, A);
+  assert(cA.status === 200 && cA.body.command.status === "cancelled", `contrôle positif : annulation par le titulaire ${cA.status} ${cA.body.error || ""}`);
+  const svcPost = await h.call("POST", "/api/hq/command", { text: "création sans portée", ownerSlug: "sandbox-klirline" }, SVC);
+  assert(svcPost.status === 403, `création sans portées ${svcPost.status}`);
+  const id2 = await h.cmd("T4 claim sans portée");
+  const svcClaim = await h.claim(id2, SVC);
+  assert(svcClaim.status === 403, `claim sans portées ${svcClaim.status}`);
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;

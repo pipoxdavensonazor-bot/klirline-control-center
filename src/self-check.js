@@ -446,6 +446,7 @@ const createdHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams(),
   body: { text: "rédiger l'article Black Wall News", priority: "haute" },
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(createdHq.status === 201 && createdHq.body.command.status === "pending" && createdHq.body.command.ownerSlug === "bwn-redaction", "Une commande du bureau naît en attente");
 check(createdHq.body.mode === "hq" && createdHq.body.command.grokAgentName === "BWN Rédaction", "La réponse porte le nom Grok");
@@ -455,6 +456,7 @@ const pendingHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams("status=pending"),
   body: {},
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(pendingHq.body.commands.length === 1 && pendingHq.body.commands[0].id === createdHq.body.command.id, "La file pending contient la commande");
 const explicitHq = await dispatchHq(hqStore, {
@@ -463,6 +465,7 @@ const explicitHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams(),
   body: { text: "rédiger l'article Black Wall News", ownerSlug: "sandbox-klirline" },
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(explicitHq.body.command.ownerSlug === "sandbox-klirline" && explicitHq.body.command.routedBy === "explicit", "Un agent choisi gagne sur les mots-clés");
 const claimedHq = await dispatchHq(hqStore, {
@@ -471,6 +474,7 @@ const claimedHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams(),
   body: {},
   actorId: "ceo",
+  scopes: ["work"],
 });
 const doneHq = await dispatchHq(hqStore, {
   method: "PATCH",
@@ -484,6 +488,7 @@ const doneHq = await dispatchHq(hqStore, {
     claimToken: claimedHq.body.claimToken,
   },
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(doneHq.status === 200 && doneHq.body.command.status === "done" && doneHq.body.command.result === "Article prêt" && doneHq.body.command.text.startsWith("rédiger"), "Le PATCH termine la commande sans réécrire l'ordre");
 const stillPending = await dispatchHq(hqStore, {
@@ -492,6 +497,7 @@ const stillPending = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams("status=pending"),
   body: {},
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(stillPending.body.commands.length === 1 && stillPending.body.commands[0].id === explicitHq.body.command.id, "Le filtre pending retire la commande terminée");
 const rosterHq = await dispatchHq(hqStore, {
@@ -500,23 +506,27 @@ const rosterHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams(),
   body: {},
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(rosterHq.body.roster.length === HQ_ROSTER.length && rosterHq.body.roster.find((agent) => agent.id === "bwn-redaction").lastCommand.status === "done", "Le roster expose la dernière commande");
 try {
-  await dispatchHq(hqStore, { method: "POST", pathname: "/api/hq/command", searchParams: new URLSearchParams(), body: { text: "ok" }, actorId: "ceo" });
+  await dispatchHq(hqStore, { method: "POST", pathname: "/api/hq/command", searchParams: new URLSearchParams(), body: { text: "ok" }, actorId: "ceo", scopes: ["work"] });
   check(false, "Une commande trop courte est refusée");
 } catch (error) {
   check(error.status === 400, "Une commande trop courte est refusée");
 }
-const unknownStatus = await dispatchHq(hqStore, { method: "PATCH", pathname: `/api/hq/commands/${createdHq.body.command.id}`, searchParams: new URLSearchParams(), body: { status: "publie" }, actorId: "ceo" });
+const unknownStatus = await dispatchHq(hqStore, { method: "PATCH", pathname: `/api/hq/commands/${createdHq.body.command.id}`, searchParams: new URLSearchParams(), body: { status: "publie" }, actorId: "ceo", scopes: ["work"] });
 check(unknownStatus.status === 400, "Un statut hors liste est refusé");
 
+// T4 : dispatchHq exige une portée explicite pour écrire. Ces appels unitaires jouent un agent
+// (portée work, human=false), comme une fiche machine du Worker.
 const hqCall = (method, pathname, body, now, actor = "ceo") => dispatchHq(hqStore, {
   method,
   pathname,
   searchParams: new URLSearchParams(),
   body,
   actorId: actor,
+  scopes: ["work"],
   now,
 });
 const t0 = new Date("2026-11-05T12:00:00.000Z");
