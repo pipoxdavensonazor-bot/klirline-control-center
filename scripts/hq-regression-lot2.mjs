@@ -251,6 +251,39 @@ test("D3", "T13 : à la lecture, un bail dispatched expiré est remis en file (p
   assert(again.body.outcome === "issued", `nouvelle prise : ${again.body.outcome}`);
 });
 
+test("B1", "Hors bail : un tiers « work » non auteur ne modifie pas une commande pending/blocked ; l'auteur, la revue et l'humain le peuvent", async () => {
+  const h = harness();
+  const c = await h.call("POST", "/api/hq/command", { text: "Commande hors bail", ownerSlug: "sandbox-klirline" }, A);
+  const id = c.body.command.id;
+  const third = await h.call("PATCH", `/api/hq/commands/${id}`, { status: "cancelled", agentNote: "annulée par un tiers" }, B);
+  const thirdBlock = await h.call("PATCH", `/api/hq/commands/${id}`, { status: "blocked", agentNote: "bloquée par un tiers" }, B);
+  assert(third.status === 403 && thirdBlock.status === 403, `tiers hors bail : ${third.status} ${thirdBlock.status}`);
+  const author = await h.call("PATCH", `/api/hq/commands/${id}`, { status: "blocked", agentNote: "Bloquée par l'auteur." }, A);
+  assert(author.status === 200 && author.body.command.status === "blocked", `auteur : ${author.status}`);
+  const reviewer = await h.call("PATCH", `/api/hq/commands/${id}`, { status: "pending", agentNote: "Remise en file par la revue." }, { actor: "ops-review", scopes: ["review"] });
+  assert(reviewer.status === 200, `revue : ${reviewer.status} ${reviewer.body.error || ""}`);
+  const after = await h.call("GET", `/api/hq/commands/${id}`);
+  assert(after.body.command.status === "pending", `état final ${after.body.command.status}`);
+});
+test("B2", "Dérogation humaine : justification obligatoire (overrideReason) et tracée ; sans elle, refus et aucun changement", async () => {
+  const h = harness();
+  const c = await claimed(h, "Commande sous bail, dérogation");
+  const bare = await h.call("PATCH", `/api/hq/commands/${c.id}`, { status: "done", proof: "Clôture humaine" }, COO);
+  const short = await h.call("PATCH", `/api/hq/commands/${c.id}`, { status: "done", proof: "Clôture humaine", overrideReason: "court" }, COO);
+  assert(bare.status === 400 && short.status === 400, `sans justification : ${bare.status} ${short.status}`);
+  const still = await h.call("GET", `/api/hq/commands/${c.id}`, {}, A, { now: "2026-11-28T15:01:00.000Z" });
+  assert(still.body.command.status === "dispatched", `changement malgré le refus : ${still.body.command.status}`);
+  const ok = await h.call("PATCH", `/api/hq/commands/${c.id}`, { status: "done", proof: "Clôture humaine", overrideReason: "Agent injoignable, livrable vérifié à la main." }, COO);
+  assert(ok.status === 200 && ok.body.command.status === "done", `avec justification : ${ok.status} ${ok.body.error || ""}`);
+  const o = ok.body.command.overrides?.at(-1);
+  assert(o && o.actorId === "coo" && o.from === "dispatched" && o.to === "done" && o.reason.startsWith("Agent injoignable"), `trace : ${JSON.stringify(ok.body.command.overrides)}`);
+  const reopen = await h.call("PATCH", `/api/hq/commands/${c.id}`, { status: "pending" }, COO);
+  assert(reopen.status === 400, `réouverture sans justification : ${reopen.status}`);
+  const holder = await claimed(h, "Titulaire sans dérogation");
+  const own = await h.call("PATCH", `/api/hq/commands/${holder.id}`, { status: "done", proof: "Fait", attemptId: holder.attemptId, claimToken: holder.claimToken }, A);
+  assert(own.status === 200 && !own.body.command.overrides, `titulaire : ${own.status} ${JSON.stringify(own.body.command?.overrides)}`);
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;

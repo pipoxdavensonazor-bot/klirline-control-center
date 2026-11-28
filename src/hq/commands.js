@@ -227,7 +227,52 @@ export function credentialMatches(claim, attemptId, token) {
   return hashClaimToken(token) === claim.tokenHash;
 }
 
+// Lot 2 (permissions HQ) : enveloppe de decideCompletion.
+// - Hors bail (pending, queued, blocked, awaiting_validation), seule l'identité auteure, la revue
+//   ou un humain modifie une commande (avant : toute identité « work »).
+// - Toute dérogation humaine (écrire sans la tentative en cours, rouvrir une commande terminée,
+//   forcer dispatched/running sans claim, clore sans tentative) exige une justification
+//   overrideReason (10 à 500 caractères), conservée dans command.overrides (20 dernières).
+export const OVERRIDE_MIN = 10;
+function overrideReasonOf(input) {
+  const reason = typeof input?.overrideReason === "string" ? input.overrideReason.trim() : "";
+  return reason.length >= OVERRIDE_MIN && reason.length <= 500 ? reason : null;
+}
+export function needsHumanOverride(command, input, options = {}) {
+  if (!command || options.human !== true) return false;
+  const status = String(input?.status || command.status).trim();
+  const credential = credentialMatches(command.claim, input?.attemptId, input?.claimToken);
+  const writesResult = status === "done" || status === "failed" || Object.hasOwn(input || {}, "result") || Object.hasOwn(input || {}, "proof");
+  if (LEASED.has(command.status) && !credential) return true;
+  if (TERMINAL.has(command.status) && !(command.status === "done" && status === "done")) return true;
+  if (!LEASED.has(command.status) && LEASED.has(status)) return true;
+  if (writesResult && command.status !== "done" && !credential) return true;
+  return false;
+}
+
 export function decideCompletion(command, input, options = {}) {
+  if (!command) return { http: 404, persist: false, body: { error: "Commande introuvable" } };
+  const review = Array.isArray(options.scopes) && options.scopes.includes("review");
+  if (!LEASED.has(command.status) && !TERMINAL.has(command.status) && options.human !== true && !review
+    && command.createdBy !== String(options.actorId || "")) {
+    return { http: 403, persist: false, body: { mode: "hq", outcome: "refused", error: "Hors bail, seul l'auteur, la revue ou un humain modifie cette commande.", command: publicCommand(command) } };
+  }
+  const override = needsHumanOverride(command, input, options);
+  const reason = overrideReasonOf(input);
+  if (override && !reason) {
+    return { http: 400, persist: false, body: { mode: "hq", outcome: "rejected", error: "Dérogation humaine : justification obligatoire (overrideReason, 10 à 500 caractères).", command: publicCommand(command) } };
+  }
+  const { overrideReason, ...clean } = input || {};
+  const decision = decideCompletionCore(command, clean, options);
+  if (decision.persist && override) {
+    const entry = { actorId: String(options.actorId || ""), at: clock(options).toISOString(), from: command.status, to: decision.command.status, reason };
+    decision.command = { ...decision.command, overrides: [...(command.overrides || []), entry].slice(-20) };
+    decision.body = { ...decision.body, command: publicCommand(decision.command) };
+  }
+  return decision;
+}
+
+function decideCompletionCore(command, input, options = {}) {
   if (!command) return { http: 404, persist: false, body: { error: "Commande introuvable" } };
   try {
     rejectImpersonation(input);

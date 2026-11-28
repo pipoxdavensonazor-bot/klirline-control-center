@@ -163,11 +163,14 @@ test("T1", "Sans le jeton de la tentative en cours, un tiers ne change pas une c
   assert(doneA.status === 200 && doneA.body.command.status === "done", `contrôle positif : done par le titulaire ${doneA.status} ${doneA.body.error || ""}`);
   // Entrer en dispatched/running hors claim est refusé (sinon : running sans bail, cf. hq-33ebcef6).
   const id2 = await h.cmd("T1 running sans claim");
-  const forced = await h.patch(id2, { status: "running" }, B);
-  assert(forced.status === 409, `PATCH running sans claim ${forced.status}`);
-  const forcedS = await h.patch(id2, { status: " running " }, B);
+  // Lot 2 : hors bail, un tiers non auteur est refusé d'emblée (403) ; l'auteur lui-même ne
+  // passe pas running sans claim (409).
+  const forcedB = await h.patch(id2, { status: "running" }, B);
+  const forced = await h.patch(id2, { status: "running" }, A);
+  assert(forcedB.status === 403 && forced.status === 409, `PATCH running sans claim tiers=${forcedB.status} auteur=${forced.status}`);
+  const forcedS = await h.patch(id2, { status: " running " }, A);
   assert(forcedS.status === 409, `PATCH « running » avec espaces sans claim ${forcedS.status}`);
-  const forcedD = await h.patch(id2, { status: "dispatched" }, B);
+  const forcedD = await h.patch(id2, { status: "dispatched" }, A);
   assert(forcedD.status === 409, `PATCH dispatched sans claim ${forcedD.status}`);
 });
 
@@ -197,7 +200,7 @@ test("T9", "Une commande terminée ne se rouvre que par un humain ; l'empreinte 
     const reopenT = await h.patch(idT, { status: "pending" }, B);
     assert(reopenT.status === 409, `réouverture ${terminal} par un tiers ${reopenT.status}`);
   }
-  const human = await h.patch(id, { status: "pending", agentNote: "Réouverture décidée par Philippe." }, COO_HUMAN);
+  const human = await h.patch(id, { status: "pending", agentNote: "Réouverture décidée par Philippe.", overrideReason: "Réouverture humaine documentée (test)." }, COO_HUMAN);
   assert(human.status === 200 && human.body.command.status === "pending", `contrôle positif : réouverture humaine ${human.status} ${human.body.error || ""}`);
 });
 
@@ -229,7 +232,7 @@ test("T12", "Livrable et preuve liés à la tentative : ni machine review, ni ti
   await h.claim(id, A);
   const fake = await h.patch(id, { status: "done", proof: "Preuve inventée" }, COO_MACHINE);
   assert(fake.status === 409, `PATCH done sous bail par machine review ${fake.status}`);
-  const humanClose = await h.patch(id, { status: "done", proof: "Clôture décidée par un humain." }, COO_HUMAN);
+  const humanClose = await h.patch(id, { status: "done", proof: "Clôture décidée par un humain.", overrideReason: "Clôture humaine documentée (test)." }, COO_HUMAN);
   assert(humanClose.status === 200, `contrôle positif : clôture humaine ${humanClose.status} ${humanClose.body.error || ""}`);
 });
 

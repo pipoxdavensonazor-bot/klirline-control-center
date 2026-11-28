@@ -121,7 +121,7 @@ async function scenario() {
   assert(left.status === 200 && right.status === 200 && outcomes.join() === "held,issued", `courses ${outcomes.join()}`);
 
   const stale = "2026-11-05T16:00:00.000Z";
-  const running = await call("PATCH", `/api/hq/commands/${commandId}`, { status: "running" }, { actor: "coo", scopes: ["review"], human: true, now: t0 });
+  const running = await call("PATCH", `/api/hq/commands/${commandId}`, { status: "running", overrideReason: "Essai local : passage running forcé par un humain." }, { actor: "coo", scopes: ["review"], human: true, now: t0 });
   assert(running.status === 200 && running.payload.command.status === "running", `passage running ${running.status} ${running.payload.error || ""}`);
   const expired = await call("POST", `/api/hq/commands/${commandId}/claim`, {}, { actor: "machine-klirprospect", scopes: ["work"], now: stale });
   assert(expired.payload.outcome === "blocked" && expired.payload.command.status === "blocked", `expiration ${expired.payload.outcome}`);
