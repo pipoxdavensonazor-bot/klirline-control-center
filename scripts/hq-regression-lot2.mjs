@@ -175,6 +175,23 @@ test("A6", "Anciennes approbations (FNV et SHA-256 v1) : conservées, marquées 
   assert(shown.approvals[0].legacy === true && shown.approvals[0].validatesActions === false, "approbation v1 non marquée legacy");
 });
 
+test("C1", "T11 : coût invalide, négatif, non fini ou fractionnaire refusé (400) ; dépassement du plafond refusé (409) ; rien n'est enregistré", async () => {
+  const h = harness();
+  const created = await h.call("POST", "/api/hq/missions", { template: "klirprospect-synthese" }, A);
+  const mid = created.body.mission.id; const tid = created.body.mission.tasks[0].id;
+  await h.call("POST", `/api/hq/missions/${mid}/transition`, { status: "ready" }, A);
+  for (const bad of ["abc", "5", -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 60, true, { v: 1 }]) {
+    const r = await h.call("POST", `/api/hq/missions/${mid}/tasks/${tid}/start`, { costCents: bad }, A);
+    assert(r.status === 400, `coût ${String(bad)} : ${r.status} (attendu 400)`);
+  }
+  const over = await h.call("POST", `/api/hq/missions/${mid}/tasks/${tid}/start`, { costCents: 1 }, A);
+  assert(over.status === 409, `dépassement : ${over.status}`);
+  const after = await h.call("GET", `/api/hq/missions/${mid}`, {}, A);
+  assert(after.body.mission.cost.spentCents === 0 && after.body.mission.tasks[0].status !== "running", `état modifié : ${JSON.stringify(after.body.mission.cost)} ${after.body.mission.tasks[0].status}`);
+  const ok = await h.call("POST", `/api/hq/missions/${mid}/tasks/${tid}/start`, { costCents: 0 }, A);
+  assert(ok.status === 200 && ok.body.started === true, `contrôle positif coût 0 : ${ok.status}`);
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;

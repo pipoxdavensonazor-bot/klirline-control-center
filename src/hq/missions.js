@@ -255,9 +255,17 @@ export function createMission(input, actorId, options = {}) {
   };
 }
 
+// T11 (lot 2) : un coût est un entier de cents sûr, fini et >= 0. Toute autre valeur (texte,
+// négatif, NaN, Infinity, fraction) est refusée (400) au lieu d'être ignorée ; au-delà du
+// plafond : 409. Le coût reste déclaré par l'appelant (aucun relevé de facturation local).
+export function costCents(value) {
+  if (value == null) return 0;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) fail(400, "Coût illisible : entier de cents positif ou nul attendu.");
+  return value;
+}
+
 export function recordCost(mission, cents) {
-  const amount = Number(cents);
-  if (!Number.isFinite(amount) || amount < 0) fail(400, "Dépense illisible.");
+  const amount = costCents(cents);
   if (mission.cost.spentCents + amount > mission.cost.capCents) fail(409, "Plafond de dépense atteint.");
   mission.cost.spentCents += amount;
 }
@@ -350,7 +358,8 @@ export function startMissionTask(mission, commands, taskId, options = {}) {
   const source = mission.tasks.find((task) => task.id === taskId);
   if (!source) fail(404, "Tâche introuvable");
   if (!["ready", "running", "rework", "blocked"].includes(mission.status)) fail(409, "La mission n'est pas prête à démarrer.");
-  if (Number(options.costCents) > 0) recordCost(mission, options.costCents);
+  const declared = costCents(options.costCents);
+  if (declared > 0) recordCost(mission, declared);
   const unmet = (source.dependsOn || []).filter((id) => mission.tasks.find((task) => task.id === id)?.status !== "done");
   if (unmet.length) fail(409, "Une tâche précédente n'est pas terminée.");
   const now = clock(options);
