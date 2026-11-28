@@ -164,8 +164,40 @@ test("T1", "Sans le jeton de la tentative en cours, un tiers ne change pas une c
   const id2 = await h.cmd("T1 running sans claim");
   const forced = await h.patch(id2, { status: "running" }, B);
   assert(forced.status === 409, `PATCH running sans claim ${forced.status}`);
+  const forcedS = await h.patch(id2, { status: " running " }, B);
+  assert(forcedS.status === 409, `PATCH « running » avec espaces sans claim ${forcedS.status}`);
   const forcedD = await h.patch(id2, { status: "dispatched" }, B);
   assert(forcedD.status === 409, `PATCH dispatched sans claim ${forcedD.status}`);
+});
+
+// ---------- T9 : réouverture d'une commande terminale ----------
+test("T9", "Une commande terminée ne se rouvre que par un humain ; l'empreinte du jeton n'est jamais exposée", async () => {
+  const h = harness();
+  const id = await h.cmd("T9 terminale"); const a = await h.claim(id, A);
+  const cred = { attemptId: a.body.command.claim.attemptId, claimToken: a.body.claimToken };
+  const done = await h.patch(id, { status: "done", proof: "fini", ...cred }, A);
+  assert(done.status === 200, `done ${done.status}`);
+  const shown = JSON.stringify([done.body, (await h.get(id)).body, (await h.call("GET", "/api/hq/commands", {}, A)).body]);
+  assert(!shown.includes("completedTokenHash") && !shown.includes("tokenHash"), "l'empreinte du jeton de la tentative terminée est exposée");
+  for (const [who, label] of [[SVC, "service:hq-poll"], [B, "tiers work"], [{ ...COO_MACHINE }, "machine review"]]) {
+    const reopen = await h.patch(id, { status: "pending" }, who);
+    assert(reopen.status >= 400, `réouverture par ${label} ${reopen.status}`);
+  }
+  const reopenA = await h.patch(id, { status: "pending", ...cred }, A);
+  assert(reopenA.status === 409, `réouverture par l'ancien titulaire ${reopenA.status}`);
+  const c2 = await h.claim(id, B);
+  assert(c2.status === 409 && !c2.body.claimToken, `claim après tentative de réouverture ${c2.status}/${c2.body.outcome}`);
+  const dup = await h.patch(id, { status: "done", proof: "fini", ...cred }, A);
+  assert(dup.status === 200 && dup.body.outcome === "duplicate", `contrôle positif : renvoi identique ${dup.status}/${dup.body.outcome}`);
+  for (const terminal of ["failed", "cancelled"]) {
+    const idT = await h.cmd(`T9 ${terminal}`); const aT = await h.claim(idT, A);
+    const closeT = await h.patch(idT, { status: terminal, agentNote: "clos", attemptId: aT.body.command.claim.attemptId, claimToken: aT.body.claimToken }, A);
+    assert(closeT.status === 200, `${terminal} ${closeT.status} ${closeT.body.error || ""}`);
+    const reopenT = await h.patch(idT, { status: "pending" }, B);
+    assert(reopenT.status === 409, `réouverture ${terminal} par un tiers ${reopenT.status}`);
+  }
+  const human = await h.patch(id, { status: "pending", agentNote: "Réouverture décidée par Philippe." }, COO_HUMAN);
+  assert(human.status === 200 && human.body.command.status === "pending", `contrôle positif : réouverture humaine ${human.status} ${human.body.error || ""}`);
 });
 
 let failed = 0;

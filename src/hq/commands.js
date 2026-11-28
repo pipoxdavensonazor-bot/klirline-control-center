@@ -27,6 +27,7 @@ const PRIORITIES = {
 const OPEN_CLAIM = new Set(["pending", "queued"]);
 const LEASED = new Set(["dispatched", "running"]);
 const CLOSED = new Set(["awaiting_validation", "blocked", "done", "failed", "cancelled"]);
+const TERMINAL = new Set(["done", "failed", "cancelled"]);
 
 function fail(status, message) {
   const error = new Error(message);
@@ -81,6 +82,9 @@ export function publicCommand(command) {
   if (!command || typeof command !== "object") return command;
   const copy = { ...command };
   delete copy.claimToken;
+  // T9 : l'empreinte du jeton de la tentative terminée n'est jamais exposée (elle l'était dès que
+  // claim valait null, c'est-à-dire sur toute commande terminée).
+  delete copy.completedTokenHash;
   if (command.claim && typeof command.claim === "object") {
     copy.claim = {
       holder: String(command.claim.holder || ""),
@@ -88,7 +92,6 @@ export function publicCommand(command) {
       claimedAt: command.claim.claimedAt || null,
       leaseUntil: command.claim.leaseUntil || null,
     };
-    delete copy.completedTokenHash;
   } else {
     copy.claim = null;
   }
@@ -213,7 +216,8 @@ export function decideCompletion(command, input, options = {}) {
   } catch (error) {
     return { http: error.status || 400, persist: false, body: { error: error.message } };
   }
-  const status = String(input?.status || command.status);
+  const status = String(input?.status || command.status).trim();
+  if (!HQ_STATUSES.includes(status)) return { http: 400, persist: false, body: { error: "Statut inconnu." } };
   const writesResult = status === "done" || status === "failed" || Object.hasOwn(input || {}, "result") || Object.hasOwn(input || {}, "proof");
   // T1 (banc phase 5) : une commande sous bail (dispatched/running) ne change que par la tentative
   // en cours (attemptId + claimToken) ou par un humain. Sans cela, un tiers pouvait la remettre en
@@ -223,6 +227,15 @@ export function decideCompletion(command, input, options = {}) {
       http: 409,
       persist: false,
       body: { mode: "hq", outcome: "rejected", error: "Cette tentative ne peut plus écrire le résultat.", command: publicCommand(command) },
+    };
+  }
+  // T9 (banc phase 5) : une commande terminée (done/failed/cancelled) ne se rouvre que par un humain.
+  // Seul le renvoi d'un résultat sur une commande done reste traité plus bas (duplicate ou 409).
+  if (TERMINAL.has(command.status) && options.human !== true && !(command.status === "done" && status === "done")) {
+    return {
+      http: 409,
+      persist: false,
+      body: { mode: "hq", outcome: "rejected", error: "Une commande terminée ne se rouvre que par un humain.", command: publicCommand(command) },
     };
   }
   // T1 : on n'entre en dispatched/running que par un claim (sinon : running sans bail ni jeton).
