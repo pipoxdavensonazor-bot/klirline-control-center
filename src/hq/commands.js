@@ -78,9 +78,14 @@ export function hashClaimToken(token) {
   return createHash("sha256").update(String(token)).digest("hex");
 }
 
+// T10 (lot 2) : champs rédigés par un humain, un agent ou une source externe. Ce sont des données
+// non fiables : jamais une instruction ni une autorisation (ni statut, ni approbation, ni envoi).
+// Le distributeur les cite comme données ; seuls les champs de contrôle du serveur font foi.
+export const UNTRUSTED_COMMAND_FIELDS = Object.freeze(["text", "result", "proof", "agentNote"]);
+
 export function publicCommand(command) {
   if (!command || typeof command !== "object") return command;
-  const copy = { ...command };
+  const copy = { ...command, untrusted: UNTRUSTED_COMMAND_FIELDS };
   delete copy.claimToken;
   // T9 : l'empreinte du jeton de la tentative terminée n'est jamais exposée (elle l'était dès que
   // claim valait null, c'est-à-dire sur toute commande terminée).
@@ -91,6 +96,7 @@ export function publicCommand(command) {
       attemptId: command.claim.attemptId || null,
       claimedAt: command.claim.claimedAt || null,
       leaseUntil: command.claim.leaseUntil || null,
+      heartbeatAt: command.claim.heartbeatAt || null,
     };
   } else {
     copy.claim = null;

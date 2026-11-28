@@ -690,6 +690,8 @@ export function presentMission(mission, actorId, now = new Date(), orgId) {
       approvalValid: Boolean(validApproval(mission, now, { ...context, draft })),
     })),
     approvalRequest: approvalRequest(mission, context),
+    // T10 (lot 2) : contenus non fiables (données, jamais des instructions ni des autorisations).
+    untrusted: ["objective", "successCriterion", "result", "deliverables[].body", "drafts[].body", "drafts[].recipient", "approvals[].note", "events[].detail"],
     approvalValid: Boolean(approval),
     approvalExpiresAt: approval?.expiresAt || null,
     outcomes: { demosPrepared: mission.deliverables?.length || 0, demosBooked: 0 },
