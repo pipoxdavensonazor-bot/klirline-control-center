@@ -338,6 +338,15 @@ test("J1", "Journal d'audit : chaque écriture (acceptée ou refusée) est trac�
   }
 });
 
+test("I2", "L'exemple config/hq-machines.example.json passe le contrôle avant déploiement une fois ses Client ID (factices) remplis : aucune machine « coo »", async () => {
+  const fs = await import("node:fs");
+  const { checkIdentityConfig } = await import("../src/hq/identity-check.js");
+  const example = JSON.parse(fs.readFileSync(new URL("../config/hq-machines.example.json", import.meta.url), "utf8"));
+  const filled = example.map((item, index) => ({ ...item, accessClientId: `${["ab", "cd", "ef", "12"][index % 4].repeat(16)}.access`, token: undefined }));
+  const result = checkIdentityConfig({ HQ_MACHINE_IDENTITIES: JSON.stringify(filled), ACCESS_SERVICE_CLIENT_IDS: filled.map((item) => item.accessClientId).join(",") });
+  assert(result.ok, `exemple refusé : ${result.errors.join(" | ")}`);
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;
