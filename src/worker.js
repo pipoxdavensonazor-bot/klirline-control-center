@@ -271,7 +271,7 @@ export class CompanyState extends DurableObject {
     );
   }
 
-  consume(key, now) {
+  consume(key, now, maxRequests = API_LIMITS.maxRequests) {
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS rate (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, count INTEGER NOT NULL)",
     );
@@ -285,7 +285,7 @@ export class CompanyState extends DurableObject {
       next.windowStart,
       next.count,
     );
-    if (next.count <= API_LIMITS.maxRequests) return { allowed: true, retryAfter: 0 };
+    if (next.count <= maxRequests) return { allowed: true, retryAfter: 0 };
     const retryAfter = Math.max(1, Math.ceil((next.windowStart + API_LIMITS.windowMs - now) / 1000));
     return { allowed: false, retryAfter };
   }
@@ -360,7 +360,7 @@ export default {
 
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const limiter = env.COMPANY.get(env.COMPANY.idFromName(RATE_OBJECT_NAME));
-      const ipLimit = await limiter.consume(rateKey({ ip }), Date.now());
+      const ipLimit = await limiter.consume(rateKey({ ip }), Date.now(), API_LIMITS.maxRequestsPerIp);
       if (!ipLimit.allowed) return json(429, { error: "Trop de requêtes." }, { "Retry-After": String(ipLimit.retryAfter) });
 
       if (routeAccess(url.pathname, request.method) === "public") {
