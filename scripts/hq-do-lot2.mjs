@@ -88,7 +88,8 @@ test("J2", "Journal d'audit dans le Durable Object : écrit à chaque écriture,
   const after = await sql("SELECT COUNT(*) AS n FROM hq_audit");
   assert(after.rows[0].n === before.rows[0].n, "le nombre d'entrées a changé");
   const human = await call("GET", "/api/hq/audit?limit=5", null, COO);
-  assert(human.status === 200 && human.body.audit.length === 5 && human.body.audit.every((e) => e.orgId === "klirline"), `lecture humaine : ${human.status}`);
+  const expected = Math.min(5, Number(after.rows[0].n));
+  assert(human.status === 200 && human.body.audit.length === expected && human.body.audit.every((e) => e.orgId === "klirline"), `lecture humaine : ${human.status} ${human.body.audit?.length}/${expected}`);
   const other = await call("GET", "/api/hq/audit", null, COO, T0, "org-b");
   assert(other.status === 200 && other.body.audit.length === 0, `journal de B : ${other.body.audit?.length}`);
 });
