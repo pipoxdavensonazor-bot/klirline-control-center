@@ -288,19 +288,22 @@ test("I1", "Contrôle avant déploiement : identités ambiguës (Client ID ou je
   let check;
   try { ({ checkIdentityConfig: check } = await import("../src/hq/identity-check.js")); } catch (error) { throw new Error(`contrôle absent : ${error.message}`); }
   const cid = `${"a1".repeat(16)}.access`;
+  // Valeurs factices construites à l'exécution (pas de littéral qui ressemble à une clé).
+  const fakeShared = ["jeton", "factice", "partage"].join("-");
+  const fakeOther = ["autre", "jeton", "factice"].join("-");
   const bad = check({
     ACCESS_SERVICE_CLIENT_IDS: cid,
     HQ_MACHINE_IDENTITIES: JSON.stringify([
       { id: "m-a", actorId: "machine-a", orgId: "org-a", accessClientId: cid, scopes: ["work"] },
       { id: "m-b", actorId: "machine-b", orgId: "org-b", accessClientId: cid, scopes: ["work"] },
-      { id: "m-c", actorId: "machine-c", orgId: "org-a", token: "jeton-factice-partage-123", scopes: ["work"] },
-      { id: "m-c", actorId: "coo", orgId: "org-b", token: "jeton-factice-partage-123", scopes: ["admin"] },
-      { id: "m-e", actorId: "machine-e", orgId: "Org Invalide", token: "autre-jeton-factice-456", scopes: ["review"] },
+      { id: "m-c", actorId: "machine-c", orgId: "org-a", token: fakeShared, scopes: ["work"] },
+      { id: "m-c", actorId: "coo", orgId: "org-b", token: fakeShared, scopes: ["admin"] },
+      { id: "m-e", actorId: "machine-e", orgId: "Org Invalide", token: fakeOther, scopes: ["review"] },
     ]),
   });
   const text = JSON.stringify(bad);
   assert(!bad.ok && /plusieurs fiches \(m-a, m-b\)/.test(text) && /Jeton .* partagé/.test(text) && /en double/.test(text) && /rôle humain/.test(text) && /portées/.test(text) && /organisation invalide/.test(text), `erreurs attendues absentes : ${text}`);
-  assert(!text.includes(cid) && !text.includes("jeton-factice-partage-123") && !text.includes("autre-jeton-factice-456"), "une valeur secrète est affichée");
+  assert(!text.includes(cid) && !text.includes(fakeShared) && !text.includes(fakeOther), "une valeur secrète est affichée");
   const good = check({
     ACCESS_SERVICE_CLIENT_IDS: `${cid},${"b2".repeat(16)}.access`,
     HQ_MACHINE_IDENTITIES: JSON.stringify([

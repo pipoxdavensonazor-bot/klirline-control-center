@@ -3,3 +3,8 @@
 # détecté par la règle generic-api-key. Toute autre occurrence, ou tout autre fichier, reste signalée.
 d754179bab2222417ab76a992c8b7712c03671f4:knowledge/bureau-exploitation.md:generic-api-key:56
 bbb5a771e73e8c95624d8d6ef318c88a66fbe92c:knowledge/bureau-exploitation.md:generic-api-key:44
+# Lot 2 : jetons FACTICES d'un test (hq-regression-lot2 I1, commit efbb2e6), remplacés au commit
+# suivant par des valeurs construites à l'exécution. Ces trois empreintes historiques seulement.
+efbb2e67b8e008578928d022f63a15cced1e9477:scripts/hq-regression-lot2.mjs:generic-api-key:296
+efbb2e67b8e008578928d022f63a15cced1e9477:scripts/hq-regression-lot2.mjs:generic-api-key:297
+efbb2e67b8e008578928d022f63a15cced1e9477:scripts/hq-regression-lot2.mjs:generic-api-key:298
