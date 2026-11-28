@@ -567,8 +567,9 @@ check(closedClaim.status === 409 && !Object.hasOwn(closedClaim.body, "claimToken
 
 const stale = await hqCall("POST", "/api/hq/command", { text: "suivre l'exécution trop longue", ownerSlug: "ops-klirline" }, t0);
 const staleId = stale.body.command.id;
-await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, t0);
-await hqCall("PATCH", `/api/hq/commands/${staleId}`, { status: "running", agentNote: "Démarré" }, t0);
+const staleClaim = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, t0);
+// T1 : passer running exige la tentative en cours (attemptId + claimToken).
+await hqCall("PATCH", `/api/hq/commands/${staleId}`, { status: "running", agentNote: "Démarré", attemptId: staleClaim.body.command.claim.attemptId, claimToken: staleClaim.body.claimToken }, t0);
 const staleAt = new Date(t0.getTime() + HQ_LEASE_MS + 1000);
 const blockedRun = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, staleAt);
 check(blockedRun.status === 200 && blockedRun.body.outcome === "blocked" && blockedRun.body.command.status === "blocked", "Un running trop ancien passe bloqué");
@@ -590,8 +591,8 @@ check(reclaimed.body.command.agentNote.includes("Reprise documentée") && reclai
 
 const halted = await hqCall("POST", "/api/hq/command", { text: "couper le travail en cours", ownerSlug: "noria" }, t0);
 const haltedId = halted.body.command.id;
-await hqCall("POST", `/api/hq/commands/${haltedId}/claim`, {}, t0);
-await hqCall("PATCH", `/api/hq/commands/${haltedId}`, { status: "running" }, t0);
+const haltedClaim = await hqCall("POST", `/api/hq/commands/${haltedId}/claim`, {}, t0);
+await hqCall("PATCH", `/api/hq/commands/${haltedId}`, { status: "running", attemptId: haltedClaim.body.command.claim.attemptId, claimToken: haltedClaim.body.claimToken }, t0);
 const haltAt = new Date(t0.getTime() + 5000);
 const interrupted = await hqCall("POST", `/api/hq/commands/${haltedId}/interrupt`, { note: "Processus arrêté avant la preuve." }, haltAt);
 check(interrupted.status === 200 && interrupted.body.command.status === "running" && interrupted.body.command.updatedAt === haltAt.toISOString(), "L'interruption garde le statut et la date");

@@ -215,6 +215,24 @@ export function decideCompletion(command, input, options = {}) {
   }
   const status = String(input?.status || command.status);
   const writesResult = status === "done" || status === "failed" || Object.hasOwn(input || {}, "result") || Object.hasOwn(input || {}, "proof");
+  // T1 (banc phase 5) : une commande sous bail (dispatched/running) ne change que par la tentative
+  // en cours (attemptId + claimToken) ou par un humain. Sans cela, un tiers pouvait la remettre en
+  // pending puis la reprendre pendant que le titulaire travaillait encore.
+  if (LEASED.has(command.status) && options.human !== true && !credentialMatches(command.claim, input?.attemptId, input?.claimToken)) {
+    return {
+      http: 409,
+      persist: false,
+      body: { mode: "hq", outcome: "rejected", error: "Cette tentative ne peut plus écrire le résultat.", command: publicCommand(command) },
+    };
+  }
+  // T1 : on n'entre en dispatched/running que par un claim (sinon : running sans bail ni jeton).
+  if (!LEASED.has(command.status) && LEASED.has(status) && options.human !== true) {
+    return {
+      http: 409,
+      persist: false,
+      body: { mode: "hq", outcome: "rejected", error: "Une commande ne passe transmise ou en cours que par un claim.", command: publicCommand(command) },
+    };
+  }
   if (!writesResult) {
     try {
       const next = applyHqPatch(command, input, options);

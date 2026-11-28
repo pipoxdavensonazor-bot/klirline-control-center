@@ -139,6 +139,35 @@ test("T4", "Annulation et interruption refusées sans portée ou hors titulaire 
   assert(svcClaim.status === 403, `claim sans portées ${svcClaim.status}`);
 });
 
+// ---------- T1 : reprise d'une commande sous bail sans jeton ----------
+test("T1", "Sans le jeton de la tentative en cours, un tiers ne change pas une commande sous bail", async () => {
+  const h = harness();
+  const id = await h.cmd("T1 reprise"); const a = await h.claim(id, A);
+  const cred = { attemptId: a.body.command.claim.attemptId, claimToken: a.body.claimToken };
+  const done = await h.patch(id, { status: "done", proof: "faux" }, B);
+  assert(done.status === 409, `PATCH done B sans jeton ${done.status}`);
+  const reset = await h.patch(id, { status: "pending" }, B);
+  assert(reset.status === 409, `PATCH pending B sans jeton ${reset.status}`);
+  const run = await h.patch(id, { status: "running" }, B);
+  assert(run.status === 409, `PATCH running B sans jeton ${run.status}`);
+  const cancel = await h.patch(id, { status: "cancelled" }, B);
+  assert(cancel.status === 409, `PATCH cancelled B sans jeton ${cancel.status}`);
+  const bareA = await h.patch(id, { status: "pending" }, A);
+  assert(bareA.status === 409, `PATCH pending A sans jeton ${bareA.status}`);
+  const b = await h.claim(id, B);
+  assert(b.body.outcome === "held" && !b.body.claimToken, `claim B ${b.status}/${b.body.outcome}`);
+  const runA = await h.patch(id, { status: "running", ...cred }, A);
+  assert(runA.status === 200 && runA.body.command.status === "running", `contrôle positif : running par le titulaire ${runA.status} ${runA.body.error || ""}`);
+  const doneA = await h.patch(id, { status: "done", proof: "Preuve du titulaire", ...cred }, A);
+  assert(doneA.status === 200 && doneA.body.command.status === "done", `contrôle positif : done par le titulaire ${doneA.status} ${doneA.body.error || ""}`);
+  // Entrer en dispatched/running hors claim est refusé (sinon : running sans bail, cf. hq-33ebcef6).
+  const id2 = await h.cmd("T1 running sans claim");
+  const forced = await h.patch(id2, { status: "running" }, B);
+  assert(forced.status === 409, `PATCH running sans claim ${forced.status}`);
+  const forcedD = await h.patch(id2, { status: "dispatched" }, B);
+  assert(forcedD.status === 409, `PATCH dispatched sans claim ${forcedD.status}`);
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;
