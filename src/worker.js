@@ -235,13 +235,19 @@ export class CompanyState extends DurableObject {
     return ids.map((commandId) => this.hqGet(commandId)).filter(Boolean);
   }
 
+  // Lot 2 (cohérence) : lecture, décision et écritures mission + commande dans une seule
+  // transaction SQLite. Une panne entre deux écritures annule tout (avant : la commande restait
+  // écrite sans la mission, p. ex. commande orpheline ou commande done sans livrable).
   hqMissionOperate(id, operation, input, actorId, options = {}) {
     try {
-      const mission = this.hqMissionGet(id);
-      const result = runMissionOperation(mission, this.hqMissionCommands(mission), operation, input || {}, { ...options, actorId });
-      if (result.insertCommand) this.hqInsert(result.command);
-      else if (result.replaceCommand && result.command) this.hqReplace(result.command);
-      if (result.changed && result.mission) this.hqMissionReplace(result.mission);
+      const result = this.ctx.storage.transactionSync(() => {
+        const mission = this.hqMissionGet(id);
+        const decided = runMissionOperation(mission, this.hqMissionCommands(mission), operation, input || {}, { ...options, actorId });
+        if (decided.insertCommand) this.hqInsert(decided.command);
+        else if (decided.replaceCommand && decided.command) this.hqReplace(decided.command);
+        if (decided.changed && decided.mission) this.hqMissionReplace(decided.mission);
+        return decided;
+      });
       return { ok: true, result };
     } catch (error) {
       return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
