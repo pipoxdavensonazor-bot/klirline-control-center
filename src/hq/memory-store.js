@@ -1,4 +1,4 @@
-import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, expireLease, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
 import { runMissionOperation } from "./missions.js";
 
 function missing() {
@@ -19,6 +19,14 @@ export function memoryHqStore(seed = []) {
   const commands = seed.map((command) => ({ ...command }));
   const missions = [];
   return {
+    async sweep(now) {
+      let count = 0;
+      commands.forEach((command, index) => {
+        const next = expireLease(command, { now });
+        if (next) { commands[index] = next; count += 1; }
+      });
+      return count;
+    },
     async list(filter) {
       return sortCommands(commands.filter((command) => matchesFilter(command, filter)));
     },

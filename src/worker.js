@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { accessSettings, assertServiceRoute, identityFromAccess, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
-import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt } from "./hq/commands.js";
+import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, expireLease } from "./hq/commands.js";
 import { accessScopes, resolveServiceMachine } from "./hq/machine-auth.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { runMissionOperation } from "./hq/missions.js";
@@ -182,6 +182,19 @@ export class CompanyState extends DurableObject {
     return this.hqApply(id, decideClaim(this.hqGet(id), options));
   }
 
+  // T13 (lot 2) : balayage des baux expirés, synchrone et transactionnel (lecture + écriture).
+  hqSweep(now) {
+    return this.ctx.storage.transactionSync(() => {
+      const rows = this.ctx.storage.sql.exec("SELECT body FROM hq_command WHERE status IN ('dispatched', 'running')").toArray();
+      let count = 0;
+      for (const row of rows) {
+        const next = expireLease(JSON.parse(row.body), { now });
+        if (next) { this.hqReplace(next); count += 1; }
+      }
+      return count;
+    });
+  }
+
   hqHeartbeat(id, input, options) {
     return this.hqApply(id, decideHeartbeat(this.hqGet(id), input, options));
   }
@@ -301,6 +314,7 @@ async function playbookCatalog(request, env) {
 
 export function hqDurableStore(company) {
   return {
+    sweep: (now) => company.hqSweep(now instanceof Date ? now.toISOString() : now),
     list: (filter) => company.hqList(filter),
     get: (id) => company.hqGet(id),
     insert: (command) => company.hqInsert(command),

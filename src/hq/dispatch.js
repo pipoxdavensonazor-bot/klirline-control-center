@@ -106,6 +106,10 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
       },
     };
   }
+  // T13 (lot 2) : toute lecture de commandes balaie d'abord les baux expirés (horloge de la requête).
+  if (method === "GET" && pathname.startsWith("/api/hq/") && (pathname === "/api/hq/roster" || pathname.startsWith("/api/hq/commands")) && store.sweep) {
+    await store.sweep(clock);
+  }
   if (method === "GET" && pathname === "/api/hq/roster") {
     const commands = await store.list({});
     return { status: 200, body: { mode: "hq", roster: rosterView(commands) } };

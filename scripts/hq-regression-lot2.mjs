@@ -22,7 +22,7 @@ function harness(orgId = "org-a") {
   const call = async (method, pathname, body = {}, who = A, extra = {}) => {
     try {
       return await dispatchHq(store, {
-        method, pathname, searchParams: new URLSearchParams(pathname.split("?")[1] || ""), body,
+        method, pathname: pathname.split("?")[0], searchParams: new URLSearchParams(pathname.split("?")[1] || ""), body,
         actorId: who.actor, scopes: who.scopes, human: who.human === true, now: new Date(extra.now || T0), orgId: extra.orgId ?? orgId,
       });
     } catch (error) {
@@ -230,6 +230,25 @@ test("D2", "T7 : un heartbeat après expiration est refusé (409) ; la reprise p
   const done = await h.call("POST", "/api/hq/command", { text: "Commande close", ownerSlug: "sandbox-klirline" }, A);
   const pend = await h.call("POST", `/api/hq/commands/${done.body.command.id}/heartbeat`, { attemptId: "x", claimToken: "y" }, A);
   assert(pend.status === 409, `heartbeat sans bail : ${pend.status}`);
+});
+
+test("D3", "T13 : à la lecture, un bail dispatched expiré est remis en file (pending) et un running expiré est bloqué ; l'ancien jeton est refusé", async () => {
+  const h = harness();
+  const d = await claimed(h, "Commande abandonnée");
+  const r = await claimed(h, "Commande en cours abandonnée");
+  await h.call("PATCH", `/api/hq/commands/${r.id}`, { status: "running", attemptId: r.attemptId, claimToken: r.claimToken }, A);
+  const early = await h.call("GET", `/api/hq/commands/${d.id}`, {}, A, { now: "2026-11-28T15:10:00.000Z" });
+  assert(early.body.command.status === "dispatched", `bail actif modifié : ${early.body.command.status}`);
+  const poll = await h.call("GET", "/api/hq/commands?status=pending", {}, { actor: "service:hq-poll", scopes: ["work"] }, { now: "2026-11-28T18:00:00.000Z" });
+  assert(poll.status === 200 && poll.body.commands.some((c) => c.id === d.id), `le poll ne revoit pas la commande abandonnée : ${poll.status} ${poll.body.error || ""}`);
+  const one = await h.call("GET", `/api/hq/commands/${d.id}`, {}, A, { now: "2026-11-28T18:00:00.000Z" });
+  const run = await h.call("GET", `/api/hq/commands/${r.id}`, {}, A, { now: "2026-11-28T18:00:00.000Z" });
+  assert(one.body.command.status === "pending" && one.body.command.claim === null, `dispatched expiré : ${one.body.command.status}`);
+  assert(run.body.command.status === "blocked", `running expiré : ${run.body.command.status}`);
+  const old = await h.call("PATCH", `/api/hq/commands/${d.id}`, { status: "done", proof: "ancienne", attemptId: d.attemptId, claimToken: d.claimToken }, A, { now: "2026-11-28T18:00:01.000Z" });
+  assert(old.status === 409, `ancien jeton après remise en file : ${old.status}`);
+  const again = await h.call("POST", `/api/hq/commands/${d.id}/claim`, {}, B, { now: "2026-11-28T18:00:02.000Z" });
+  assert(again.body.outcome === "issued", `nouvelle prise : ${again.body.outcome}`);
 });
 
 let failed = 0;

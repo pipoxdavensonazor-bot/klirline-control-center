@@ -449,6 +449,26 @@ export function decideHeartbeat(command, input, options = {}) {
   return { http: 200, persist: true, command: next, body: { mode: "hq", outcome: "extended", command: publicCommand(next) } };
 }
 
+// T13 (lot 2) : un bail expiré ne reste pas « dispatched » indéfiniment. À chaque lecture
+// (GET d'une commande, liste — dont le poll du distributeur ?status=pending — et roster), avec
+// l'horloge de la requête : dispatched expiré → pending (remise en file, jeton invalidé) ;
+// running expiré → blocked (comme decideClaim : une exécution peut-être partielle n'est jamais
+// relancée sans un humain). Pas d'alarme Durable Object : l'horloge réelle d'une alarme
+// contredirait l'horloge simulée du banc ; le poll régulier tient ce rôle.
+export function expireLease(command, options = {}) {
+  if (!command || !LEASED.has(command.status)) return null;
+  const now = clock(options);
+  if (leaseActive(command, now.getTime())) return null;
+  const iso = now.toISOString();
+  const since = command.claim?.leaseUntil || command.updatedAt;
+  if (command.status === "running") {
+    return { ...command, status: "blocked", updatedAt: iso, claim: null,
+      agentNote: joinNotes(command.agentNote, `Bail expiré (${since}) pendant l'exécution : statut bloqué, aucune relance automatique.`) };
+  }
+  return { ...command, status: "pending", updatedAt: iso, claim: null,
+    agentNote: joinNotes(command.agentNote, `Bail expiré (${since}) : remise en file, l'ancienne tentative ne peut plus écrire.`) };
+}
+
 export function decideInterrupt(command, options = {}) {
   if (!command) {
     return { http: 404, persist: false, body: { error: "Commande introuvable" } };

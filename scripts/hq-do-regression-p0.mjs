@@ -101,7 +101,7 @@ test("E1", "Une tâche dont la commande sort de la fenêtre de 200 reste livrabl
     const filler = await call("POST", "/api/hq/command", { text: `Remplissage ${i}`, ownerSlug: "sandbox-klirline" }, { now: new Date(Date.parse("2026-11-23T10:05:00.000Z") + i * 1000).toISOString() });
     assert(filler.status === 201, `remplissage ${i} ${filler.status}`);
   }
-  const listed = await call("GET", "/api/hq/commands", {});
+  const listed = await call("GET", "/api/hq/commands", {}, { now: "2026-11-23T10:10:00.000Z" });
   assert(listed.payload.commands.length === 200 && !listed.payload.commands.some((c) => c.missionId === mid), "la commande de la tâche devrait être hors de la liste de 200 (condition du test)");
   const dl = await call("POST", `/api/hq/missions/${mid}/deliverables`, { taskId: tid, attemptId: st.payload.attemptId, claimToken: st.payload.claimToken, body: "Livrable après 205 commandes." }, { now: "2026-11-23T10:20:00.000Z" });
   assert(dl.status === 200 && dl.payload.mission.deliverables.length === 1, `livrable ${dl.status} ${dl.payload.error || ""}`);
