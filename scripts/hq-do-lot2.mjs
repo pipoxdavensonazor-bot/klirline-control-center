@@ -93,6 +93,78 @@ test("J2", "Journal d'audit dans le Durable Object : écrit à chaque écriture,
   assert(other.status === 200 && other.body.audit.length === 0, `journal de B : ${other.body.audit?.length}`);
 });
 
+import { randomBytes } from "node:crypto";
+const KEYS = { encryptionKey: randomBytes(32).toString("hex"), authKey: randomBytes(32).toString("hex") };
+const CEO = { actorId: "ceo", orgId: "klirline", human: true };
+const op = (pathname, input, org = "klirline") => mf.dispatchFetch(`http://local${pathname}`, { method: "POST", headers: { "content-type": "application/json", "x-org": org }, body: JSON.stringify(input) }).then(async (r) => ({ status: r.status, body: await r.json() }));
+const dump = async (org) => {
+  const out = {};
+  for (const t of ["hq_command", "hq_mission"]) out[t] = (await sql(`SELECT * FROM ${t} ORDER BY id`, org)).rows;
+  out.hq_audit = (await sql("SELECT seq, at, body FROM hq_audit ORDER BY seq", org)).rows;
+  return out;
+};
+
+test("K1", "B2 : export chiffré (AES-256-GCM) avec manifeste authentifié (HMAC), restauration vérifiée dans un objet vide : données identiques, restauration journalisée", async () => {
+  const { mid, tid } = await readyMission();
+  await call("POST", `/api/hq/missions/${mid}/tasks/${tid}/start`, {});
+  const source = await dump("klirline");
+  const exp = await op("/__backup/export", { identity: CEO, reason: "Essai de sauvegarde locale du lot 2", keys: KEYS });
+  assert(exp.status === 200 && exp.body.manifest.cipher === "AES-256-GCM" && exp.body.signature.length === 64, `export : ${exp.status} ${exp.body.error || ""}`);
+  assert(!exp.body.ciphertext.includes("hq_command") && !JSON.stringify(exp.body).includes(mid), "le paquet exporté contient des données en clair");
+  const res = await op("/__backup/restore", { identity: CEO, reason: "Essai de restauration locale du lot 2", bundle: exp.body, keys: KEYS }, "klirline-restauration");
+  assert(res.status === 200 && res.body.restored.hq_command === source.hq_command.length, `restauration : ${res.status} ${res.body.error || ""}`);
+  const target = await dump("klirline-restauration");
+  assert(JSON.stringify(target.hq_command) === JSON.stringify(source.hq_command) && JSON.stringify(target.hq_mission) === JSON.stringify(source.hq_mission), "données restaurées différentes");
+  assert(JSON.stringify(target.hq_audit.slice(0, source.hq_audit.length)) === JSON.stringify(source.hq_audit), "journal d'audit restauré différent");
+  assert(JSON.parse(target.hq_audit.at(-1).body).action === "backup.restore", "restauration non journalisée");
+  const read = await call("GET", `/api/hq/missions/${mid}`, null, A, T0, "klirline-restauration");
+  assert(read.status === 200 && read.body.mission.id === mid, `lecture après restauration : ${read.status}`);
+});
+
+test("K2", "B2 : refus — machine, rôle non ceo, sans justification, mauvaise clé, manifeste ou chiffré altéré, autre organisation, objet cible non vide", async () => {
+  await readyMission();
+  const exp = await op("/__backup/export", { identity: CEO, reason: "Sauvegarde pour les tests de refus", keys: KEYS });
+  const reason = "Restauration de test (refus attendu)";
+  const cases = {
+    machine: await op("/__backup/export", { identity: { actorId: "ceo", orgId: "klirline", human: false }, reason, keys: KEYS }),
+    coo: await op("/__backup/export", { identity: { actorId: "coo", orgId: "klirline", human: true }, reason, keys: KEYS }),
+    sansMotif: await op("/__backup/export", { identity: CEO, reason: "", keys: KEYS }),
+    mauvaiseCle: await op("/__backup/restore", { identity: CEO, reason, bundle: exp.body, keys: { ...KEYS, encryptionKey: randomBytes(32).toString("hex") } }, "vide-1"),
+    mauvaiseAuth: await op("/__backup/restore", { identity: CEO, reason, bundle: exp.body, keys: { ...KEYS, authKey: randomBytes(32).toString("hex") } }, "vide-2"),
+    manifeste: await op("/__backup/restore", { identity: CEO, reason, bundle: { ...exp.body, manifest: { ...exp.body.manifest, exportedAt: "2020-01-01T00:00:00.000Z" } }, keys: KEYS }, "vide-3"),
+    chiffre: await op("/__backup/restore", { identity: CEO, reason, bundle: { ...exp.body, ciphertext: `${exp.body.ciphertext[0] === "A" ? "B" : "A"}${exp.body.ciphertext.slice(1)}` }, keys: KEYS }, "vide-4"),
+    autreOrg: await op("/__backup/restore", { identity: { ...CEO, orgId: "org-b" }, reason, bundle: exp.body, keys: KEYS }, "vide-5"),
+    nonVide: await op("/__backup/restore", { identity: CEO, reason, bundle: exp.body, keys: KEYS }, "klirline"),
+  };
+  const bad = Object.entries(cases).filter(([, r]) => r.status < 400).map(([k, r]) => `${k}=${r.status}`);
+  assert(!bad.length, `acceptés à tort : ${bad.join(", ")}`);
+  const expected = { machine: /humain/, coo: /Rôle/, sansMotif: /Justification/, mauvaiseCle: /déchiffrement/, mauvaiseAuth: /non authentifié/, manifeste: /non authentifié/, chiffre: /altéré/, autreOrg: /autre organisation/, nonVide: /pas vide/ };
+  const wrong = Object.entries(expected).filter(([k, re]) => !re.test(cases[k].body.error || "")).map(([k]) => `${k} « ${cases[k].body.error} »`);
+  assert(!wrong.length, `motifs inattendus : ${wrong.join(" ; ")}`);
+  for (const org of ["vide-1", "vide-2", "vide-3", "vide-4", "vide-5"]) {
+    const n = (await sql("SELECT (SELECT COUNT(*) FROM hq_command) + (SELECT COUNT(*) FROM hq_mission) AS n", org)).rows?.[0]?.n ?? 0;
+    assert(n === 0, `données écrites malgré le refus dans ${org}`);
+  }
+});
+
+test("K3", "B1 : PITR réservé à un humain ceo avec justification ; disponibilité locale constatée", async () => {
+  const machine = await op("/__pitr/bookmark", { identity: { actorId: "ops", orgId: "klirline", human: false }, reason: "Signet de test PITR", time: T0 });
+  const restoreMachine = await op("/__pitr/restore", { identity: { actorId: "ceo", orgId: "klirline", human: false }, reason: "Restauration PITR de test", bookmark: "x" });
+  assert(machine.status >= 400 && restoreMachine.status >= 400 && /humain/.test(machine.body.error) && /humain/.test(restoreMachine.body.error), `PITR machine : ${machine.status} ${restoreMachine.status}`);
+  const human = await op("/__pitr/bookmark", { identity: CEO, reason: "Signet de test PITR", time: new Date().toISOString() });
+  console.log(`     (constat) PITR local : ${human.status} ${human.body.bookmark ? "signet obtenu" : human.body.error}`);
+  assert(human.status === 200 || /indisponible|not supported|not implement|does not implement point-in-time/i.test(human.body.error || ""), `PITR humain : ${human.status} ${human.body.error}`);
+});
+
+test("K4", "Aucune route d'administration : /api/hq/backup, /api/hq/restore, /api/hq/pitr introuvables pour tous", async () => {
+  for (const p of ["/api/hq/backup", "/api/hq/restore", "/api/hq/pitr", "/api/hq/export"]) {
+    for (const who of [A, COO]) {
+      const r = await call("POST", p, {}, who);
+      assert(r.status === 404, `${p} (${who.actor}) : ${r.status}`);
+    }
+  }
+});
+
 let failed = 0;
 try {
   for (const item of tests) {

@@ -30,6 +30,18 @@ export default {
     const company = env.COMPANY.get(env.COMPANY.idFromName(request.headers.get("x-org") || "klirline"));
     if (url.pathname === "/__fault") return Response.json({ fault: await company.setFault(url.searchParams.get("point")) });
     if (url.pathname === "/__sql") return Response.json(await company.auditProbe(await request.text()));
+    if (url.pathname.startsWith("/__backup/") || url.pathname.startsWith("/__pitr/")) {
+      const input = await request.json();
+      try {
+        const op = { "/__backup/export": () => company.hqBackupExport(input.identity, input.reason, input.keys),
+          "/__backup/restore": () => company.hqBackupRestore(input.identity, input.reason, input.bundle, input.keys),
+          "/__pitr/bookmark": () => company.hqPitrBookmark(input.identity, input.reason, input.time),
+          "/__pitr/restore": () => company.hqPitrRestore(input.identity, input.reason, input.bookmark) }[url.pathname];
+        return Response.json(await op());
+      } catch (error) {
+        return Response.json({ error: error.message }, { status: error.status || 500 });
+      }
+    }
     const body = request.method === "GET" ? {} : await request.json().catch(() => ({}));
     const nowHeader = request.headers.get("x-local-now");
     try {

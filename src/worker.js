@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { accessSettings, assertServiceRoute, identityFromAccess, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
+import { BACKUP_TABLES, authorizeBackup, openBackup, sealBackup } from "./hq/backup.js";
 import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, expireLease } from "./hq/commands.js";
 import { accessScopes, resolveServiceMachine } from "./hq/machine-auth.js";
 import { dispatchHq } from "./hq/dispatch.js";
@@ -127,6 +128,66 @@ export class CompanyState extends DurableObject {
 
   hqAuditAppend(entry) {
     this.ctx.storage.sql.exec(HQ_AUDIT_INSERT, entry.at, JSON.stringify(entry));
+  }
+
+  // Lot 2 (B1/B2) : sauvegarde et restauration. Méthodes NON routées (aucune route HTTP) :
+  // appelables seulement par du code d'exploitation, pour un humain ceo avec justification.
+  async hqBackupExport(identity, reason, keys) {
+    const auth = authorizeBackup(identity, reason);
+    const rows = {};
+    for (const table of BACKUP_TABLES) rows[table] = this.ctx.storage.sql.exec(`SELECT * FROM ${table}`).toArray();
+    const at = new Date().toISOString();
+    const sealed = await sealBackup({ rows, orgId: auth.orgId, exportedAt: at, actorId: auth.actorId }, keys);
+    this.hqAuditAppend({ at, actorId: auth.actorId, orgId: auth.orgId, action: "backup.export", authorization: { human: true, override: auth.reason }, result: { status: 200 }, contentHash: `sha256-${sealed.manifest.payloadSha256}` });
+    return sealed;
+  }
+
+  async hqBackupRestore(identity, reason, bundle, keys) {
+    const auth = authorizeBackup(identity, reason);
+    const { manifest, rows } = await openBackup(bundle, { ...keys, expectedOrgId: auth.orgId });
+    return this.ctx.storage.transactionSync(() => {
+      const used = BACKUP_TABLES.reduce((n, table) => n + Number(this.ctx.storage.sql.exec(`SELECT COUNT(*) AS n FROM ${table}`).toArray()[0].n), 0);
+      if (used > 0) {
+        const error = new Error("Restauration refusée : l'objet cible n'est pas vide.");
+        error.status = 409;
+        throw error;
+      }
+      for (const row of rows.hq_command || []) this.ctx.storage.sql.exec("INSERT INTO hq_command (id, status, owner_slug, division, created_at, body) VALUES (?, ?, ?, ?, ?, ?)", row.id, row.status, row.owner_slug, row.division, row.created_at, row.body);
+      for (const row of rows.hq_mission || []) this.ctx.storage.sql.exec("INSERT INTO hq_mission (id, status, owner_slug, created_at, body) VALUES (?, ?, ?, ?, ?)", row.id, row.status, row.owner_slug, row.created_at, row.body);
+      for (const row of rows.hq_audit || []) this.ctx.storage.sql.exec("INSERT INTO hq_audit (seq, at, body) VALUES (?, ?, ?)", row.seq, row.at, row.body);
+      const at = new Date().toISOString();
+      this.hqAuditAppend({ at, actorId: auth.actorId, orgId: auth.orgId, action: "backup.restore", authorization: { human: true, override: auth.reason }, result: { status: 200 }, contentHash: `sha256-${manifest.payloadSha256}` });
+      return { restored: Object.fromEntries(BACKUP_TABLES.map((table) => [table, (rows[table] || []).length])), exportedAt: manifest.exportedAt };
+    });
+  }
+
+  // B1 : restauration à un instant (PITR Cloudflare, 30 jours). Signet puis redémarrage de l'objet.
+  async hqPitrBookmark(identity, reason, isoTime) {
+    authorizeBackup(identity, reason);
+    if (typeof this.ctx.storage.getBookmarkForTime !== "function") {
+      const error = new Error("PITR indisponible dans cet environnement.");
+      error.status = 501;
+      throw error;
+    }
+    return { bookmark: await this.ctx.storage.getBookmarkForTime(new Date(isoTime)) };
+  }
+
+  async hqPitrRestore(identity, reason, bookmark) {
+    const auth = authorizeBackup(identity, reason);
+    if (typeof bookmark !== "string" || !bookmark) {
+      const error = new Error("Signet PITR requis.");
+      error.status = 400;
+      throw error;
+    }
+    if (typeof this.ctx.storage.onNextSessionRestoreBookmark !== "function") {
+      const error = new Error("PITR indisponible dans cet environnement.");
+      error.status = 501;
+      throw error;
+    }
+    this.hqAuditAppend({ at: new Date().toISOString(), actorId: auth.actorId, orgId: auth.orgId, action: "pitr.restore", authorization: { human: true, override: auth.reason }, result: { status: 202 }, contentHash: null });
+    const undo = await this.ctx.storage.onNextSessionRestoreBookmark(bookmark);
+    this.ctx.abort("Restauration PITR demandée par un humain.");
+    return { undo };
   }
 
   hqAuditList(limit = 100) {
