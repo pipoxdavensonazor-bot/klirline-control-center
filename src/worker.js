@@ -1,11 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
 import { accessSettings, assertServiceRoute, identityFromAccess, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
-import { decideClaim, decideCompletion, decideInterrupt } from "./hq/commands.js";
+import { BACKUP_TABLES, authorizeBackup, openBackup, sealBackup } from "./hq/backup.js";
+import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, expireLease } from "./hq/commands.js";
 import { accessScopes, resolveServiceMachine } from "./hq/machine-auth.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { runMissionOperation } from "./hq/missions.js";
-import { HQ_INDEX, HQ_INSERT, HQ_MISSION_INDEX, HQ_MISSION_INSERT, HQ_MISSION_SCHEMA, HQ_MISSION_SELECT, HQ_MISSION_UPDATE, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
+import { HQ_AUDIT_GUARDS, HQ_AUDIT_INSERT, HQ_AUDIT_SCHEMA, HQ_AUDIT_SELECT, HQ_INDEX, HQ_INSERT, HQ_MISSION_INDEX, HQ_MISSION_INSERT, HQ_MISSION_SCHEMA, HQ_MISSION_SELECT, HQ_MISSION_UPDATE, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
 import { COMPANY } from "./policy.js";
 import { freshState } from "./fresh-state.js";
 import { API_LIMITS, RATE_OBJECT_NAME, nextWindow, rateKey } from "./limits.js";
@@ -81,6 +82,7 @@ async function authenticate(request, env) {
         scopes: machine.scopes,
       };
     }
+    // I1 : sans fiche machine, identityFromAccess refuse le jeton de service (403), sans repli.
     return { ...identityFromAccess(verified, settings.accounts), human: false };
   }
   const human = identityFromAccess(verified, settings.accounts);
@@ -120,6 +122,76 @@ export class CompanyState extends DurableObject {
     this.ctx.storage.sql.exec(HQ_INDEX);
     this.ctx.storage.sql.exec(HQ_MISSION_SCHEMA);
     this.ctx.storage.sql.exec(HQ_MISSION_INDEX);
+    this.ctx.storage.sql.exec(HQ_AUDIT_SCHEMA);
+    for (const guard of HQ_AUDIT_GUARDS) this.ctx.storage.sql.exec(guard);
+  }
+
+  hqAuditAppend(entry) {
+    this.ctx.storage.sql.exec(HQ_AUDIT_INSERT, entry.at, JSON.stringify(entry));
+  }
+
+  // Lot 2 (B1/B2) : sauvegarde et restauration. Méthodes NON routées (aucune route HTTP) :
+  // appelables seulement par du code d'exploitation, pour un humain ceo avec justification.
+  async hqBackupExport(identity, reason, keys) {
+    const auth = authorizeBackup(identity, reason);
+    const rows = {};
+    for (const table of BACKUP_TABLES) rows[table] = this.ctx.storage.sql.exec(`SELECT * FROM ${table}`).toArray();
+    const at = new Date().toISOString();
+    const sealed = await sealBackup({ rows, orgId: auth.orgId, exportedAt: at, actorId: auth.actorId }, keys);
+    this.hqAuditAppend({ at, actorId: auth.actorId, orgId: auth.orgId, action: "backup.export", authorization: { human: true, override: auth.reason }, result: { status: 200 }, contentHash: `sha256-${sealed.manifest.payloadSha256}` });
+    return sealed;
+  }
+
+  async hqBackupRestore(identity, reason, bundle, keys) {
+    const auth = authorizeBackup(identity, reason);
+    const { manifest, rows } = await openBackup(bundle, { ...keys, expectedOrgId: auth.orgId });
+    return this.ctx.storage.transactionSync(() => {
+      const used = BACKUP_TABLES.reduce((n, table) => n + Number(this.ctx.storage.sql.exec(`SELECT COUNT(*) AS n FROM ${table}`).toArray()[0].n), 0);
+      if (used > 0) {
+        const error = new Error("Restauration refusée : l'objet cible n'est pas vide.");
+        error.status = 409;
+        throw error;
+      }
+      for (const row of rows.hq_command || []) this.ctx.storage.sql.exec("INSERT INTO hq_command (id, status, owner_slug, division, created_at, body) VALUES (?, ?, ?, ?, ?, ?)", row.id, row.status, row.owner_slug, row.division, row.created_at, row.body);
+      for (const row of rows.hq_mission || []) this.ctx.storage.sql.exec("INSERT INTO hq_mission (id, status, owner_slug, created_at, body) VALUES (?, ?, ?, ?, ?)", row.id, row.status, row.owner_slug, row.created_at, row.body);
+      for (const row of rows.hq_audit || []) this.ctx.storage.sql.exec("INSERT INTO hq_audit (seq, at, body) VALUES (?, ?, ?)", row.seq, row.at, row.body);
+      const at = new Date().toISOString();
+      this.hqAuditAppend({ at, actorId: auth.actorId, orgId: auth.orgId, action: "backup.restore", authorization: { human: true, override: auth.reason }, result: { status: 200 }, contentHash: `sha256-${manifest.payloadSha256}` });
+      return { restored: Object.fromEntries(BACKUP_TABLES.map((table) => [table, (rows[table] || []).length])), exportedAt: manifest.exportedAt };
+    });
+  }
+
+  // B1 : restauration à un instant (PITR Cloudflare, 30 jours). Signet puis redémarrage de l'objet.
+  async hqPitrBookmark(identity, reason, isoTime) {
+    authorizeBackup(identity, reason);
+    if (typeof this.ctx.storage.getBookmarkForTime !== "function") {
+      const error = new Error("PITR indisponible dans cet environnement.");
+      error.status = 501;
+      throw error;
+    }
+    return { bookmark: await this.ctx.storage.getBookmarkForTime(new Date(isoTime)) };
+  }
+
+  async hqPitrRestore(identity, reason, bookmark) {
+    const auth = authorizeBackup(identity, reason);
+    if (typeof bookmark !== "string" || !bookmark) {
+      const error = new Error("Signet PITR requis.");
+      error.status = 400;
+      throw error;
+    }
+    if (typeof this.ctx.storage.onNextSessionRestoreBookmark !== "function") {
+      const error = new Error("PITR indisponible dans cet environnement.");
+      error.status = 501;
+      throw error;
+    }
+    this.hqAuditAppend({ at: new Date().toISOString(), actorId: auth.actorId, orgId: auth.orgId, action: "pitr.restore", authorization: { human: true, override: auth.reason }, result: { status: 202 }, contentHash: null });
+    const undo = await this.ctx.storage.onNextSessionRestoreBookmark(bookmark);
+    this.ctx.abort("Restauration PITR demandée par un humain.");
+    return { undo };
+  }
+
+  hqAuditList(limit = 100) {
+    return this.ctx.storage.sql.exec(HQ_AUDIT_SELECT, limit).toArray().map((row) => ({ seq: Number(row.seq), ...JSON.parse(row.body) }));
   }
 
   hqList(filter = {}) {
@@ -146,6 +218,20 @@ export class CompanyState extends DurableObject {
     return command;
   }
 
+  // T5 : clé d'idempotence lue dans le JSON existant (aucune nouvelle table ni colonne). Lecture et
+  // insertion dans le même appel synchrone du Durable Object : deux POST simultanés ne créent qu'une
+  // commande.
+  hqInsertIdempotent(command) {
+    const rows = this.ctx.storage.sql.exec(
+      "SELECT body FROM hq_command WHERE json_extract(body, '$.idempotencyKey') = ? AND json_extract(body, '$.createdBy') = ? LIMIT 1",
+      command.idempotencyKey,
+      command.createdBy,
+    ).toArray();
+    if (rows.length) return { created: false, command: JSON.parse(rows[0].body) };
+    this.hqInsert(command);
+    return { created: true, command };
+  }
+
   hqReplace(command) {
     this.ctx.storage.sql.exec(
       HQ_UPDATE,
@@ -165,6 +251,23 @@ export class CompanyState extends DurableObject {
 
   hqClaim(id, options) {
     return this.hqApply(id, decideClaim(this.hqGet(id), options));
+  }
+
+  // T13 (lot 2) : balayage des baux expirés, synchrone et transactionnel (lecture + écriture).
+  hqSweep(now) {
+    return this.ctx.storage.transactionSync(() => {
+      const rows = this.ctx.storage.sql.exec("SELECT body FROM hq_command WHERE status IN ('dispatched', 'running')").toArray();
+      let count = 0;
+      for (const row of rows) {
+        const next = expireLease(JSON.parse(row.body), { now });
+        if (next) { this.hqReplace(next); count += 1; }
+      }
+      return count;
+    });
+  }
+
+  hqHeartbeat(id, input, options) {
+    return this.hqApply(id, decideHeartbeat(this.hqGet(id), input, options));
   }
 
   hqInterrupt(id, options) {
@@ -195,12 +298,27 @@ export class CompanyState extends DurableObject {
     return mission;
   }
 
+  // E1 (banc phase 5) : les commandes d'une mission sont lues par identifiant, sans la fenêtre de
+  // 200 de hqList (au-delà, un livrable légitime était refusé : « commande introuvable »).
+  hqMissionCommands(mission) {
+    if (!mission) return [];
+    const ids = [...new Set((mission.tasks || []).map((task) => task.commandId).filter(Boolean))];
+    return ids.map((commandId) => this.hqGet(commandId)).filter(Boolean);
+  }
+
+  // Lot 2 (cohérence) : lecture, décision et écritures mission + commande dans une seule
+  // transaction SQLite. Une panne entre deux écritures annule tout (avant : la commande restait
+  // écrite sans la mission, p. ex. commande orpheline ou commande done sans livrable).
   hqMissionOperate(id, operation, input, actorId, options = {}) {
     try {
-      const result = runMissionOperation(this.hqMissionGet(id), this.hqList({}), operation, input || {}, { ...options, actorId });
-      if (result.insertCommand) this.hqInsert(result.command);
-      else if (result.replaceCommand && result.command) this.hqReplace(result.command);
-      if (result.changed && result.mission) this.hqMissionReplace(result.mission);
+      const result = this.ctx.storage.transactionSync(() => {
+        const mission = this.hqMissionGet(id);
+        const decided = runMissionOperation(mission, this.hqMissionCommands(mission), operation, input || {}, { ...options, actorId });
+        if (decided.insertCommand) this.hqInsert(decided.command);
+        else if (decided.replaceCommand && decided.command) this.hqReplace(decided.command);
+        if (decided.changed && decided.mission) this.hqMissionReplace(decided.mission);
+        return decided;
+      });
       return { ok: true, result };
     } catch (error) {
       return { ok: false, status: error.status || 500, error: error.message || "Erreur" };
@@ -224,7 +342,7 @@ export class CompanyState extends DurableObject {
     );
   }
 
-  consume(key, now) {
+  consume(key, now, maxRequests = API_LIMITS.maxRequests) {
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS rate (key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, count INTEGER NOT NULL)",
     );
@@ -238,7 +356,7 @@ export class CompanyState extends DurableObject {
       next.windowStart,
       next.count,
     );
-    if (next.count <= API_LIMITS.maxRequests) return { allowed: true, retryAfter: 0 };
+    if (next.count <= maxRequests) return { allowed: true, retryAfter: 0 };
     const retryAfter = Math.max(1, Math.ceil((next.windowStart + API_LIMITS.windowMs - now) / 1000));
     return { allowed: false, retryAfter };
   }
@@ -273,11 +391,16 @@ async function playbookCatalog(request, env) {
 
 export function hqDurableStore(company) {
   return {
+    auditAppend: (entry) => company.hqAuditAppend(entry),
+    auditList: (limit) => company.hqAuditList(limit),
+    sweep: (now) => company.hqSweep(now instanceof Date ? now.toISOString() : now),
     list: (filter) => company.hqList(filter),
     get: (id) => company.hqGet(id),
     insert: (command) => company.hqInsert(command),
+    insertIdempotent: (command) => company.hqInsertIdempotent(command),
     replace: (command) => company.hqReplace(command),
     claim: (id, options) => company.hqClaim(id, options),
+    heartbeat: (id, input, options) => company.hqHeartbeat(id, input, options),
     interrupt: (id, options) => company.hqInterrupt(id, options),
     complete: (id, input, options) => company.hqComplete(id, input, options),
     missionList: () => company.hqMissionList(),
@@ -310,7 +433,7 @@ export default {
 
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       const limiter = env.COMPANY.get(env.COMPANY.idFromName(RATE_OBJECT_NAME));
-      const ipLimit = await limiter.consume(rateKey({ ip }), Date.now());
+      const ipLimit = await limiter.consume(rateKey({ ip }), Date.now(), API_LIMITS.maxRequestsPerIp);
       if (!ipLimit.allowed) return json(429, { error: "Trop de requêtes." }, { "Retry-After": String(ipLimit.retryAfter) });
 
       if (routeAccess(url.pathname, request.method) === "public") {
@@ -335,6 +458,14 @@ export default {
 
       if (url.pathname.startsWith("/api/hq/")) {
         const payload = request.method === "GET" ? {} : await readJson(request);
+        // T5 : l'en-tête Idempotency-Key vaut idempotencyKey ; deux valeurs différentes sont refusées.
+        const headerKey = request.headers.get("Idempotency-Key");
+        if (headerKey != null && request.method === "POST" && payload && typeof payload === "object") {
+          if (payload.idempotencyKey != null && String(payload.idempotencyKey) !== headerKey) {
+            return json(400, { error: "Idempotency-Key et idempotencyKey diffèrent." });
+          }
+          payload.idempotencyKey = headerKey;
+        }
         const result = await dispatchHq(
           hqDurableStore(company),
           {
@@ -345,6 +476,7 @@ export default {
             actorId: identity.actorId,
             scopes: identity.scopes,
             human: identity.human === true,
+            orgId: identity.orgId,
           },
         );
         return json(result.status, result.body);

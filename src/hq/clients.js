@@ -1,7 +1,12 @@
 // Dossiers de démonstration. Ce n'est pas un second CRM : KlirProspect reste la source des fiches réelles.
+// Lot 2 (revue KCO-2026-REVUE-P1, question 5) : chaque dossier appartient à une organisation.
+// Une organisation ne voit que son catalogue (avant : catalogue commun à toutes). Aucune donnée
+// réelle tant que ce cloisonnement n'est pas validé en production.
+export const DEMO_ORG = "klirline";
 export const DEMO_CLIENTS = [
   {
     id: "cli-atelier-nord",
+    orgId: DEMO_ORG,
     name: "Atelier Nord",
     source: "demonstration",
     state: "hypothesis",
@@ -19,6 +24,7 @@ export const DEMO_CLIENTS = [
   },
   {
     id: "cli-reserve",
+    orgId: DEMO_ORG,
     name: "Dossier réservé",
     source: "demonstration",
     state: "confidential",
@@ -41,12 +47,19 @@ export function canReadClient(actorId, client) {
   return Array.isArray(client.readers) && client.readers.includes(actorId);
 }
 
-export function visibleClients(actorId) {
-  return DEMO_CLIENTS.filter((client) => canReadClient(actorId, client)).map(presentClient);
+// orgId absent (dépôts locaux de test, pilote du banc) : organisation de démonstration. Le Worker
+// passe toujours identity.orgId.
+export function clientCatalog(orgId) {
+  const org = orgId ?? DEMO_ORG;
+  return DEMO_CLIENTS.filter((client) => client.orgId === org);
 }
 
-export function visibleClient(actorId, id) {
-  const client = DEMO_CLIENTS.find((item) => item.id === id);
+export function visibleClients(actorId, orgId) {
+  return clientCatalog(orgId).filter((client) => canReadClient(actorId, client)).map(presentClient);
+}
+
+export function visibleClient(actorId, id, orgId) {
+  const client = clientCatalog(orgId).find((item) => item.id === id);
   if (!client || !canReadClient(actorId, client)) return null;
   return presentClient(client);
 }

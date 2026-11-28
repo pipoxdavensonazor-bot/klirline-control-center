@@ -277,9 +277,15 @@ const serviceClaims = {
 const serviceOpts = { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs, serviceClientIds: withService.serviceClientIds };
 const serviceJwt = await verifyAccessJwt(sign(serviceClaims), serviceOpts);
 check(serviceJwt.kind === "service" && serviceJwt.clientId === listedId && serviceJwt.email == null, "Un JWT de service allowlisté n'a pas de courriel");
-const machine = identityFromAccess(serviceJwt, withService.accounts);
-check(machine.service && machine.actorId === HQ_SERVICE_ACTOR && machine.orgId === "klirline" && machine.email === HQ_SERVICE_ACTOR, "Le poll ouvre l'organisation unique, comme machine");
-check(machine.actorId !== "ceo" && machine.email !== "ada@example.com", "Le poll ne reprend pas le compte humain");
+// I1 : un jeton de service sans fiche machine n'obtient plus l'identité de repli HQ_SERVICE_ACTOR.
+try {
+  const fallback = identityFromAccess(serviceJwt, withService.accounts);
+  check(false, `Un jeton de service sans fiche machine est refusé (${fallback.actorId})`);
+} catch (error) {
+  check(error.status === 403, "Un jeton de service sans fiche machine est refusé");
+}
+check(HQ_SERVICE_ACTOR === "service:hq-poll", "L'ancien acteur de repli reste nommé, sans être attribué");
+const machine = { service: true, actorId: "machine-klirprospect", orgId: "klirline", email: "machine:executor-klirprospect" };
 const humanStill = identityFromAccess(accepted, withService.accounts);
 check(!humanStill.service && humanStill.actorId === "ceo" && humanStill.email === "ada@example.com", "Le courriel continue de choisir le rôle");
 try {
@@ -327,7 +333,7 @@ try {
   identityFromAccess(serviceJwt, twoOrgs.accounts);
   check(false, "Deux organisations refusent le jeton de service");
 } catch (error) {
-  check(error.status === 401, "Deux organisations refusent le jeton de service");
+  check(error.status === 403, "Deux organisations refusent le jeton de service");
 }
 assertServiceRoute(machine, "/api/hq/commands");
 assertServiceRoute(machine, "/api/hq/commands/hq-00000000-0000-4000-8000-000000000001/claim");
@@ -347,11 +353,13 @@ const scopedEnv = {
   ACCESS_AUD: trial.aud,
   ACCESS_ACCOUNTS: JSON.stringify([{ email: "ada@example.com", role: "ceo", orgId: "klirline" }]),
   HQ_MACHINE_IDENTITIES: JSON.stringify([
-    { id: "executor-klirprospect", accessClientId: scopedName, actorId: "ceo", orgId: "klirline", scopes: ["work"] },
+    { id: "executor-klirprospect", accessClientId: scopedName, actorId: "machine-klirprospect", orgId: "klirline", scopes: ["work"] },
   ]),
 };
 const scopedIdentity = identifyAccess({ kind: "service", commonName: scopedName }, scopedEnv).identity;
-check(scopedIdentity.human === false && scopedIdentity.scopes.join() === "work" && scopedIdentity.actorId === "ceo", "Une fiche machine ne reçoit pas le droit de revue du rôle");
+check(scopedIdentity.human === false && scopedIdentity.scopes.join() === "work" && scopedIdentity.actorId === "machine-klirprospect", "Une fiche machine ne reçoit que ses portées");
+const cooMachineEnv = { ...scopedEnv, HQ_MACHINE_IDENTITIES: JSON.stringify([{ id: "machine-coo", accessClientId: scopedName, actorId: "coo", orgId: "klirline", scopes: ["review"] }]) };
+check(identifyAccess({ kind: "service", commonName: scopedName }, cooMachineEnv).status === 403, "I2 : une fiche machine ne porte pas un rôle humain validateur");
 const mappedHuman = identifyAccess({ kind: "human", email: "ada@example.com" }, scopedEnv).identity;
 check(mappedHuman.human === true && mappedHuman.scopes.includes("review") && mappedHuman.actorId === "ceo", "Le courriel garde les permissions du poste");
 check(identifyAccess({ kind: "service", commonName: scopedName }, { ...scopedEnv, HQ_MACHINE_IDENTITIES: "" }).status === 403, "Sans fiche, le mappeur applicatif ne donne pas de droit");
@@ -438,6 +446,7 @@ const createdHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams(),
   body: { text: "rédiger l'article Black Wall News", priority: "haute" },
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(createdHq.status === 201 && createdHq.body.command.status === "pending" && createdHq.body.command.ownerSlug === "bwn-redaction", "Une commande du bureau naît en attente");
 check(createdHq.body.mode === "hq" && createdHq.body.command.grokAgentName === "BWN Rédaction", "La réponse porte le nom Grok");
@@ -447,6 +456,7 @@ const pendingHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams("status=pending"),
   body: {},
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(pendingHq.body.commands.length === 1 && pendingHq.body.commands[0].id === createdHq.body.command.id, "La file pending contient la commande");
 const explicitHq = await dispatchHq(hqStore, {
@@ -455,6 +465,7 @@ const explicitHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams(),
   body: { text: "rédiger l'article Black Wall News", ownerSlug: "sandbox-klirline" },
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(explicitHq.body.command.ownerSlug === "sandbox-klirline" && explicitHq.body.command.routedBy === "explicit", "Un agent choisi gagne sur les mots-clés");
 const claimedHq = await dispatchHq(hqStore, {
@@ -463,6 +474,7 @@ const claimedHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams(),
   body: {},
   actorId: "ceo",
+  scopes: ["work"],
 });
 const doneHq = await dispatchHq(hqStore, {
   method: "PATCH",
@@ -476,6 +488,7 @@ const doneHq = await dispatchHq(hqStore, {
     claimToken: claimedHq.body.claimToken,
   },
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(doneHq.status === 200 && doneHq.body.command.status === "done" && doneHq.body.command.result === "Article prêt" && doneHq.body.command.text.startsWith("rédiger"), "Le PATCH termine la commande sans réécrire l'ordre");
 const stillPending = await dispatchHq(hqStore, {
@@ -484,6 +497,7 @@ const stillPending = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams("status=pending"),
   body: {},
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(stillPending.body.commands.length === 1 && stillPending.body.commands[0].id === explicitHq.body.command.id, "Le filtre pending retire la commande terminée");
 const rosterHq = await dispatchHq(hqStore, {
@@ -492,23 +506,27 @@ const rosterHq = await dispatchHq(hqStore, {
   searchParams: new URLSearchParams(),
   body: {},
   actorId: "ceo",
+  scopes: ["work"],
 });
 check(rosterHq.body.roster.length === HQ_ROSTER.length && rosterHq.body.roster.find((agent) => agent.id === "bwn-redaction").lastCommand.status === "done", "Le roster expose la dernière commande");
 try {
-  await dispatchHq(hqStore, { method: "POST", pathname: "/api/hq/command", searchParams: new URLSearchParams(), body: { text: "ok" }, actorId: "ceo" });
+  await dispatchHq(hqStore, { method: "POST", pathname: "/api/hq/command", searchParams: new URLSearchParams(), body: { text: "ok" }, actorId: "ceo", scopes: ["work"] });
   check(false, "Une commande trop courte est refusée");
 } catch (error) {
   check(error.status === 400, "Une commande trop courte est refusée");
 }
-const unknownStatus = await dispatchHq(hqStore, { method: "PATCH", pathname: `/api/hq/commands/${createdHq.body.command.id}`, searchParams: new URLSearchParams(), body: { status: "publie" }, actorId: "ceo" });
+const unknownStatus = await dispatchHq(hqStore, { method: "PATCH", pathname: `/api/hq/commands/${createdHq.body.command.id}`, searchParams: new URLSearchParams(), body: { status: "publie" }, actorId: "ceo", scopes: ["work"] });
 check(unknownStatus.status === 400, "Un statut hors liste est refusé");
 
+// T4 : dispatchHq exige une portée explicite pour écrire. Ces appels unitaires jouent un agent
+// (portée work, human=false), comme une fiche machine du Worker.
 const hqCall = (method, pathname, body, now, actor = "ceo") => dispatchHq(hqStore, {
   method,
   pathname,
   searchParams: new URLSearchParams(),
   body,
   actorId: actor,
+  scopes: ["work"],
   now,
 });
 const t0 = new Date("2026-11-05T12:00:00.000Z");
@@ -549,8 +567,9 @@ check(closedClaim.status === 409 && !Object.hasOwn(closedClaim.body, "claimToken
 
 const stale = await hqCall("POST", "/api/hq/command", { text: "suivre l'exécution trop longue", ownerSlug: "ops-klirline" }, t0);
 const staleId = stale.body.command.id;
-await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, t0);
-await hqCall("PATCH", `/api/hq/commands/${staleId}`, { status: "running", agentNote: "Démarré" }, t0);
+const staleClaim = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, t0);
+// T1 : passer running exige la tentative en cours (attemptId + claimToken).
+await hqCall("PATCH", `/api/hq/commands/${staleId}`, { status: "running", agentNote: "Démarré", attemptId: staleClaim.body.command.claim.attemptId, claimToken: staleClaim.body.claimToken }, t0);
 const staleAt = new Date(t0.getTime() + HQ_LEASE_MS + 1000);
 const blockedRun = await hqCall("POST", `/api/hq/commands/${staleId}/claim`, {}, staleAt);
 check(blockedRun.status === 200 && blockedRun.body.outcome === "blocked" && blockedRun.body.command.status === "blocked", "Un running trop ancien passe bloqué");
@@ -572,8 +591,8 @@ check(reclaimed.body.command.agentNote.includes("Reprise documentée") && reclai
 
 const halted = await hqCall("POST", "/api/hq/command", { text: "couper le travail en cours", ownerSlug: "noria" }, t0);
 const haltedId = halted.body.command.id;
-await hqCall("POST", `/api/hq/commands/${haltedId}/claim`, {}, t0);
-await hqCall("PATCH", `/api/hq/commands/${haltedId}`, { status: "running" }, t0);
+const haltedClaim = await hqCall("POST", `/api/hq/commands/${haltedId}/claim`, {}, t0);
+await hqCall("PATCH", `/api/hq/commands/${haltedId}`, { status: "running", attemptId: haltedClaim.body.command.claim.attemptId, claimToken: haltedClaim.body.claimToken }, t0);
 const haltAt = new Date(t0.getTime() + 5000);
 const interrupted = await hqCall("POST", `/api/hq/commands/${haltedId}/interrupt`, { note: "Processus arrêté avant la preuve." }, haltAt);
 check(interrupted.status === 200 && interrupted.body.command.status === "running" && interrupted.body.command.updatedAt === haltAt.toISOString(), "L'interruption garde le statut et la date");

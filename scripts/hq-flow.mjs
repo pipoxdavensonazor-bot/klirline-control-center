@@ -19,8 +19,11 @@ const machineToken = "local-test-executor";
 const reviewToken = "local-test-reviewer";
 const machineIdentities = JSON.stringify([
   { id: "executor-test", token: machineToken, actorId: "machine-klirprospect", scopes: ["work"] },
-  { id: "reviewer-test", token: reviewToken, actorId: "coo", scopes: ["review"] },
+  // I2 : une fiche machine « coo » est désormais refusée (401), démontré ci-dessous.
+  { id: "machine-coo-refusee", token: "local-test-machine-coo", actorId: "coo", scopes: ["review"] },
 ]);
+// Le réviseur est une personne locale (HQ_LOCAL_HUMANS, serveur de démonstration seulement).
+const localHumans = JSON.stringify([{ id: "reviewer-test", token: reviewToken, actorId: "coo" }]);
 
 async function request(method, pathname, body, token = machineToken) {
   const response = await fetch(`${base}${pathname}`, {
@@ -51,12 +54,14 @@ async function waitForHealth(child) {
 
 const child = spawn(process.execPath, ["src/server.js"], {
   cwd: root,
-  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile, HQ_MACHINE_IDENTITIES: machineIdentities },
+  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile, HQ_MACHINE_IDENTITIES: machineIdentities, HQ_LOCAL_HUMANS: localHumans },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
 try {
   await waitForHealth(child);
+  const machineCoo = await request("GET", "/api/hq/commands", undefined, "local-test-machine-coo");
+  assert(machineCoo.status === 401, `une fiche machine « coo » est acceptée ${machineCoo.status}`);
 
   const created = await request("POST", "/api/hq/command", { text: "rédiger l'article Black Wall News", priority: "haute" });
   assert(created.status === 201, `création ${created.status}`);
@@ -99,17 +104,17 @@ try {
   const human = await request("POST", "/api/hq/command", { text: "relire la page d'accueil Klirline" }, reviewToken);
   assert(human.status === 201, `création humaine ${human.status}`);
   const humanId = human.payload.command.id;
-  const running = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "running" }, reviewToken);
+  const running = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "running", overrideReason: "Relecture humaine lancée sans claim (essai local)." }, reviewToken);
   assert(running.status === 200 && running.payload.command.status === "running", "passage en cours");
-  const review = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "awaiting_validation" }, reviewToken);
+  const review = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "awaiting_validation", overrideReason: "Relecture humaine terminée sans jeton (essai local)." }, reviewToken);
   assert(review.status === 200 && review.payload.command.status === "awaiting_validation", "passage à valider");
   const blocked = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "blocked", agentNote: "Il manque la source." }, reviewToken);
   assert(blocked.status === 200 && blocked.payload.command.status === "blocked" && blocked.payload.command.agentNote === "Il manque la source.", "passage bloqué");
-  const failed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "failed", agentNote: "La source est injoignable." }, reviewToken);
+  const failed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "failed", agentNote: "La source est injoignable.", overrideReason: "Décision humaine documentée (essai local)." }, reviewToken);
   assert(failed.status === 200 && failed.payload.command.status === "failed" && failed.payload.command.agentNote === "La source est injoignable.", "passage en échec");
-  const refused = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", result: "", proof: "", agentNote: "" }, reviewToken);
+  const refused = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", result: "", proof: "", agentNote: "", overrideReason: "Décision humaine documentée (essai local)." }, reviewToken);
   assert(refused.status === 400 && typeof refused.payload.error === "string", "clôture humaine sans preuve");
-  const closed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", proof: "Capture du bureau" }, reviewToken);
+  const closed = await request("PATCH", `/api/hq/commands/${humanId}`, { status: "done", proof: "Capture du bureau", overrideReason: "Décision humaine documentée (essai local)." }, reviewToken);
   assert(closed.status === 200 && closed.payload.command.status === "done" && closed.payload.command.proof === "Capture du bureau", "clôture humaine avec preuve");
   const listed = await request("GET", "/api/hq/commands", undefined, reviewToken);
   const found = listed.payload.commands.find((command) => command.id === humanId);

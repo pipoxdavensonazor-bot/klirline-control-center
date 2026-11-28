@@ -9,10 +9,12 @@
     "check": "node src/self-check.js",
     "check:hq": "node scripts/hq-flow.mjs",
     "check:do": "node scripts/hq-do-check.mjs",
+    "check:identities": "node scripts/hq-identity-check.mjs --env",
+    "check:identities:strict": "node scripts/hq-identity-check.mjs --env --strict",
     "stage": "node scripts/stage-assets.mjs",
     "deploy": "node scripts/stage-assets.mjs && wrangler deploy"
   },
   "devDependencies": {
-    "wrangler": "^4.135.0"
+    "wrangler": "^4.169.0"
   }
 }

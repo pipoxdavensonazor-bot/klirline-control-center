@@ -1,6 +1,10 @@
 export const API_LIMITS = {
   windowMs: 60_000,
   maxRequests: 60,
+  // I5 (lot 2) : le filtre par IP, avant authentification, n'est qu'un garde-fou anti-inondation.
+  // Le quota de 60/min est par identité (email humain ou machine:<id>). Avant, l'IP et l'identité
+  // avaient la même limite : toutes les machines d'une même sortie réseau partageaient 60/min.
+  maxRequestsPerIp: 600,
   maxBodyBytes: 32_768,
 };
 

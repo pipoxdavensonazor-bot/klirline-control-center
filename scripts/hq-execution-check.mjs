@@ -13,7 +13,9 @@ const hqFile = path.join(os.tmpdir(), `klirline-hq-exec-${process.pid}.json`);
 const missionFile = path.join(os.tmpdir(), `klirline-mission-exec-${process.pid}.json`);
 const identities = [
   { id: "executor-klirprospect", token: "local-test-executor", actorId: "machine-klirprospect", scopes: ["work"] },
-  { id: "reviewer-office", token: "local-test-reviewer", actorId: "coo", scopes: ["review"] },
+  // I2 : une fiche machine « coo » est refusée ; le réviseur est une personne locale (HQ_LOCAL_HUMANS).
+  { id: "machine-coo-refusee", token: "local-test-machine-coo", actorId: "coo", scopes: ["review"] },
+  { id: "revue-machine", token: "local-test-review-machine", actorId: "ops-review", scopes: ["review"] },
   { id: "accountant-test", token: "local-test-accounting", actorId: "accounting", scopes: ["work"] },
 ];
 
@@ -32,6 +34,12 @@ async function call(token, method, pathname, body) {
   });
   const payload = await response.json();
   return { status: response.status, payload };
+}
+
+// Lot 2 : l'approbateur valide l'empreinte du contenu qui lui est présenté (approvalRequest.hash).
+async function approveAs(token, missionId, extra = {}) {
+  const shown = await call(token, "GET", `/api/hq/missions/${missionId}`);
+  return call(token, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", presentedHash: shown.payload.mission?.approvalRequest?.hash, ...extra });
 }
 
 const procedure = readPinnedProcedure();
@@ -54,6 +62,7 @@ const child = spawn(process.execPath, ["src/server.js"], {
     HQ_COMMANDS_PATH: hqFile,
     HQ_MISSIONS_PATH: missionFile,
     HQ_MACHINE_IDENTITIES: JSON.stringify(identities),
+    HQ_LOCAL_HUMANS: JSON.stringify([{ id: "reviewer-office", token: "local-test-reviewer", actorId: "coo" }]),
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -78,6 +87,8 @@ try {
   });
   assert(browserRole.status === 401, "un rôle de navigateur ouvre une mission");
 
+  const machineCoo = await call("local-test-machine-coo", "GET", "/api/hq/missions");
+  assert(machineCoo.status === 401, `une fiche machine « coo » est acceptée ${machineCoo.status}`);
   const first = await runExecutor(base, "local-test-executor");
   const executorApproval = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve" });
   assert(executorApproval.status === 403, "l'exécuteur valide son propre dossier");
@@ -109,13 +120,22 @@ try {
   await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/transition`, { status: "in_review" });
   const hiddenMission = await call("local-test-accounting", "GET", `/api/hq/missions/${first.missionId}`);
   assert(hiddenMission.status === 404, "un rôle non autorisé lit la mission");
-  const reviewerClaim = await call("local-test-reviewer", "POST", "/api/hq/command", { text: "essai réservé au travail", ownerSlug: "sandbox-klirline" });
-  const claimDenied = await call("local-test-reviewer", "POST", `/api/hq/commands/${reviewerClaim.payload.command.id}/claim`, {});
+  const reviewerClaim = await call("local-test-review-machine", "POST", "/api/hq/command", { text: "essai réservé au travail", ownerSlug: "sandbox-klirline" });
+  const claimDenied = await call("local-test-review-machine", "POST", `/api/hq/commands/${reviewerClaim.payload.command.id}/claim`, {});
   assert(reviewerClaim.status === 201 && claimDenied.status === 403, "un rôle de revue prend une commande");
-  const approved = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve", note: "Synthèse interne acceptée." });
+  const approved = await approveAs("local-test-reviewer", first.missionId, { note: "Synthèse interne acceptée." });
   assert(approved.status === 200 && approved.payload.mission.approvalValid === true, "le réviseur n'accepte pas le dossier");
+  // T12 : une révision exige la tentative terminée (titulaire) ; sans jeton, elle est refusée.
+  const forgedRevision = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/deliverables`, {
+    taskId: returned.payload.mission.tasks[0].id,
+    body: `${synthesis.body}\n\nRévision sans jeton.`,
+    executionKind: "manual",
+  });
+  assert(forgedRevision.status === 409, `révision sans jeton acceptée ${forgedRevision.status}`);
   const revised = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/deliverables`, {
     taskId: returned.payload.mission.tasks[0].id,
+    attemptId: restarted.payload.attemptId,
+    claimToken: restarted.payload.claimToken,
     body: `${synthesis.body}\n\nRévision : toujours aucune démonstration réservée.`,
     executionKind: "manual",
   });
@@ -135,14 +155,14 @@ try {
     executionKind: "deterministic-script",
   });
   await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/transition`, { status: "in_review" });
-  const reapproved = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve", note: "Révision acceptée." });
+  const reapproved = await approveAs("local-test-reviewer", first.missionId, { note: "Révision acceptée." });
   assert(reapproved.payload.mission.approvalValid === true, "la nouvelle approbation manque");
   const closed = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/transition`, {
     status: "done",
     result: "Synthèse interne préparée. Aucune démonstration n'est réservée.",
   });
   assert(closed.status === 200 && closed.payload.mission.outcomes.demosBooked === 0 && closed.payload.mission.cost.spentCents === 0, "la clôture compte une réservation ou une dépense");
-  const mail = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/actions`, { type: "email", body: "Invitation" });
+  const mail = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/actions`, { type: "email", body: "Invitation", idempotencyKey: "exec-check-invitation-1" });
   assert(mail.status === 403 && mail.payload.mission.drafts.every((draft) => draft.sent === false), "un courriel est parti");
 
   const proof = {

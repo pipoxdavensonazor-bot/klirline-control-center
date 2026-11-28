@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { decideClaim, decideCompletion, decideInterrupt, matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, expireLease, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
 import { runMissionOperation } from "./missions.js";
 import { dataPath } from "../store.js";
 
@@ -54,6 +54,16 @@ function writeAll(commands) {
 
 export function fileHqStore() {
   return {
+    async sweep(now) {
+      const commands = readAll();
+      let count = 0;
+      commands.forEach((command, index) => {
+        const next = expireLease(command, { now });
+        if (next) { commands[index] = next; count += 1; }
+      });
+      if (count) writeAll(commands);
+      return count;
+    },
     async list(filter) {
       return sortCommands(readAll().filter((command) => matchesFilter(command, filter)));
     },
@@ -64,6 +74,14 @@ export function fileHqStore() {
       const commands = readAll();
       commands.push(command);
       writeAll(commands);
+    },
+    async insertIdempotent(command) {
+      const commands = readAll();
+      const existing = findIdempotent(commands, command);
+      if (existing) return { created: false, command: existing };
+      commands.push(command);
+      writeAll(commands);
+      return { created: true, command };
     },
     async replace(command) {
       const commands = readAll();
@@ -90,6 +108,16 @@ export function fileHqStore() {
       const commands = readAll();
       const index = commands.findIndex((item) => item.id === id);
       const decision = decideCompletion(index < 0 ? null : commands[index], input, options);
+      if (decision.persist) {
+        commands[index] = decision.command;
+        writeAll(commands);
+      }
+      return { status: decision.http, body: decision.body };
+    },
+    async heartbeat(id, input, options) {
+      const commands = readAll();
+      const index = commands.findIndex((item) => item.id === id);
+      const decision = decideHeartbeat(index < 0 ? null : commands[index], input, options);
       if (decision.persist) {
         commands[index] = decision.command;
         writeAll(commands);

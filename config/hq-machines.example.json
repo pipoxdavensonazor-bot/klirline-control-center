@@ -10,7 +10,7 @@
   {
     "id": "reviewer-office",
     "accessClientId": "",
-    "actorId": "coo",
+    "actorId": "ops-review",
     "orgId": "klirline",
     "scopes": ["review"],
     "token": ""

@@ -101,9 +101,11 @@ export function bindServiceIdentity(orgId) {
 
 export function identityFromAccess(verified, accounts) {
   if (verified?.kind === "service") {
-    const orgIds = [...new Set((accounts || []).map((item) => item.orgId))];
-    if (orgIds.length !== 1) rejected();
-    return bindServiceIdentity(orgIds[0]);
+    // I1 (banc phase 5) : plus de repli « service:hq-poll » sans portées. Un jeton de service n'obtient
+    // une identité que par sa fiche HQ_MACHINE_IDENTITIES (resolveServiceMachine, portées explicites).
+    const error = new Error("Ce jeton de service n'a pas de fiche machine (HQ_MACHINE_IDENTITIES).");
+    error.status = 403;
+    throw error;
   }
   const account = (accounts || []).find((item) => item.email === verified?.email);
   if (!account) {

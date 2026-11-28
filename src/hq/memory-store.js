@@ -1,4 +1,4 @@
-import { decideClaim, decideCompletion, decideInterrupt, matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, expireLease, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
 import { runMissionOperation } from "./missions.js";
 
 function missing() {
@@ -18,7 +18,22 @@ function commit(commands, id, decision) {
 export function memoryHqStore(seed = []) {
   const commands = seed.map((command) => ({ ...command }));
   const missions = [];
+  const audit = [];
   return {
+    async auditAppend(entry) {
+      audit.push(Object.freeze(JSON.parse(JSON.stringify(entry))));
+    },
+    async auditList(limit = 100) {
+      return audit.slice(-limit).reverse().map((entry, index) => ({ seq: audit.length - index, ...entry }));
+    },
+    async sweep(now) {
+      let count = 0;
+      commands.forEach((command, index) => {
+        const next = expireLease(command, { now });
+        if (next) { commands[index] = next; count += 1; }
+      });
+      return count;
+    },
     async list(filter) {
       return sortCommands(commands.filter((command) => matchesFilter(command, filter)));
     },
@@ -28,6 +43,12 @@ export function memoryHqStore(seed = []) {
     async insert(command) {
       commands.push({ ...command });
     },
+    async insertIdempotent(command) {
+      const existing = findIdempotent(commands, command);
+      if (existing) return { created: false, command: { ...existing } };
+      commands.push({ ...command });
+      return { created: true, command };
+    },
     async replace(command) {
       const index = commands.findIndex((item) => item.id === command.id);
       if (index < 0) missing();
@@ -36,6 +57,10 @@ export function memoryHqStore(seed = []) {
     async claim(id, options) {
       const current = commands.find((command) => command.id === id) || null;
       return commit(commands, id, decideClaim(current, options));
+    },
+    async heartbeat(id, input, options) {
+      const current = commands.find((command) => command.id === id) || null;
+      return commit(commands, id, decideHeartbeat(current, input, options));
     },
     async interrupt(id, options) {
       const current = commands.find((command) => command.id === id) || null;

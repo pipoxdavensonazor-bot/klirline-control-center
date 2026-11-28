@@ -72,7 +72,8 @@ function options() {
       ACCESS_SERVICE_CLIENT_IDS: `${serviceName},${"cd".repeat(16)}.access`,
       HQ_MACHINE_IDENTITIES: JSON.stringify([
         { id: "executor-klirprospect", accessClientId: serviceName, actorId: "machine-klirprospect", orgId: "klirline", scopes: ["work"] },
-        { id: "reviewer-only", accessClientId: `${"cd".repeat(16)}.access`, actorId: "coo", orgId: "klirline", scopes: ["review"] },
+        // I2 : une fiche machine ne porte plus « coo » ; la revue machine garde un acteur non humain.
+        { id: "reviewer-only", accessClientId: `${"cd".repeat(16)}.access`, actorId: "ops-review", orgId: "klirline", scopes: ["review"] },
       ]),
     },
     // Ce remplacement n'existe que dans ce script. wrangler.jsonc et src/worker.js
@@ -171,9 +172,10 @@ try {
   assert(review.status === 200, `passage en revue ${review.status} ${review.payload.error || ""}`);
   const selfApproval = await call(mf, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, executor);
   assert(selfApproval.status === 403, `l'exécuteur s'est validé ${selfApproval.status}`);
-  const approved = await call(mf, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu en local." }, approver);
+  const shown = await call(mf, "GET", `/api/hq/missions/${missionId}`, undefined, approver);
+  const approved = await call(mf, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu en local.", presentedHash: shown.payload.mission?.approvalRequest?.hash }, approver);
   assert(approved.status === 200 && approved.payload.mission.status === "in_review" && approved.payload.mission.approvalValid === true, `validation ${approved.status} ${approved.payload.mission?.status || ""} ${approved.payload.error || ""}`);
-  const send = await call(mf, "POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Ce message ne part pas." }, executor);
+  const send = await call(mf, "POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Ce message ne part pas.", idempotencyKey: "worker-local-message-1" }, executor);
   assert(send.status === 403 && send.payload.mission.drafts.at(-1).sent === false, `envoi ${send.status} ${send.payload.error || ""}`);
 
   await mf.dispose();
@@ -182,6 +184,11 @@ try {
   const reloaded = await call(mf, "GET", `/api/hq/missions/${missionId}`, undefined, approver);
   assert(after.includes("hq_mission"), "hq_mission absente après redémarrage");
   assert(reloaded.status === 200 && reloaded.payload.mission.id === missionId && reloaded.payload.mission.status === "in_review" && reloaded.payload.mission.approvalValid === true, `relecture ${reloaded.status} ${reloaded.payload.error || reloaded.payload.mission?.status || ""}`);
+  // KCO-AUDIT-2026-11-28 point 6 : dans workerd aussi, approbation et livrable portent du SHA-256.
+  const storedApproval = reloaded.payload.mission.approvals.at(-1);
+  const storedDeliverable = reloaded.payload.mission.deliverables[0];
+  assert(/^sha256-[0-9a-f]{64}$/.test(storedApproval.contentHash) && storedApproval.legacy === false, `empreinte d'approbation ${storedApproval.contentHash}`);
+  assert(/^sha256-[0-9a-f]{64}$/.test(storedDeliverable.contentHash || "") && storedDeliverable.contentHashMatches === true, `empreinte de livrable ${storedDeliverable.contentHash}`);
   const hidden = await call(mf, "GET", "/api/hq/clients/cli-reserve", undefined, executor);
   assert(hidden.status === 404, `dossier réservé ${hidden.status}`);
   console.log(JSON.stringify({
@@ -194,6 +201,7 @@ try {
     status: reloaded.payload.mission.status,
     deliverables: reloaded.payload.mission.deliverables.length,
     approvalValid: reloaded.payload.mission.approvalValid,
+    approvalHash: storedApproval.contentHash.slice(0, 15),
     draftSent: reloaded.payload.mission.drafts.at(-1).sent,
     concurrentClaims: outcomes,
     oldAttempt: stale.status,
