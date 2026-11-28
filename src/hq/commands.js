@@ -173,6 +173,25 @@ export function buildHqCommand(input, actorId, options = {}) {
   };
 }
 
+// T5 (banc phase 5) : clé d'idempotence fournie par l'auteur (corps idempotencyKey ou en-tête
+// Idempotency-Key). Portée : un auteur (createdBy). ASCII imprimable sans espace, 1 à 200 caractères.
+export function normalizeIdempotencyKey(value) {
+  if (value == null) return null;
+  const key = String(value);
+  if (!key) return null;
+  if (!/^[\x21-\x7e]{1,200}$/.test(key)) fail(400, "Clé d'idempotence illisible.");
+  return key;
+}
+
+export function sameIdempotentCommand(existing, command) {
+  return existing.text === command.text && existing.ownerSlug === command.ownerSlug && existing.priority === command.priority;
+}
+
+export function findIdempotent(commands, command) {
+  if (!command.idempotencyKey) return null;
+  return commands.find((item) => item.idempotencyKey === command.idempotencyKey && item.createdBy === command.createdBy) || null;
+}
+
 export function applyHqPatch(command, input, options = {}) {
   if (!command) fail(404, "Commande introuvable");
   const status = String(input?.status ?? "").trim();

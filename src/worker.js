@@ -147,6 +147,20 @@ export class CompanyState extends DurableObject {
     return command;
   }
 
+  // T5 : clé d'idempotence lue dans le JSON existant (aucune nouvelle table ni colonne). Lecture et
+  // insertion dans le même appel synchrone du Durable Object : deux POST simultanés ne créent qu'une
+  // commande.
+  hqInsertIdempotent(command) {
+    const rows = this.ctx.storage.sql.exec(
+      "SELECT body FROM hq_command WHERE json_extract(body, '$.idempotencyKey') = ? AND json_extract(body, '$.createdBy') = ? LIMIT 1",
+      command.idempotencyKey,
+      command.createdBy,
+    ).toArray();
+    if (rows.length) return { created: false, command: JSON.parse(rows[0].body) };
+    this.hqInsert(command);
+    return { created: true, command };
+  }
+
   hqReplace(command) {
     this.ctx.storage.sql.exec(
       HQ_UPDATE,
@@ -277,6 +291,7 @@ export function hqDurableStore(company) {
     list: (filter) => company.hqList(filter),
     get: (id) => company.hqGet(id),
     insert: (command) => company.hqInsert(command),
+    insertIdempotent: (command) => company.hqInsertIdempotent(command),
     replace: (command) => company.hqReplace(command),
     claim: (id, options) => company.hqClaim(id, options),
     interrupt: (id, options) => company.hqInterrupt(id, options),
@@ -336,6 +351,14 @@ export default {
 
       if (url.pathname.startsWith("/api/hq/")) {
         const payload = request.method === "GET" ? {} : await readJson(request);
+        // T5 : l'en-tête Idempotency-Key vaut idempotencyKey ; deux valeurs différentes sont refusées.
+        const headerKey = request.headers.get("Idempotency-Key");
+        if (headerKey != null && request.method === "POST" && payload && typeof payload === "object") {
+          if (payload.idempotencyKey != null && String(payload.idempotencyKey) !== headerKey) {
+            return json(400, { error: "Idempotency-Key et idempotencyKey diffèrent." });
+          }
+          payload.idempotencyKey = headerKey;
+        }
         const result = await dispatchHq(
           hqDurableStore(company),
           {

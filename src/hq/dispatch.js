@@ -1,4 +1,4 @@
-import { buildHqCommand, commandFilter, isHqId, publicCommand, rejectImpersonation } from "./commands.js";
+import { buildHqCommand, commandFilter, isHqId, normalizeIdempotencyKey, publicCommand, rejectImpersonation, sameIdempotentCommand } from "./commands.js";
 import { CONNECTIONS } from "./connections.js";
 import { visibleClient, visibleClients } from "./clients.js";
 import { canReadMission, createMission, isMissionId, presentMission } from "./missions.js";
@@ -115,9 +115,20 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   }
   if (method === "POST" && pathname === "/api/hq/command") {
     if (!writes(scopes)) return NO_SCOPE;
+    const idempotencyKey = normalizeIdempotencyKey(body?.idempotencyKey);
     const command = buildHqCommand(body, actorId, { now: clock });
-    await store.insert(command);
-    return { status: 201, body: { mode: "hq", command: present(command) } };
+    if (!idempotencyKey) {
+      await store.insert(command);
+      return { status: 201, body: { mode: "hq", command: present(command) } };
+    }
+    // T5 : vérification et insertion atomiques dans le dépôt (Durable Object : un seul appel synchrone).
+    command.idempotencyKey = idempotencyKey;
+    const stored = await store.insertIdempotent(command);
+    if (stored.created) return { status: 201, body: { mode: "hq", outcome: "created", command: present(stored.command) } };
+    if (!sameIdempotentCommand(stored.command, command)) {
+      return { status: 409, body: { mode: "hq", outcome: "conflict", error: "Cette clé d'idempotence a déjà servi pour une autre commande." } };
+    }
+    return { status: 200, body: { mode: "hq", outcome: "duplicate", command: present(stored.command) } };
   }
 
   const claimRoute = commandId(pathname, "/claim");

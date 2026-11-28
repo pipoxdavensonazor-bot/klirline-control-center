@@ -232,6 +232,28 @@ test("T12", "Livrable et preuve liés à la tentative : ni machine review, ni ti
   assert(humanClose.status === 200, `contrôle positif : clôture humaine ${humanClose.status} ${humanClose.body.error || ""}`);
 });
 
+// ---------- T5 : création de commandes en doublon ----------
+test("T5", "Idempotency-Key : la même clé du même auteur renvoie la même commande (y compris en simultané)", async () => {
+  const h = harness();
+  const body = { text: "T5 avec clé", ownerSlug: "sandbox-klirline", idempotencyKey: "cle-t5" };
+  const [r1, r2] = await Promise.all([h.call("POST", "/api/hq/command", body, A), h.call("POST", "/api/hq/command", body, A)]);
+  const ids = [r1.body.command?.id, r2.body.command?.id];
+  assert(ids[0] && ids[0] === ids[1], `ids distincts en simultané : ${ids.join(" / ")} (${r1.status},${r2.status})`);
+  assert([r1.status, r2.status].sort().join() === "200,201", `statuts ${r1.status},${r2.status} (201 puis 200 attendus)`);
+  const again = await h.call("POST", "/api/hq/command", body, A);
+  assert(again.status === 200 && again.body.outcome === "duplicate" && again.body.command.id === ids[0], `renvoi ${again.status}/${again.body.outcome}`);
+  const list = await h.call("GET", "/api/hq/commands", {}, A);
+  assert(list.body.commands.filter((c) => c.text === "T5 avec clé").length === 1, "plus d'une commande enregistrée");
+  const conflict = await h.call("POST", "/api/hq/command", { ...body, text: "Autre texte, même clé" }, A);
+  assert(conflict.status === 409, `même clé, autre commande ${conflict.status}`);
+  const other = await h.call("POST", "/api/hq/command", body, B);
+  assert(other.status === 201 && other.body.command.id !== ids[0], `la clé d'un autre auteur ne doit pas collisionner ${other.status}`);
+  const bad = await h.call("POST", "/api/hq/command", { ...body, idempotencyKey: "clé avec espaces" }, A);
+  assert(bad.status === 400, `clé illisible ${bad.status}`);
+  const noKey = await Promise.all([h.cmd("T5 sans clé"), h.cmd("T5 sans clé")]);
+  assert(noKey[0] && noKey[1] && noKey[0] !== noKey[1], "sans clé, deux POST restent deux commandes (comportement documenté)");
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;

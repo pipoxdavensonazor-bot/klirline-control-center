@@ -57,6 +57,9 @@ jobs:
       - name: hq-regression-p0 (défauts du banc phase 5, mémoire)
         run: node scripts/hq-regression-p0.mjs
 
+      - name: hq-do-regression-p0 (défauts du banc phase 5, Durable Object local)
+        run: node scripts/hq-do-regression-p0.mjs
+
       - name: npm audit (informatif, non bloquant)
         run: |
           npm audit --audit-level=high || echo "::warning title=npm audit::Vulnérabilités hautes dans l'outillage (wrangler/miniflare). Voir le journal."

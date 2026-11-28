@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { decideClaim, decideCompletion, decideInterrupt, matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideCompletion, decideInterrupt, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
 import { runMissionOperation } from "./missions.js";
 import { dataPath } from "../store.js";
 
@@ -64,6 +64,14 @@ export function fileHqStore() {
       const commands = readAll();
       commands.push(command);
       writeAll(commands);
+    },
+    async insertIdempotent(command) {
+      const commands = readAll();
+      const existing = findIdempotent(commands, command);
+      if (existing) return { created: false, command: existing };
+      commands.push(command);
+      writeAll(commands);
+      return { created: true, command };
     },
     async replace(command) {
       const commands = readAll();

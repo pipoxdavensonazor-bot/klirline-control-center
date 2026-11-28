@@ -1,4 +1,4 @@
-import { decideClaim, decideCompletion, decideInterrupt, matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideCompletion, decideInterrupt, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
 import { runMissionOperation } from "./missions.js";
 
 function missing() {
@@ -27,6 +27,12 @@ export function memoryHqStore(seed = []) {
     },
     async insert(command) {
       commands.push({ ...command });
+    },
+    async insertIdempotent(command) {
+      const existing = findIdempotent(commands, command);
+      if (existing) return { created: false, command: { ...existing } };
+      commands.push({ ...command });
+      return { created: true, command };
     },
     async replace(command) {
       const index = commands.findIndex((item) => item.id === command.id);
