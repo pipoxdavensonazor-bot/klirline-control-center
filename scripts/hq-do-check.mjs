@@ -164,8 +164,11 @@ async function scenario() {
   assert(review.status === 200, `revue ${review.status} ${review.payload.error || ""}`);
   const selfApproval = await call("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, { actor: "machine-klirprospect", scopes: ["work"], now: t0 });
   assert(selfApproval.status === 403, "l'auteur s'est validé");
-  const approved = await call("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu." }, { actor: "coo", scopes: ["review"], now: t0 });
-  assert(approved.status === 200 && approved.payload.mission.approvalValid === true, "validation refusée");
+  // T3 (inversé) : une identité machine « coo » (human=false) ne valide jamais une mission A3.
+  const machineApproval = await call("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu." }, { actor: "coo", scopes: ["review"], now: t0 });
+  assert(machineApproval.status === 403, `une machine coo a validé ${machineApproval.status}`);
+  const approved = await call("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu." }, { actor: "coo", scopes: ["review"], human: true, now: t0 });
+  assert(approved.status === 200 && approved.payload.mission.approvalValid === true, "validation humaine refusée");
 
   const revised = await call("POST", `/api/hq/missions/${missionId}/deliverables`, {
     taskId,

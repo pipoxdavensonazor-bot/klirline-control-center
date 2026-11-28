@@ -194,6 +194,8 @@ export function transitionMission(mission, input, options = {}) {
   }
   if (status === "in_review" && openTasks(next).length) fail(409, "Des tâches restent ouvertes.");
   if (status === "done") {
+    // T3 (banc phase 5) : la clôture d'une mission A3 est une décision humaine (spec v2 §5).
+    if (options.human !== true) fail(403, "Une machine ne clôt pas une mission : décision humaine requise.");
     if (openTasks(next).length) fail(409, "Des tâches restent ouvertes.");
     const result = String(input?.result || "").trim();
     if (result.length < 8) fail(400, "Indiquez le résultat du dossier.");
@@ -356,6 +358,9 @@ export function decideMission(mission, input, options = {}) {
   rejectElevation(input);
   if (mission.status !== "in_review") fail(409, "Le dossier n'est pas en validation.");
   const actor = String(options.actorId || "");
+  // T3 (banc phase 5) : A3 réservé aux humains. Une identité machine (human !== true) ne valide
+  // jamais, même si elle porte l'actorId du validateur.
+  if (options.human !== true) fail(403, "Une machine ne valide pas une mission : décision humaine requise.");
   if (!actor || actor === mission.createdBy) fail(403, "L'auteur ne valide pas sa propre mission.");
   if (actor !== mission.validatorId && !(actor === "ceo" && mission.createdBy !== "ceo")) {
     fail(403, "Ce rôle ne valide pas cette mission.");

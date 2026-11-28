@@ -85,6 +85,30 @@ test("I2", "Une fiche machine ne peut pas porter coo, ceo ou chief-of-staff", as
   assert(ok && ok.actorId === "machine-klirprospect" && ok.human === false && ok.scopes.join() === "work", "contrôle positif : une fiche machine ordinaire n'est plus résolue");
 });
 
+// ---------- T3 : approbation et clôture A3 par une machine ----------
+async function missionInReview(h) {
+  const m = await h.mission(A);
+  const st = await h.call("POST", `/api/hq/missions/${m.mid}/tasks/${m.tid}/start`, {}, A);
+  assert(st.status === 200 && st.body.claimToken, `démarrage ${st.status} ${st.body.error || ""}`);
+  const dl = await h.call("POST", `/api/hq/missions/${m.mid}/deliverables`, { taskId: m.tid, attemptId: st.body.attemptId, claimToken: st.body.claimToken, body: "Livrable de sonde, fictif." }, A);
+  assert(dl.status === 200, `livrable légitime ${dl.status} ${dl.body.error || ""}`);
+  const rv = await h.call("POST", `/api/hq/missions/${m.mid}/transition`, { status: "in_review" }, A);
+  assert(rv.status === 200, `revue ${rv.status} ${rv.body.error || ""}`);
+  return { ...m, st };
+}
+test("T3", "Une machine (human=false) n'approuve ni ne clôt une mission A3 ; un humain coo le peut", async () => {
+  const h = harness();
+  const m = await missionInReview(h);
+  const ap = await h.call("POST", `/api/hq/missions/${m.mid}/approval`, { decision: "approve" }, { actor: "coo", scopes: ["review"], human: false });
+  assert(ap.status === 403, `approbation machine ${ap.status} approvalValid=${ap.body.mission?.approvalValid}`);
+  const human = await h.call("POST", `/api/hq/missions/${m.mid}/approval`, { decision: "approve" }, { actor: "coo", scopes: ["review"], human: true });
+  assert(human.status === 200 && human.body.mission.approvalValid === true, `contrôle positif humain ${human.status} ${human.body.error || ""}`);
+  const close = await h.call("POST", `/api/hq/missions/${m.mid}/transition`, { status: "done", result: "Synthèse interne prête, aucune réservation." }, { actor: "coo", scopes: ["review"], human: false });
+  assert(close.status === 403, `clôture machine ${close.status} statut=${close.body.mission?.status}`);
+  const closeHuman = await h.call("POST", `/api/hq/missions/${m.mid}/transition`, { status: "done", result: "Synthèse interne prête, aucune réservation." }, { actor: "coo", scopes: ["review"], human: true });
+  assert(closeHuman.status === 200 && closeHuman.body.mission.status === "done", `clôture humaine ${closeHuman.status} ${closeHuman.body.error || ""}`);
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;
