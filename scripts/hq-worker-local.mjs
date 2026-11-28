@@ -72,7 +72,8 @@ function options() {
       ACCESS_SERVICE_CLIENT_IDS: `${serviceName},${"cd".repeat(16)}.access`,
       HQ_MACHINE_IDENTITIES: JSON.stringify([
         { id: "executor-klirprospect", accessClientId: serviceName, actorId: "machine-klirprospect", orgId: "klirline", scopes: ["work"] },
-        { id: "reviewer-only", accessClientId: `${"cd".repeat(16)}.access`, actorId: "coo", orgId: "klirline", scopes: ["review"] },
+        // I2 : une fiche machine ne porte plus « coo » ; la revue machine garde un acteur non humain.
+        { id: "reviewer-only", accessClientId: `${"cd".repeat(16)}.access`, actorId: "ops-review", orgId: "klirline", scopes: ["review"] },
       ]),
     },
     // Ce remplacement n'existe que dans ce script. wrangler.jsonc et src/worker.js

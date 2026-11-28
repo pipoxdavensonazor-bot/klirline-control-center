@@ -29,6 +29,13 @@ export function machineIdentities(env = {}) {
 
 const SERVICE_CLIENT = /^[a-f0-9]{32}\.access$/;
 const APP_SCOPES = new Set(["work", "review"]);
+// I2 (banc phase 5) : rôles humains validateurs (A3). Une fiche machine ne les porte jamais :
+// une machine qui se déclarerait « coo » ou « ceo » pourrait approuver puis clore une mission.
+export const HUMAN_VALIDATOR_ROLES = new Set(["ceo", "coo", "chief-of-staff"]);
+
+function humanRole(actorId) {
+  return HUMAN_VALIDATOR_ROLES.has(String(actorId || "").trim().toLowerCase());
+}
 
 export function resolveServiceMachine(commonName, env = {}) {
   if (!SERVICE_CLIENT.test(commonName || "")) return null;
@@ -37,6 +44,7 @@ export function resolveServiceMachine(commonName, env = {}) {
   const scopes = Array.isArray(match.scopes) ? [...new Set(match.scopes.map(String))] : [];
   if (!scopes.length || scopes.some((scope) => !APP_SCOPES.has(scope))) return null;
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(String(match.actorId || ""))) return null;
+  if (humanRole(match.actorId)) return null;
   let orgId;
   try {
     orgId = orgObjectName(String(match.orgId || ""));
@@ -87,11 +95,31 @@ export function authenticateMachine(authorizationHeader, env = {}) {
   if (!token) return null;
   const match = machineIdentities(env).find((item) => item.token && sameSecret(item.token, token));
   if (!match) return null;
+  if (humanRole(match.actorId)) return null;
   return {
     id: String(match.id),
     actorId: String(match.actorId),
     scopes: Array.isArray(match.scopes) ? match.scopes.map(String) : [],
   };
+}
+
+// Serveur Node de démonstration uniquement (src/server.js, jamais publié) : une personne locale
+// déclarée dans HQ_LOCAL_HUMANS, seul moyen d'y tenir un rôle humain validateur. Le Worker publié
+// n'utilise pas cette fonction : ses humains viennent du JWT Access (courriel).
+export function authenticateLocalHuman(authorizationHeader, env = {}) {
+  const token = bearer(authorizationHeader);
+  if (!token || !env.HQ_LOCAL_HUMANS) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(String(env.HQ_LOCAL_HUMANS));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+  const match = parsed.find((item) => item && item.id && item.token && humanRole(item.actorId) && sameSecret(item.token, token));
+  if (!match) return null;
+  const actorId = String(match.actorId).trim().toLowerCase();
+  return { id: String(match.id), actorId, human: true, scopes: accessScopes(actorId) };
 }
 
 export function accessScopes(actorId) {

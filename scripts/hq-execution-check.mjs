@@ -13,7 +13,9 @@ const hqFile = path.join(os.tmpdir(), `klirline-hq-exec-${process.pid}.json`);
 const missionFile = path.join(os.tmpdir(), `klirline-mission-exec-${process.pid}.json`);
 const identities = [
   { id: "executor-klirprospect", token: "local-test-executor", actorId: "machine-klirprospect", scopes: ["work"] },
-  { id: "reviewer-office", token: "local-test-reviewer", actorId: "coo", scopes: ["review"] },
+  // I2 : une fiche machine « coo » est refusée ; le réviseur est une personne locale (HQ_LOCAL_HUMANS).
+  { id: "machine-coo-refusee", token: "local-test-machine-coo", actorId: "coo", scopes: ["review"] },
+  { id: "revue-machine", token: "local-test-review-machine", actorId: "ops-review", scopes: ["review"] },
   { id: "accountant-test", token: "local-test-accounting", actorId: "accounting", scopes: ["work"] },
 ];
 
@@ -54,6 +56,7 @@ const child = spawn(process.execPath, ["src/server.js"], {
     HQ_COMMANDS_PATH: hqFile,
     HQ_MISSIONS_PATH: missionFile,
     HQ_MACHINE_IDENTITIES: JSON.stringify(identities),
+    HQ_LOCAL_HUMANS: JSON.stringify([{ id: "reviewer-office", token: "local-test-reviewer", actorId: "coo" }]),
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -78,6 +81,8 @@ try {
   });
   assert(browserRole.status === 401, "un rôle de navigateur ouvre une mission");
 
+  const machineCoo = await call("local-test-machine-coo", "GET", "/api/hq/missions");
+  assert(machineCoo.status === 401, `une fiche machine « coo » est acceptée ${machineCoo.status}`);
   const first = await runExecutor(base, "local-test-executor");
   const executorApproval = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve" });
   assert(executorApproval.status === 403, "l'exécuteur valide son propre dossier");
@@ -109,8 +114,8 @@ try {
   await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/transition`, { status: "in_review" });
   const hiddenMission = await call("local-test-accounting", "GET", `/api/hq/missions/${first.missionId}`);
   assert(hiddenMission.status === 404, "un rôle non autorisé lit la mission");
-  const reviewerClaim = await call("local-test-reviewer", "POST", "/api/hq/command", { text: "essai réservé au travail", ownerSlug: "sandbox-klirline" });
-  const claimDenied = await call("local-test-reviewer", "POST", `/api/hq/commands/${reviewerClaim.payload.command.id}/claim`, {});
+  const reviewerClaim = await call("local-test-review-machine", "POST", "/api/hq/command", { text: "essai réservé au travail", ownerSlug: "sandbox-klirline" });
+  const claimDenied = await call("local-test-review-machine", "POST", `/api/hq/commands/${reviewerClaim.payload.command.id}/claim`, {});
   assert(reviewerClaim.status === 201 && claimDenied.status === 403, "un rôle de revue prend une commande");
   const approved = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve", note: "Synthèse interne acceptée." });
   assert(approved.status === 200 && approved.payload.mission.approvalValid === true, "le réviseur n'accepte pas le dossier");

@@ -19,8 +19,11 @@ const machineToken = "local-test-executor";
 const reviewToken = "local-test-reviewer";
 const machineIdentities = JSON.stringify([
   { id: "executor-test", token: machineToken, actorId: "machine-klirprospect", scopes: ["work"] },
-  { id: "reviewer-test", token: reviewToken, actorId: "coo", scopes: ["review"] },
+  // I2 : une fiche machine « coo » est désormais refusée (401), démontré ci-dessous.
+  { id: "machine-coo-refusee", token: "local-test-machine-coo", actorId: "coo", scopes: ["review"] },
 ]);
+// Le réviseur est une personne locale (HQ_LOCAL_HUMANS, serveur de démonstration seulement).
+const localHumans = JSON.stringify([{ id: "reviewer-test", token: reviewToken, actorId: "coo" }]);
 
 async function request(method, pathname, body, token = machineToken) {
   const response = await fetch(`${base}${pathname}`, {
@@ -51,12 +54,14 @@ async function waitForHealth(child) {
 
 const child = spawn(process.execPath, ["src/server.js"], {
   cwd: root,
-  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile, HQ_MACHINE_IDENTITIES: machineIdentities },
+  env: { ...process.env, PORT: String(port), HQ_COMMANDS_PATH: hqFile, HQ_MACHINE_IDENTITIES: machineIdentities, HQ_LOCAL_HUMANS: localHumans },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
 try {
   await waitForHealth(child);
+  const machineCoo = await request("GET", "/api/hq/commands", undefined, "local-test-machine-coo");
+  assert(machineCoo.status === 401, `une fiche machine « coo » est acceptée ${machineCoo.status}`);
 
   const created = await request("POST", "/api/hq/command", { text: "rédiger l'article Black Wall News", priority: "haute" });
   assert(created.status === 201, `création ${created.status}`);

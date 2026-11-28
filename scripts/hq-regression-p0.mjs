@@ -4,6 +4,7 @@
 // Usage : node scripts/hq-regression-p0.mjs [ID ...]   (sans argument : tous les tests)
 import { identityFromAccess } from "../src/access.js";
 import { dispatchHq } from "../src/hq/dispatch.js";
+import { authenticateMachine, identifyAccess, resolveServiceMachine } from "../src/hq/machine-auth.js";
 import { memoryHqStore } from "../src/hq/memory-store.js";
 
 const only = new Set(process.argv.slice(2));
@@ -68,6 +69,20 @@ test("I1", "Un jeton de service sans fiche HQ_MACHINE_IDENTITIES est refusé (pl
   assert(status === 403, `statut ${status}, 403 attendu`);
   const human = identityFromAccess({ kind: "user", email: "humain@example.test" }, accounts);
   assert(human.actorId === "ceo" && human.service === false, "contrôle positif : le courriel humain ne choisit plus son rôle");
+});
+
+// ---------- I2 : une fiche machine ne porte jamais un rôle humain validateur ----------
+test("I2", "Une fiche machine ne peut pas porter coo, ceo ou chief-of-staff", async () => {
+  const cn = `${"a".repeat(32)}.access`;
+  for (const actorId of ["coo", "ceo", "chief-of-staff"]) {
+    const env = { HQ_MACHINE_IDENTITIES: JSON.stringify([{ id: "m1", actorId, orgId: "klirline", accessClientId: cn, token: "jeton-factice-i2", scopes: ["review"] }]) };
+    assert(resolveServiceMachine(cn, env) === null, `resolveServiceMachine accepte ${actorId}`);
+    assert(authenticateMachine("Bearer jeton-factice-i2", env) === null, `authenticateMachine accepte ${actorId}`);
+    assert(identifyAccess({ kind: "service", commonName: cn }, env).status === 403, `identifyAccess accepte ${actorId}`);
+  }
+  const okEnv = { HQ_MACHINE_IDENTITIES: JSON.stringify([{ id: "m3", actorId: "machine-klirprospect", orgId: "klirline", accessClientId: cn, scopes: ["work"] }]) };
+  const ok = resolveServiceMachine(cn, okEnv);
+  assert(ok && ok.actorId === "machine-klirprospect" && ok.human === false && ok.scopes.join() === "work", "contrôle positif : une fiche machine ordinaire n'est plus résolue");
 });
 
 let failed = 0;

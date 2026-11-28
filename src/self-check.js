@@ -353,11 +353,13 @@ const scopedEnv = {
   ACCESS_AUD: trial.aud,
   ACCESS_ACCOUNTS: JSON.stringify([{ email: "ada@example.com", role: "ceo", orgId: "klirline" }]),
   HQ_MACHINE_IDENTITIES: JSON.stringify([
-    { id: "executor-klirprospect", accessClientId: scopedName, actorId: "ceo", orgId: "klirline", scopes: ["work"] },
+    { id: "executor-klirprospect", accessClientId: scopedName, actorId: "machine-klirprospect", orgId: "klirline", scopes: ["work"] },
   ]),
 };
 const scopedIdentity = identifyAccess({ kind: "service", commonName: scopedName }, scopedEnv).identity;
-check(scopedIdentity.human === false && scopedIdentity.scopes.join() === "work" && scopedIdentity.actorId === "ceo", "Une fiche machine ne reçoit pas le droit de revue du rôle");
+check(scopedIdentity.human === false && scopedIdentity.scopes.join() === "work" && scopedIdentity.actorId === "machine-klirprospect", "Une fiche machine ne reçoit que ses portées");
+const cooMachineEnv = { ...scopedEnv, HQ_MACHINE_IDENTITIES: JSON.stringify([{ id: "machine-coo", accessClientId: scopedName, actorId: "coo", orgId: "klirline", scopes: ["review"] }]) };
+check(identifyAccess({ kind: "service", commonName: scopedName }, cooMachineEnv).status === 403, "I2 : une fiche machine ne porte pas un rôle humain validateur");
 const mappedHuman = identifyAccess({ kind: "human", email: "ada@example.com" }, scopedEnv).identity;
 check(mappedHuman.human === true && mappedHuman.scopes.includes("review") && mappedHuman.actorId === "ceo", "Le courriel garde les permissions du poste");
 check(identifyAccess({ kind: "service", commonName: scopedName }, { ...scopedEnv, HQ_MACHINE_IDENTITIES: "" }).status === 403, "Sans fiche, le mappeur applicatif ne donne pas de droit");
