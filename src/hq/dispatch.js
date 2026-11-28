@@ -151,6 +151,15 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
     });
   }
 
+  // T6/T7 (lot 2) : POST /api/hq/commands/:id/heartbeat { attemptId, claimToken }.
+  const heartbeatRoute = commandId(pathname, "/heartbeat");
+  if (heartbeatRoute) {
+    if (heartbeatRoute.error) return heartbeatRoute.error;
+    if (method !== "POST") return { status: 404, body: { error: "Introuvable" } };
+    if (!allows(scopes, "work")) return NO_SCOPE;
+    return store.heartbeat(heartbeatRoute.id, body || {}, { actorId, now: clock });
+  }
+
   const interruptRoute = commandId(pathname, "/interrupt");
   if (interruptRoute) {
     if (interruptRoute.error) return interruptRoute.error;

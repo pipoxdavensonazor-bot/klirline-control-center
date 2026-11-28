@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { accessSettings, assertServiceRoute, identityFromAccess, verifyAccessJwt } from "./access.js";
 import { decide, execute, issueCommand, logCall } from "./engine.js";
-import { decideClaim, decideCompletion, decideInterrupt } from "./hq/commands.js";
+import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt } from "./hq/commands.js";
 import { accessScopes, resolveServiceMachine } from "./hq/machine-auth.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { runMissionOperation } from "./hq/missions.js";
@@ -182,6 +182,10 @@ export class CompanyState extends DurableObject {
     return this.hqApply(id, decideClaim(this.hqGet(id), options));
   }
 
+  hqHeartbeat(id, input, options) {
+    return this.hqApply(id, decideHeartbeat(this.hqGet(id), input, options));
+  }
+
   hqInterrupt(id, options) {
     return this.hqApply(id, decideInterrupt(this.hqGet(id), options));
   }
@@ -303,6 +307,7 @@ export function hqDurableStore(company) {
     insertIdempotent: (command) => company.hqInsertIdempotent(command),
     replace: (command) => company.hqReplace(command),
     claim: (id, options) => company.hqClaim(id, options),
+    heartbeat: (id, input, options) => company.hqHeartbeat(id, input, options),
     interrupt: (id, options) => company.hqInterrupt(id, options),
     complete: (id, input, options) => company.hqComplete(id, input, options),
     missionList: () => company.hqMissionList(),

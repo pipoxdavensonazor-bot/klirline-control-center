@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { decideClaim, decideCompletion, decideInterrupt, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
 import { runMissionOperation } from "./missions.js";
 import { dataPath } from "../store.js";
 
@@ -98,6 +98,16 @@ export function fileHqStore() {
       const commands = readAll();
       const index = commands.findIndex((item) => item.id === id);
       const decision = decideCompletion(index < 0 ? null : commands[index], input, options);
+      if (decision.persist) {
+        commands[index] = decision.command;
+        writeAll(commands);
+      }
+      return { status: decision.http, body: decision.body };
+    },
+    async heartbeat(id, input, options) {
+      const commands = readAll();
+      const index = commands.findIndex((item) => item.id === id);
+      const decision = decideHeartbeat(index < 0 ? null : commands[index], input, options);
       if (decision.persist) {
         commands[index] = decision.command;
         writeAll(commands);

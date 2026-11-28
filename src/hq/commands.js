@@ -425,6 +425,30 @@ export function decideClaim(command, options = {}) {
   };
 }
 
+// T6/T7 (lot 2) : battement de cœur d'une tentative. Seule la tentative en cours (attemptId +
+// claimToken) prolonge son bail, et seulement tant qu'il est actif. Un bail expiré ne se ranime
+// pas : la commande se reprend par un claim (nouvelle tentative, l'ancien jeton reste refusé).
+export function decideHeartbeat(command, input, options = {}) {
+  if (!command) return { http: 404, persist: false, body: { error: "Commande introuvable" } };
+  try {
+    rejectImpersonation(input);
+  } catch (error) {
+    return { http: error.status || 400, persist: false, body: { error: error.message } };
+  }
+  const now = clock(options);
+  const refuse = (http, outcome, error) => ({ http, persist: false, body: { mode: "hq", outcome, error, command: publicCommand(command) } });
+  if (!LEASED.has(command.status) || !command.claim?.tokenHash) return refuse(409, "refused", "Aucun bail en cours pour cette commande.");
+  if (!credentialMatches(command.claim, input?.attemptId, input?.claimToken)) return refuse(409, "rejected", "Cette tentative ne peut pas prolonger le bail.");
+  if (!leaseActive(command, now.getTime())) return refuse(409, "expired", "Bail expiré : la commande se reprend par un claim.");
+  const iso = now.toISOString();
+  const next = {
+    ...command,
+    updatedAt: iso,
+    claim: { ...command.claim, heartbeatAt: iso, leaseUntil: new Date(now.getTime() + HQ_LEASE_MS).toISOString() },
+  };
+  return { http: 200, persist: true, command: next, body: { mode: "hq", outcome: "extended", command: publicCommand(next) } };
+}
+
 export function decideInterrupt(command, options = {}) {
   if (!command) {
     return { http: 404, persist: false, body: { error: "Commande introuvable" } };

@@ -192,6 +192,46 @@ test("C1", "T11 : coût invalide, négatif, non fini ou fractionnaire refusé (4
   assert(ok.status === 200 && ok.body.started === true, `contrôle positif coût 0 : ${ok.status}`);
 });
 
+const B = { actor: "agent-b", scopes: ["work"] };
+async function claimed(h, text = "Commande fictive lot 2") {
+  const c = await h.call("POST", "/api/hq/command", { text, ownerSlug: "sandbox-klirline" }, A);
+  const id = c.body.command.id;
+  const cl = await h.call("POST", `/api/hq/commands/${id}/claim`, {}, A);
+  return { id, attemptId: cl.body.command.claim.attemptId, claimToken: cl.body.claimToken, leaseUntil: cl.body.command.claim.leaseUntil };
+}
+test("D1", "T6 : seul le titulaire (attemptId + claimToken) prolonge le bail ; tiers, sans jeton, mauvais jeton, sans portée : refusés", async () => {
+  const h = harness();
+  const c = await claimed(h);
+  const hb = (body, who, now) => h.call("POST", `/api/hq/commands/${c.id}/heartbeat`, body, who, { now });
+  const noToken = await hb({ attemptId: c.attemptId }, B, "2026-11-28T15:10:00.000Z");
+  const wrong = await hb({ attemptId: c.attemptId, claimToken: "jeton-faux" }, B, "2026-11-28T15:10:00.000Z");
+  const noScope = await hb({ attemptId: c.attemptId, claimToken: c.claimToken }, { actor: "agent-a", scopes: [] }, "2026-11-28T15:10:00.000Z");
+  const forged = await hb({ attemptId: c.attemptId, claimToken: c.claimToken, actorId: "ceo" }, A, "2026-11-28T15:10:00.000Z");
+  assert(noToken.status === 409 && wrong.status === 409 && noScope.status === 403 && forged.status === 400, `refus attendus : ${noToken.status} ${wrong.status} ${noScope.status} ${forged.status}`);
+  const same = await h.call("GET", `/api/hq/commands/${c.id}`);
+  assert(same.body.command.claim.leaseUntil === c.leaseUntil, "le bail a bougé après un heartbeat refusé");
+  const ok = await hb({ attemptId: c.attemptId, claimToken: c.claimToken }, A, "2026-11-28T15:20:00.000Z");
+  assert(ok.status === 200 && ok.body.outcome === "extended" && ok.body.command.claim.leaseUntil === "2026-11-28T15:50:00.000Z", `contrôle positif : ${ok.status} ${JSON.stringify(ok.body.command?.claim)}`);
+  const held = await h.call("POST", `/api/hq/commands/${c.id}/claim`, {}, B, { now: "2026-11-28T15:40:00.000Z" });
+  assert(held.body.outcome === "held", `bail prolongé non respecté : ${held.body.outcome}`);
+});
+test("D2", "T7 : un heartbeat après expiration est refusé (409) ; la reprise passe par un claim et l'ancien jeton reste refusé", async () => {
+  const h = harness();
+  const c = await claimed(h);
+  const hb = (body, now) => h.call("POST", `/api/hq/commands/${c.id}/heartbeat`, body, A, { now });
+  const early = await hb({ attemptId: c.attemptId, claimToken: c.claimToken }, "2026-11-28T15:05:00.000Z");
+  assert(early.status === 200, `heartbeat à +5 min : ${early.status}`);
+  const late = await hb({ attemptId: c.attemptId, claimToken: c.claimToken }, "2026-11-28T16:00:00.000Z");
+  assert(late.status === 409 && late.body.outcome === "expired", `heartbeat à +60 min : ${late.status} ${late.body.outcome}`);
+  const re = await h.call("POST", `/api/hq/commands/${c.id}/claim`, {}, B, { now: "2026-11-28T16:00:01.000Z" });
+  assert(re.body.outcome === "reclaimed", `reprise : ${re.body.outcome}`);
+  const old = await hb({ attemptId: c.attemptId, claimToken: c.claimToken }, "2026-11-28T16:00:02.000Z");
+  assert(old.status === 409, `ancien jeton après reprise : ${old.status}`);
+  const done = await h.call("POST", "/api/hq/command", { text: "Commande close", ownerSlug: "sandbox-klirline" }, A);
+  const pend = await h.call("POST", `/api/hq/commands/${done.body.command.id}/heartbeat`, { attemptId: "x", claimToken: "y" }, A);
+  assert(pend.status === 409, `heartbeat sans bail : ${pend.status}`);
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;

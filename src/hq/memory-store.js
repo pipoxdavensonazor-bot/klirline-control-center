@@ -1,4 +1,4 @@
-import { decideClaim, decideCompletion, decideInterrupt, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
+import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, findIdempotent, matchesFilter, sortCommands } from "./commands.js";
 import { runMissionOperation } from "./missions.js";
 
 function missing() {
@@ -42,6 +42,10 @@ export function memoryHqStore(seed = []) {
     async claim(id, options) {
       const current = commands.find((command) => command.id === id) || null;
       return commit(commands, id, decideClaim(current, options));
+    },
+    async heartbeat(id, input, options) {
+      const current = commands.find((command) => command.id === id) || null;
+      return commit(commands, id, decideHeartbeat(current, input, options));
     },
     async interrupt(id, options) {
       const current = commands.find((command) => command.id === id) || null;
