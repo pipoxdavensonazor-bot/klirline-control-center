@@ -34,7 +34,7 @@ function writes(scopes) {
 
 const NO_SCOPE = { status: 403, body: { error: "Cette identité n'a pas ce droit." } };
 
-export async function dispatchHq(store, { method, pathname, searchParams, body, actorId, now, scopes, human }) {
+export async function dispatchHq(store, { method, pathname, searchParams, body, actorId, now, scopes, human, orgId }) {
   const clock = now instanceof Date ? now : new Date();
   if (method !== "GET" && body && typeof body === "object") {
     try {
@@ -56,13 +56,13 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   if (method === "GET" && pathname === "/api/hq/missions") {
     const missions = await store.missionList();
     const visible = missions.filter((mission) => canReadMission(mission, actorId, scopes));
-    return { status: 200, body: { mode: "hq", missions: visible.map((mission) => presentMission(mission, actorId, clock)) } };
+    return { status: 200, body: { mode: "hq", missions: visible.map((mission) => presentMission(mission, actorId, clock, orgId)) } };
   }
   if (method === "POST" && pathname === "/api/hq/missions") {
     if (!allows(scopes, "work")) return { status: 403, body: { error: "Cette identité ne peut pas ouvrir une mission." } };
-    const mission = createMission(body, actorId, { now: clock });
+    const mission = createMission(body, actorId, { now: clock, orgId });
     await store.missionInsert(mission);
-    return { status: 201, body: { mode: "hq", mission: presentMission(mission, actorId, clock) } };
+    return { status: 201, body: { mode: "hq", mission: presentMission(mission, actorId, clock, orgId) } };
   }
   const missionStart = pathname.match(/^\/api\/hq\/missions\/([^/]+)\/tasks\/([^/]+)\/start$/);
   const missionAction = pathname.match(/^\/api\/hq\/missions\/([^/]+)\/(transition|deliverables|approval|actions)$/);
@@ -78,7 +78,7 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
     if (missionOne && method === "GET") {
       const mission = await store.missionGet(rawId);
       if (!mission || !canReadMission(mission, actorId, scopes)) return { status: 404, body: { error: "Mission introuvable" } };
-      return { status: 200, body: { mode: "hq", mission: presentMission(mission, actorId, clock) } };
+      return { status: 200, body: { mode: "hq", mission: presentMission(mission, actorId, clock, orgId) } };
     }
     if (method !== "POST" || missionOne) return { status: 404, body: { error: "Introuvable" } };
     const operation = missionStart ? "start" : { transition: "transition", deliverables: "deliver", approval: "decide", actions: "act" }[missionAction[2]];
@@ -92,15 +92,16 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
         return { status: 404, body: { error: "Tâche introuvable" } };
       }
     }
-    const result = await store.missionOperate(rawId, operation, missionStart ? { ...(body || {}), taskId } : (body || {}), actorId, { now: clock, scopes, human });
+    const result = await store.missionOperate(rawId, operation, missionStart ? { ...(body || {}), taskId } : (body || {}), actorId, { now: clock, scopes, human, orgId });
     return {
       status: result.httpStatus || 200,
       body: {
         mode: "hq",
-        mission: presentMission(result.mission, actorId, clock),
+        mission: presentMission(result.mission, actorId, clock, orgId),
         started: result.started,
         reason: result.reason,
         ...(result.claimToken ? { claimToken: result.claimToken, attemptId: result.attemptId } : {}),
+        ...(result.draftId ? { draftId: result.draftId } : {}),
         ...(result.error ? { error: result.error } : {}),
       },
     };

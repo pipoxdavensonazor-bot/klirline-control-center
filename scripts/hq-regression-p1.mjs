@@ -40,7 +40,9 @@ async function webSha256(text) {
 
 function approvedMission(objective = COLLIDE[0]) {
   const mission = createMission({ objective, successCriterion: "Critère fictif", ownerSlug: "office-klirline" }, "agent-a", { now: NOW });
-  const approved = decideMission({ ...mission, status: "in_review" }, { decision: "approve" }, { actorId: "coo", human: true, now: NOW });
+  const review = { ...mission, status: "in_review" };
+  // Lot 2 : l'approbateur fournit l'empreinte présentée (schéma v2).
+  const approved = decideMission(review, { decision: "approve", presentedHash: missions.approvalRequest?.(review).hash }, { actorId: "coo", human: true, now: NOW });
   return approved;
 }
 
@@ -56,9 +58,11 @@ test("H2", "Les nouvelles approbations portent une empreinte SHA-256 identique �
   const approved = approvedMission();
   const hash = approved.approvals[0].contentHash;
   assert(SHA256.test(hash), `empreinte d'approbation non SHA-256 : ${hash}`);
-  const parts = [approved.objective, approved.successCriterion];
-  assert(hash === `sha256-${await webSha256(JSON.stringify(parts))}`, "SHA-256 node:crypto ≠ WebCrypto");
-  assert(missionContentHash(approved) === hash, "missionContentHash diverge");
+  // Lot 2 (revue KCO-2026-REVUE-P1, question 3) : l'empreinte d'approbation porte sur le sujet
+  // canonique v2 (contexte complet) et non plus sur JSON.stringify(parts).
+  const request = missions.approvalRequest(approved);
+  assert(hash === request.hash && hash === `sha256-${await webSha256(request.canonical)}`, "SHA-256 node:crypto ≠ WebCrypto");
+  assert(SHA256.test(missionContentHash(approved)), "missionContentHash n'est pas SHA-256");
 });
 
 test("H3", "Une approbation FNV (legacy) ne valide ni clôture ni action externe, et est marquée legacy à la lecture", async () => {
@@ -69,7 +73,7 @@ test("H3", "Une approbation FNV (legacy) ne valide ni clôture ni action externe
     approvals: [{ id: "apr-legacy", decision: "approve", contentHash: fnvMission(base), approverId: "coo", note: "", at: NOW.toISOString(), expiresAt: new Date(NOW.getTime() + 86400000).toISOString(), invalidatedAt: null }],
   };
   assert(!validApproval(legacy, NOW), "une approbation FNV valide encore le dossier");
-  const act = prepareExternalAction(legacy, { type: "email", body: "Brouillon fictif" }, { actorId: "coo", now: NOW });
+  const act = prepareExternalAction(legacy, { type: "email", body: "Brouillon fictif", idempotencyKey: "h3-brouillon-0001" }, { actorId: "coo", now: NOW });
   assert(act.httpStatus === 403 && act.error === "Approbation manquante.", `action externe : ${act.error}`);
   const shown = presentMission(legacy, "coo", NOW);
   assert(shown.approvalValid === false, "approvalValid vrai avec une approbation FNV");
@@ -99,7 +103,7 @@ test("H4", "Chaque livrable déposé porte une empreinte SHA-256 de son contenu,
 test("H5", "Une ancienne approbation FNV reste lisible (aucune perte de donnée) et une nouvelle approbation humaine la remplace", async () => {
   const base = createMission({ objective: "Objectif fictif reprise", successCriterion: "Critère fictif", ownerSlug: "office-klirline" }, "agent-a", { now: NOW });
   const legacy = { ...base, status: "in_review", approvals: [{ id: "apr-old", decision: "approve", contentHash: fnvMission(base), approverId: "coo", note: "", at: NOW.toISOString(), expiresAt: new Date(NOW.getTime() + 86400000).toISOString(), invalidatedAt: null }] };
-  const renewed = decideMission(legacy, { decision: "approve" }, { actorId: "coo", human: true, now: NOW });
+  const renewed = decideMission(legacy, { decision: "approve", presentedHash: missions.approvalRequest?.(legacy).hash }, { actorId: "coo", human: true, now: NOW });
   assert(renewed.approvals.length === 2 && renewed.approvals[0].id === "apr-old", "l'ancienne approbation est perdue");
   assert(validApproval(renewed, NOW)?.id === renewed.approvals[1].id, "la nouvelle approbation SHA-256 ne vaut pas");
   assert(SHA256.test(renewed.approvals[1].contentHash), "nouvelle approbation non SHA-256");

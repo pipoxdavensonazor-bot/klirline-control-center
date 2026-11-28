@@ -378,6 +378,7 @@ export default {
             actorId: identity.actorId,
             scopes: identity.scopes,
             human: identity.human === true,
+            orgId: identity.orgId,
           },
         );
         return json(result.status, result.body);

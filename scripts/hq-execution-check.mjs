@@ -36,6 +36,12 @@ async function call(token, method, pathname, body) {
   return { status: response.status, payload };
 }
 
+// Lot 2 : l'approbateur valide l'empreinte du contenu qui lui est présenté (approvalRequest.hash).
+async function approveAs(token, missionId, extra = {}) {
+  const shown = await call(token, "GET", `/api/hq/missions/${missionId}`);
+  return call(token, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", presentedHash: shown.payload.mission?.approvalRequest?.hash, ...extra });
+}
+
 const procedure = readPinnedProcedure();
 const synthesis = buildSynthesis(procedure);
 assert(synthesis.executionKind === "deterministic-script" && synthesis.model === null && synthesis.costCents === 0, "la synthèse ne doit pas prétendre à un modèle");
@@ -117,7 +123,7 @@ try {
   const reviewerClaim = await call("local-test-review-machine", "POST", "/api/hq/command", { text: "essai réservé au travail", ownerSlug: "sandbox-klirline" });
   const claimDenied = await call("local-test-review-machine", "POST", `/api/hq/commands/${reviewerClaim.payload.command.id}/claim`, {});
   assert(reviewerClaim.status === 201 && claimDenied.status === 403, "un rôle de revue prend une commande");
-  const approved = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve", note: "Synthèse interne acceptée." });
+  const approved = await approveAs("local-test-reviewer", first.missionId, { note: "Synthèse interne acceptée." });
   assert(approved.status === 200 && approved.payload.mission.approvalValid === true, "le réviseur n'accepte pas le dossier");
   // T12 : une révision exige la tentative terminée (titulaire) ; sans jeton, elle est refusée.
   const forgedRevision = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/deliverables`, {
@@ -149,14 +155,14 @@ try {
     executionKind: "deterministic-script",
   });
   await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/transition`, { status: "in_review" });
-  const reapproved = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve", note: "Révision acceptée." });
+  const reapproved = await approveAs("local-test-reviewer", first.missionId, { note: "Révision acceptée." });
   assert(reapproved.payload.mission.approvalValid === true, "la nouvelle approbation manque");
   const closed = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/transition`, {
     status: "done",
     result: "Synthèse interne préparée. Aucune démonstration n'est réservée.",
   });
   assert(closed.status === 200 && closed.payload.mission.outcomes.demosBooked === 0 && closed.payload.mission.cost.spentCents === 0, "la clôture compte une réservation ou une dépense");
-  const mail = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/actions`, { type: "email", body: "Invitation" });
+  const mail = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/actions`, { type: "email", body: "Invitation", idempotencyKey: "exec-check-invitation-1" });
   assert(mail.status === 403 && mail.payload.mission.drafts.every((draft) => draft.sent === false), "un courriel est parti");
 
   const proof = {

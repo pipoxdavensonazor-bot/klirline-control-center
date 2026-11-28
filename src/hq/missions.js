@@ -93,6 +93,72 @@ export function deliverableHash(body) {
   return contentHash(["livrable", body]);
 }
 
+// ---------- Schéma canonique d'approbation v2 (KCO-2026-LOT-2 §2) ----------
+// L'approbation porte sur un « sujet » complet : organisation, mission, livrables (id, tâche,
+// version, empreinte), et, pour une action externe, type, destinataire, contenu exact, pièces
+// jointes et leurs empreintes, paramètres, montant et devise. Le sujet est sérialisé de façon
+// canonique (clés triées, chaînes NFC, nombres entiers finis seulement) puis haché en SHA-256.
+export const APPROVAL_SCHEMA = "klirline.hq.approval/v2";
+
+export function canonicalJson(value) {
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "string") return JSON.stringify(value.normalize("NFC"));
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value)) fail(400, "Nombre non canonique (entier fini attendu).");
+    return String(value);
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  fail(400, "Valeur non canonique.");
+}
+
+function deliverableVersions(mission) {
+  const counters = new Map();
+  return (mission.deliverables || []).map((item) => {
+    const version = Number.isSafeInteger(item.version) ? item.version : (counters.get(item.taskId) || 0) + 1;
+    counters.set(item.taskId, Math.max(counters.get(item.taskId) || 0, version));
+    return { id: item.id, taskId: item.taskId || null, version, state: item.state || null, contentHash: deliverableHash(item.body) };
+  }).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function actionSubject(draft) {
+  if (!draft) return null;
+  return {
+    draftId: draft.id,
+    type: draft.type,
+    recipient: draft.recipient ?? null,
+    content: draft.body ?? "",
+    contentHash: contentHash(["action", draft.body ?? ""]),
+    attachments: (draft.attachments || []).map((item) => ({ name: item.name, sha256: item.sha256 })),
+    parameters: draft.parameters || {},
+    amount: draft.amount ? { cents: draft.amount.cents, currency: draft.amount.currency } : null,
+  };
+}
+
+export function approvalSubject(mission, context = {}) {
+  return {
+    schema: APPROVAL_SCHEMA,
+    orgId: String(context.orgId ?? mission.orgId ?? ""),
+    missionId: mission.id,
+    scope: context.draft ? "external-action" : "mission-close",
+    mission: { objective: mission.objective, successCriterion: mission.successCriterion, clientId: mission.clientId || null, template: mission.template || null },
+    deliverables: deliverableVersions(mission),
+    action: actionSubject(context.draft),
+  };
+}
+
+export function approvalHash(subject) {
+  return `${CONTENT_HASH_PREFIX}${createHash("sha256").update(canonicalJson(subject), "utf8").digest("hex")}`;
+}
+
+export function approvalRequest(mission, context = {}) {
+  const subject = approvalSubject(mission, context);
+  return { schema: APPROVAL_SCHEMA, scope: subject.scope, actionId: context.draft?.id || null, hash: approvalHash(subject), canonical: canonicalJson(subject) };
+}
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -182,6 +248,7 @@ export function createMission(input, actorId, options = {}) {
     outcomes: { demosPrepared: 0, demosBooked: 0 },
     cost: { spentCents: 0, capCents: 0 },
     validatorId: "coo",
+    orgId: options.orgId ?? null,
     createdBy: actor,
     createdAt: now,
     updatedAt: now,
@@ -199,18 +266,21 @@ function openTasks(mission) {
   return mission.tasks.filter((task) => task.status !== "done" && task.status !== "cancelled");
 }
 
-export function validApproval(mission, now = new Date()) {
-  const hash = missionContentHash(mission);
+export function validApproval(mission, now = new Date(), context = {}) {
   const nowMs = now instanceof Date ? now.getTime() : Date.parse(now);
-  // Seule une approbation SHA-256 vaut : une approbation FNV (legacy) ne valide jamais une
-  // clôture ni une action externe, même si son empreinte correspond encore au contenu.
-  return (mission.approvals || []).find((approval) => (
-    approval.decision === "approve"
-    && !approval.invalidatedAt
-    && hashAlgorithm(approval.contentHash) === "sha256"
-    && approval.contentHash === hash
-    && Date.parse(approval.expiresAt) > nowMs
-  )) || null;
+  const scope = context.draft ? "external-action" : "mission-close";
+  const actionId = context.draft?.id || null;
+  let hash = null;
+  // Seule une approbation du schéma v2 vaut. Une approbation FNV (legacy) ou SHA-256 v1 (P1) ne
+  // valide jamais une clôture ni une action externe ; une approbation de clôture ne vaut pas pour
+  // une action, ni l'inverse ; l'empreinte est recalculée sur le contenu actuel et le contexte.
+  return (mission.approvals || []).find((approval) => {
+    if (approval.decision !== "approve" || approval.invalidatedAt) return false;
+    if (approval.schema !== APPROVAL_SCHEMA || approval.scope !== scope || (approval.actionId || null) !== actionId) return false;
+    if (!(Date.parse(approval.expiresAt) > nowMs)) return false;
+    hash ||= approvalHash(approvalSubject(mission, context));
+    return approval.contentHash === hash;
+  }) || null;
 }
 
 // Lecture des approbations : algorithme affiché, anciennes empreintes marquées « legacy ».
@@ -218,7 +288,8 @@ export function presentApprovals(mission) {
   let legacyHash = null;
   return (mission.approvals || []).map((approval) => {
     const algorithm = hashAlgorithm(approval.contentHash);
-    if (algorithm !== "fnv-legacy") return { ...approval, hashAlgorithm: algorithm, legacy: false };
+    if (approval.schema === APPROVAL_SCHEMA) return { ...approval, hashAlgorithm: algorithm, legacy: false };
+    if (algorithm !== "fnv-legacy") return { ...approval, hashAlgorithm: algorithm, schema: "v1", legacy: true, validatesActions: false };
     legacyHash ||= legacyMissionContentHash(mission);
     return {
       ...approval,
@@ -255,7 +326,7 @@ export function transitionMission(mission, input, options = {}) {
     const result = String(input?.result || "").trim();
     if (result.length < 8) fail(400, "Indiquez le résultat du dossier.");
     if (claimsBookedDemos(result)) fail(400, "Ne comptez pas des démonstrations qui ne sont pas réservées.");
-    if (!validApproval(next, now)) fail(409, "La mission ne se clôt pas sans validation.");
+    if (!validApproval(next, now, { orgId: options.orgId })) fail(409, "La mission ne se clôt pas sans validation.");
     next.result = result;
     next.outcomes = { demosPrepared: next.deliverables.length, demosBooked: 0 };
   }
@@ -370,6 +441,7 @@ export function addDeliverable(mission, commands, input, options = {}) {
       body,
       source: "demonstration",
       state: "revision",
+      version: next.deliverables.filter((item) => item.taskId === target.id).length + 1,
       contentHash: deliverableHash(body),
       executionKind: input?.executionKind || "manual",
       createdAt: now,
@@ -404,6 +476,7 @@ export function addDeliverable(mission, commands, input, options = {}) {
     body,
     source: "demonstration",
     state: "proposal",
+    version: next.deliverables.filter((item) => item.taskId === target.id).length + 1,
     contentHash: deliverableHash(body),
     executionKind: input?.executionKind || "deterministic-script",
     createdAt: now,
@@ -421,7 +494,11 @@ export function addDeliverable(mission, commands, input, options = {}) {
 export function decideMission(mission, input, options = {}) {
   if (!mission) fail(404, "Mission introuvable");
   rejectElevation(input);
-  if (mission.status !== "in_review") fail(409, "Le dossier n'est pas en validation.");
+  const actionId = input?.actionId ? String(input.actionId) : null;
+  const draft = actionId ? (mission.drafts || []).find((item) => item.id === actionId) : null;
+  if (actionId && !draft) fail(404, "Action introuvable.");
+  if (!actionId && mission.status !== "in_review") fail(409, "Le dossier n'est pas en validation.");
+  if (actionId && TERMINAL.has(mission.status)) fail(409, "La mission est close.");
   const actor = String(options.actorId || "");
   // T3 (banc phase 5) : A3 réservé aux humains. Une identité machine (human !== true) ne valide
   // jamais, même si elle porte l'actorId du validateur.
@@ -435,20 +512,33 @@ export function decideMission(mission, input, options = {}) {
   const now = clock(options);
   const iso = now.toISOString();
   const next = clone(mission);
+  const nextDraft = actionId ? next.drafts.find((item) => item.id === actionId) : null;
+  const request = approvalRequest(next, { orgId: options.orgId, draft: nextDraft });
+  // L'approbateur valide l'empreinte du contenu qui lui a été présenté (approvalRequest.hash de la
+  // lecture). Si le contenu a changé entre la lecture et la décision, l'approbation est refusée.
+  if (decision === "approve") {
+    const presented = String(input?.presentedHash || "");
+    if (!presented) fail(400, "Indiquez l'empreinte du contenu présenté (presentedHash).");
+    if (presented !== request.hash) fail(409, "Le contenu a changé depuis sa présentation : relisez-le avant d'approuver.");
+  }
   for (const approval of next.approvals) {
-    if (!approval.invalidatedAt && approval.decision === "approve") approval.invalidatedAt = iso;
+    if (!approval.invalidatedAt && approval.decision === "approve" && (approval.actionId || null) === actionId) approval.invalidatedAt = iso;
   }
   next.approvals.push({
     id: `apr-${crypto.randomUUID()}`,
     decision,
-    contentHash: missionContentHash(next),
+    schema: APPROVAL_SCHEMA,
+    scope: request.scope,
+    actionId,
+    orgId: String(options.orgId ?? mission.orgId ?? ""),
+    contentHash: request.hash,
     approverId: actor,
     note: String(input?.note || "").trim().slice(0, 500),
     at: iso,
     expiresAt: new Date(now.getTime() + APPROVAL_MS).toISOString(),
     invalidatedAt: null,
   });
-  if (decision === "reject") {
+  if (decision === "reject" && !actionId) {
     next.status = "rework";
     for (const task of next.tasks) {
       if (task.status === "done") {
@@ -459,30 +549,100 @@ export function decideMission(mission, input, options = {}) {
     }
   }
   next.updatedAt = iso;
-  pushEvent(next, decision, actor, decision === "approve" ? "Dossier approuvé." : "Dossier renvoyé.", iso);
+  const label = actionId ? (decision === "approve" ? "Action approuvée." : "Action refusée.") : decision === "approve" ? "Dossier approuvé." : "Dossier renvoyé.";
+  pushEvent(next, decision, actor, label, iso);
   return next;
+}
+
+const ACTION_FIELDS = ["type", "recipient", "body", "attachments", "parameters", "amountCents", "currency"];
+
+function normalizeAction(input) {
+  const type = String(input?.type || "");
+  if (!EXTERNAL.has(type)) fail(400, "Action externe inconnue.");
+  const recipient = input?.recipient == null ? null : String(input.recipient).trim().slice(0, 320) || null;
+  const body = String(input?.body || "").trim().slice(0, 2000);
+  const rawAttachments = input?.attachments == null ? [] : input.attachments;
+  if (!Array.isArray(rawAttachments) || rawAttachments.length > 10) fail(400, "Pièces jointes illisibles.");
+  const attachments = rawAttachments.map((item) => {
+    const name = String(item?.name || "").trim().slice(0, 200);
+    if (!name) fail(400, "Pièce jointe sans nom.");
+    const sha256 = item?.content != null
+      ? createHash("sha256").update(String(item.content), "utf8").digest("hex")
+      : String(item?.sha256 || "").toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(sha256)) fail(400, "Empreinte SHA-256 de pièce jointe manquante.");
+    return { name, sha256 };
+  });
+  const parameters = input?.parameters == null ? {} : input.parameters;
+  if (typeof parameters !== "object" || Array.isArray(parameters) || Object.keys(parameters).length > 20) fail(400, "Paramètres illisibles.");
+  for (const value of Object.values(parameters)) {
+    if (!["string", "boolean"].includes(typeof value) && !Number.isSafeInteger(value)) fail(400, "Paramètre non canonique.");
+  }
+  let amount = null;
+  if (input?.amountCents != null || input?.currency != null) {
+    const cents = input?.amountCents;
+    if (!Number.isSafeInteger(cents) || cents < 0) fail(400, "Montant illisible (entier de cents positif attendu).");
+    const currency = String(input?.currency || "").toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) fail(400, "Devise illisible (code ISO 4217 attendu).");
+    amount = { cents, currency };
+  }
+  return { type, recipient, body, attachments, parameters, amount };
+}
+
+function sameAction(draft, action) {
+  return canonicalJson({ ...actionSubject({ ...draft, id: "x" }) }) === canonicalJson({ ...actionSubject({ ...action, id: "x" }) });
 }
 
 export function prepareExternalAction(mission, input, options = {}) {
   if (!mission) fail(404, "Mission introuvable");
   rejectElevation(input);
-  const type = String(input?.type || "");
-  if (!EXTERNAL.has(type)) fail(400, "Action externe inconnue.");
-  const link = connectionById(type === "email" || type === "sms" ? "email" : type === "call" ? "calendar" : "email");
   const now = clock(options);
   const iso = now.toISOString();
   const next = clone(mission);
-  const body = String(input?.body || "").trim().slice(0, 2000);
-  next.drafts.push({ id: `drf-${crypto.randomUUID()}`, type, body, sent: false, at: iso });
-  const approved = Boolean(validApproval(next, now));
+  next.drafts ||= [];
+  let draft;
+  if (input?.draftId) {
+    draft = next.drafts.find((item) => item.id === String(input.draftId));
+    if (!draft) fail(404, "Action introuvable.");
+    // Conflit de paramètres : une demande d'exécution ne peut pas modifier l'action approuvée.
+    if (ACTION_FIELDS.some((key) => Object.hasOwn(input, key)) && !sameAction(draft, normalizeAction({ ...draftInput(draft), ...input }))) {
+      fail(409, "Paramètres en conflit avec l'action présentée à l'approbation.");
+    }
+  } else {
+    const action = normalizeAction(input);
+    const key = input?.idempotencyKey == null ? null : String(input.idempotencyKey).trim();
+    if (key != null && !/^[A-Za-z0-9._:-]{8,128}$/.test(key)) fail(400, "Idempotency-Key illisible.");
+    // Opération automatisée sensible : une machine doit fournir une clé d'idempotence.
+    if (options.human !== true && !key) fail(400, "Une action externe automatisée exige une Idempotency-Key.");
+    const existing = key ? next.drafts.find((item) => item.idempotencyKey === key) : null;
+    if (existing) {
+      if (!sameAction(existing, action)) fail(409, "Idempotency-Key déjà utilisée pour une autre action.");
+      draft = existing;
+    } else {
+      draft = { id: `drf-${crypto.randomUUID()}`, ...action, sent: false, at: iso, createdBy: options.actorId || "", ...(key ? { idempotencyKey: key } : {}) };
+      next.drafts.push(draft);
+    }
+  }
+  const link = connectionById(draft.type === "email" || draft.type === "sms" ? "email" : draft.type === "call" ? "calendar" : "email");
+  const approved = Boolean(validApproval(next, now, { orgId: options.orgId, draft }));
   const error = !approved
     ? "Approbation manquante."
     : link?.send === false || link?.status === "disabled" || link?.status === "absent"
       ? "Envoi désactivé. Le brouillon reste dans le dossier."
       : "Envoi désactivé. Le brouillon reste dans le dossier.";
   next.updatedAt = iso;
-  pushEvent(next, "external_blocked", options.actorId, `${type} : ${error}`, iso);
-  return { mission: next, httpStatus: 403, error };
+  pushEvent(next, "external_blocked", options.actorId, `${draft.type} : ${error}`, iso);
+  return { mission: next, httpStatus: 403, error, draftId: draft.id, approvalValid: approved };
+}
+
+function draftInput(draft) {
+  return {
+    type: draft.type,
+    recipient: draft.recipient,
+    body: draft.body,
+    attachments: draft.attachments,
+    parameters: draft.parameters,
+    ...(draft.amount ? { amountCents: draft.amount.cents, currency: draft.amount.currency } : {}),
+  };
 }
 
 export function runMissionOperation(mission, commands, operation, input, options = {}) {
@@ -500,9 +660,10 @@ export function canReadMission(mission, actorId, scopes) {
   return mission.createdBy === actorId || mission.validatorId === actorId;
 }
 
-export function presentMission(mission, actorId, now = new Date()) {
+export function presentMission(mission, actorId, now = new Date(), orgId) {
   if (!mission) return null;
-  const approval = validApproval(mission, now);
+  const context = { orgId };
+  const approval = validApproval(mission, now, context);
   const client = mission.clientId ? visibleClient(actorId, mission.clientId) : null;
   return {
     ...mission,
@@ -514,6 +675,12 @@ export function presentMission(mission, actorId, now = new Date()) {
       hashAlgorithm: item.contentHash ? hashAlgorithm(item.contentHash) : "absent-legacy",
       contentHashMatches: item.contentHash ? item.contentHash === deliverableHash(item.body) : null,
     })),
+    drafts: (mission.drafts || []).map((draft) => ({
+      ...draft,
+      approvalRequest: approvalRequest(mission, { ...context, draft }),
+      approvalValid: Boolean(validApproval(mission, now, { ...context, draft })),
+    })),
+    approvalRequest: approvalRequest(mission, context),
     approvalValid: Boolean(approval),
     approvalExpiresAt: approval?.expiresAt || null,
     outcomes: { demosPrepared: mission.deliverables?.length || 0, demosBooked: 0 },

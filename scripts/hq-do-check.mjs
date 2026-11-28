@@ -167,7 +167,8 @@ async function scenario() {
   // T3 (inversé) : une identité machine « coo » (human=false) ne valide jamais une mission A3.
   const machineApproval = await call("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu." }, { actor: "coo", scopes: ["review"], now: t0 });
   assert(machineApproval.status === 403, `une machine coo a validé ${machineApproval.status}`);
-  const approved = await call("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu." }, { actor: "coo", scopes: ["review"], human: true, now: t0 });
+  const shown = await call("GET", `/api/hq/missions/${missionId}`, {}, { actor: "coo", scopes: ["review"], human: true, now: t0 });
+  const approved = await call("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu.", presentedHash: shown.payload.mission?.approvalRequest?.hash }, { actor: "coo", scopes: ["review"], human: true, now: t0 });
   assert(approved.status === 200 && approved.payload.mission.approvalValid === true, "validation humaine refusée");
 
   // T12 : sans la tentative terminée, une révision est refusée ; le titulaire la fait avec son jeton.
@@ -184,7 +185,7 @@ async function scenario() {
   }, { actor: "machine-klirprospect", scopes: ["work"], now: "2026-11-05T15:05:00.000Z" });
   assert(revised.status === 200 && revised.payload.mission.status === "rework" && revised.payload.mission.approvalValid === false, "la modification a gardé l'approbation");
 
-  const send = await call("POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Message qui ne doit pas partir." }, { actor: "machine-klirprospect", scopes: ["work"], now: t0 });
+  const send = await call("POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Message qui ne doit pas partir.", idempotencyKey: "do-check-message-1" }, { actor: "machine-klirprospect", scopes: ["work"], now: t0 });
   assert(send.status === 403 && send.payload.mission.drafts.at(-1).sent === false, `envoi ${send.status}`);
   const hidden = await call("GET", "/api/hq/clients/cli-reserve", {}, { actor: "machine-klirprospect", scopes: ["work"] });
   assert(hidden.status === 404, `dossier réservé visible ${hidden.status}`);

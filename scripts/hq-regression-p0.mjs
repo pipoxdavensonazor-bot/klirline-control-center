@@ -101,7 +101,8 @@ test("T3", "Une machine (human=false) n'approuve ni ne clôt une mission A3 ; un
   const m = await missionInReview(h);
   const ap = await h.call("POST", `/api/hq/missions/${m.mid}/approval`, { decision: "approve" }, { actor: "coo", scopes: ["review"], human: false });
   assert(ap.status === 403, `approbation machine ${ap.status} approvalValid=${ap.body.mission?.approvalValid}`);
-  const human = await h.call("POST", `/api/hq/missions/${m.mid}/approval`, { decision: "approve" }, { actor: "coo", scopes: ["review"], human: true });
+  const shown = await h.call("GET", `/api/hq/missions/${m.mid}`, {}, { actor: "coo", scopes: ["review"], human: true });
+  const human = await h.call("POST", `/api/hq/missions/${m.mid}/approval`, { decision: "approve", presentedHash: shown.body.mission?.approvalRequest?.hash }, { actor: "coo", scopes: ["review"], human: true });
   assert(human.status === 200 && human.body.mission.approvalValid === true, `contrôle positif humain ${human.status} ${human.body.error || ""}`);
   const close = await h.call("POST", `/api/hq/missions/${m.mid}/transition`, { status: "done", result: "Synthèse interne prête, aucune réservation." }, { actor: "coo", scopes: ["review"], human: false });
   assert(close.status === 403, `clôture machine ${close.status} statut=${close.body.mission?.status}`);

@@ -172,9 +172,10 @@ try {
   assert(review.status === 200, `passage en revue ${review.status} ${review.payload.error || ""}`);
   const selfApproval = await call(mf, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve" }, executor);
   assert(selfApproval.status === 403, `l'exécuteur s'est validé ${selfApproval.status}`);
-  const approved = await call(mf, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu en local." }, approver);
+  const shown = await call(mf, "GET", `/api/hq/missions/${missionId}`, undefined, approver);
+  const approved = await call(mf, "POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu en local.", presentedHash: shown.payload.mission?.approvalRequest?.hash }, approver);
   assert(approved.status === 200 && approved.payload.mission.status === "in_review" && approved.payload.mission.approvalValid === true, `validation ${approved.status} ${approved.payload.mission?.status || ""} ${approved.payload.error || ""}`);
-  const send = await call(mf, "POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Ce message ne part pas." }, executor);
+  const send = await call(mf, "POST", `/api/hq/missions/${missionId}/actions`, { type: "email", body: "Ce message ne part pas.", idempotencyKey: "worker-local-message-1" }, executor);
   assert(send.status === 403 && send.payload.mission.drafts.at(-1).sent === false, `envoi ${send.status} ${send.payload.error || ""}`);
 
   await mf.dispose();

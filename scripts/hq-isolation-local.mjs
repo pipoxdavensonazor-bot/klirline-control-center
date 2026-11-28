@@ -121,7 +121,8 @@ try {
   const stA = await call("POST", `/api/hq/missions/${midA}/tasks/${tidA}/start`, {}, WHO.execA);
   const dlA = await call("POST", `/api/hq/missions/${midA}/deliverables`, { taskId: tidA, attemptId: stA.payload.attemptId, claimToken: stA.payload.claimToken, body: "Livrable fictif org-a SECRET-A-LIV" }, WHO.execA);
   await call("POST", `/api/hq/missions/${midA}/transition`, { status: "in_review" }, WHO.execA);
-  const apA = await call("POST", `/api/hq/missions/${midA}/approval`, { decision: "approve", note: "Approbation fictive SECRET-A-APR" }, WHO.cooA);
+  const shownA = await call("GET", `/api/hq/missions/${midA}`, undefined, WHO.cooA);
+  const apA = await call("POST", `/api/hq/missions/${midA}/approval`, { decision: "approve", note: "Approbation fictive SECRET-A-APR", presentedHash: shownA.payload.mission?.approvalRequest?.hash }, WHO.cooA);
   record("P2", "contrôle", "A crée mission, livrable et approbation", Boolean(midA) && dlA.status === 200 && apA.status === 200 && apA.payload.mission?.approvalValid === true, `${misA.status}/${dlA.status}/${apA.status}`, true);
   const cmdA2 = await call("POST", "/api/hq/command", { text: "Commande fictive org-a à interrompre", ownerSlug: "ops-klirline" }, WHO.execA);
   const idA2 = cmdA2.payload.command?.id;
