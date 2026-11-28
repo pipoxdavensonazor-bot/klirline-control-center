@@ -200,6 +200,38 @@ test("T9", "Une commande terminée ne se rouvre que par un humain ; l'empreinte 
   assert(human.status === 200 && human.body.command.status === "pending", `contrôle positif : réouverture humaine ${human.status} ${human.body.error || ""}`);
 });
 
+// ---------- T12 : livrable ou preuve falsifiés ----------
+test("T12", "Livrable et preuve liés à la tentative : ni machine review, ni tiers, ni humain sans jeton ne déposent", async () => {
+  const h = harness();
+  const m = await h.mission(A);
+  const st = await h.call("POST", `/api/hq/missions/${m.mid}/tasks/${m.tid}/start`, {}, A);
+  const intruder = await h.call("POST", `/api/hq/missions/${m.mid}/deliverables`, { taskId: m.tid, body: "Livrable inventé par B sans jeton." }, B);
+  assert(intruder.status >= 400, `B sans jeton ${intruder.status}`);
+  const coo = await h.call("POST", `/api/hq/missions/${m.mid}/deliverables`, { taskId: m.tid, body: "Livrable déposé par une machine coo sans jeton." }, COO_MACHINE);
+  assert(coo.status >= 400, `machine coo/review sans jeton ${coo.status}`);
+  const humanNoToken = await h.call("POST", `/api/hq/missions/${m.mid}/deliverables`, { taskId: m.tid, body: "Livrable humain sans tentative." }, COO_HUMAN);
+  assert(humanNoToken.status >= 400, `humain sans jeton ${humanNoToken.status}`);
+  const legit = await h.call("POST", `/api/hq/missions/${m.mid}/deliverables`, { taskId: m.tid, attemptId: st.body.attemptId, claimToken: st.body.claimToken, body: "Livrable légitime de A." }, A);
+  assert(legit.status === 200 && legit.body.mission.deliverables.length === 1, `contrôle positif : livrable légitime ${legit.status} ${legit.body.error || ""}`);
+  const over = await h.call("POST", `/api/hq/missions/${m.mid}/deliverables`, { taskId: m.tid, body: "Trois démonstrations réservées et confirmées." }, B);
+  assert(over.status >= 400, `B sans jeton après livraison ${over.status} état=${over.body.mission?.status}`);
+  const overCoo = await h.call("POST", `/api/hq/missions/${m.mid}/deliverables`, { taskId: m.tid, body: "Révision par machine review." }, COO_MACHINE);
+  assert(overCoo.status >= 400, `machine review après livraison ${overCoo.status}`);
+  const unchanged = await h.call("GET", `/api/hq/missions/${m.mid}`, {}, A);
+  assert(unchanged.body.mission.status === "running" && unchanged.body.mission.deliverables.length === 1, `mission modifiée : ${unchanged.body.mission.status}/${unchanged.body.mission.deliverables.length}`);
+  const revision = await h.call("POST", `/api/hq/missions/${m.mid}/deliverables`, { taskId: m.tid, attemptId: st.body.attemptId, claimToken: st.body.claimToken, body: "Révision par le titulaire de la tentative terminée." }, A);
+  assert(revision.status === 200 && revision.body.mission.status === "rework", `contrôle positif : révision par le titulaire ${revision.status} ${revision.body.error || ""}`);
+  // Preuve de commande : la portée review ne remplace plus le jeton, même hors bail.
+  const id = await h.cmd("T12 preuve");
+  const fakePending = await h.patch(id, { status: "done", proof: "Preuve inventée" }, COO_MACHINE);
+  assert(fakePending.status === 409, `PATCH done hors bail par machine review ${fakePending.status}`);
+  await h.claim(id, A);
+  const fake = await h.patch(id, { status: "done", proof: "Preuve inventée" }, COO_MACHINE);
+  assert(fake.status === 409, `PATCH done sous bail par machine review ${fake.status}`);
+  const humanClose = await h.patch(id, { status: "done", proof: "Clôture décidée par un humain." }, COO_HUMAN);
+  assert(humanClose.status === 200, `contrôle positif : clôture humaine ${humanClose.status} ${humanClose.body.error || ""}`);
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;

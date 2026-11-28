@@ -119,8 +119,17 @@ try {
   assert(reviewerClaim.status === 201 && claimDenied.status === 403, "un rôle de revue prend une commande");
   const approved = await call("local-test-reviewer", "POST", `/api/hq/missions/${first.missionId}/approval`, { decision: "approve", note: "Synthèse interne acceptée." });
   assert(approved.status === 200 && approved.payload.mission.approvalValid === true, "le réviseur n'accepte pas le dossier");
+  // T12 : une révision exige la tentative terminée (titulaire) ; sans jeton, elle est refusée.
+  const forgedRevision = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/deliverables`, {
+    taskId: returned.payload.mission.tasks[0].id,
+    body: `${synthesis.body}\n\nRévision sans jeton.`,
+    executionKind: "manual",
+  });
+  assert(forgedRevision.status === 409, `révision sans jeton acceptée ${forgedRevision.status}`);
   const revised = await call("local-test-executor", "POST", `/api/hq/missions/${first.missionId}/deliverables`, {
     taskId: returned.payload.mission.tasks[0].id,
+    attemptId: restarted.payload.attemptId,
+    claimToken: restarted.payload.claimToken,
     body: `${synthesis.body}\n\nRévision : toujours aucune démonstration réservée.`,
     executionKind: "manual",
   });

@@ -201,7 +201,7 @@ export function rejectImpersonation(input) {
   }
 }
 
-function credentialMatches(claim, attemptId, token) {
+export function credentialMatches(claim, attemptId, token) {
   if (!claim?.tokenHash || !claim.attemptId) return false;
   if (String(attemptId || "") !== claim.attemptId) return false;
   if (!token) return false;
@@ -273,7 +273,9 @@ export function decideCompletion(command, input, options = {}) {
       body: { mode: "hq", outcome: "rejected", error: "Le résultat est déjà enregistré.", command: publicCommand(command) },
     };
   }
-  const reviewer = options.human === true || (Array.isArray(options.scopes) && options.scopes.includes("review"));
+  // T12 (banc phase 5) : la portée review ne remplace plus le jeton. Seul un humain écrit un
+  // résultat sans la tentative en cours.
+  const reviewer = options.human === true;
   if (!reviewer && !credentialMatches(command.claim, attemptId, token)) {
     return {
       http: 409,

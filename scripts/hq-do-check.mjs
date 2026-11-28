@@ -170,8 +170,16 @@ async function scenario() {
   const approved = await call("POST", `/api/hq/missions/${missionId}/approval`, { decision: "approve", note: "Vu." }, { actor: "coo", scopes: ["review"], human: true, now: t0 });
   assert(approved.status === 200 && approved.payload.mission.approvalValid === true, "validation humaine refusée");
 
+  // T12 : sans la tentative terminée, une révision est refusée ; le titulaire la fait avec son jeton.
+  const forgedRevision = await call("POST", `/api/hq/missions/${missionId}/deliverables`, {
+    taskId,
+    body: "Révision sans jeton, refusée.",
+  }, { actor: "machine-klirprospect", scopes: ["work"], now: "2026-11-05T15:05:00.000Z" });
+  assert(forgedRevision.status === 409, `révision sans jeton acceptée ${forgedRevision.status}`);
   const revised = await call("POST", `/api/hq/missions/${missionId}/deliverables`, {
     taskId,
+    attemptId: reclaimed.payload.attemptId,
+    claimToken: reclaimed.payload.claimToken,
     body: "Synthèse révisée, toujours sans démonstration réservée.",
   }, { actor: "machine-klirprospect", scopes: ["work"], now: "2026-11-05T15:05:00.000Z" });
   assert(revised.status === 200 && revised.payload.mission.status === "rework" && revised.payload.mission.approvalValid === false, "la modification a gardé l'approbation");

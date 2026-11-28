@@ -1,4 +1,4 @@
-import { buildHqCommand, decideClaim, decideCompletion } from "./commands.js";
+import { buildHqCommand, credentialMatches, decideClaim, decideCompletion } from "./commands.js";
 import { visibleClient } from "./clients.js";
 import { connectionById } from "./connections.js";
 import { fold, rosterAgent } from "./roster.js";
@@ -297,6 +297,12 @@ export function addDeliverable(mission, commands, input, options = {}) {
   const command = commands.find((item) => item.id === task.commandId);
   if (!command) fail(409, "La commande de la tâche est introuvable.");
   if (command.status === "done") {
+    // T12 (banc phase 5) : réviser un livrable livré (qui invalide l'approbation et renvoie la mission
+    // en rework) est réservé au titulaire de la tentative terminée ou à un humain.
+    const completed = { tokenHash: command.completedTokenHash, attemptId: command.completedAttemptId };
+    if (options.human !== true && !credentialMatches(completed, input?.attemptId, input?.claimToken)) {
+      fail(409, "Seul le titulaire de la tentative terminée ou un humain révise ce livrable.");
+    }
     const now = clock(options).toISOString();
     const next = clone(mission);
     const target = next.tasks.find((item) => item.id === task.id);
@@ -320,13 +326,15 @@ export function addDeliverable(mission, commands, input, options = {}) {
     pushEvent(next, "revision", options.actorId, "Livrable modifié. L'approbation précédente ne vaut plus.", now);
     return { mission: next, command, changed: true, replaceCommand: false };
   }
+  // T12 : un livrable est la preuve d'une tentative ; il exige toujours attemptId + claimToken,
+  // y compris pour un humain (qui peut démarrer la tâche lui-même).
   const proved = decideCompletion(command, {
     status: "done",
     proof: body,
     result: input?.result || null,
     attemptId: input?.attemptId,
     claimToken: input?.claimToken,
-  }, options);
+  }, { ...options, human: false });
   if (proved.http >= 400) fail(proved.http, proved.body.error || "Livrable refusé.");
   if (!proved.persist) return { mission, command, changed: false, replaceCommand: false };
   const now = clock(options).toISOString();
