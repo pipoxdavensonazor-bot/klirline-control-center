@@ -39,8 +39,11 @@ function humanRole(actorId) {
 
 export function resolveServiceMachine(commonName, env = {}) {
   if (!SERVICE_CLIENT.test(commonName || "")) return null;
-  const match = machineIdentities(env).find((item) => item.accessClientId === commonName);
-  if (!match) return null;
+  // Isolation (KCO-AUDIT-2026-11-28 point 7) : un Client ID déclaré par plusieurs fiches est une
+  // configuration ambiguë ; on refuse plutôt que de choisir l'organisation selon l'ordre du JSON.
+  const matches = machineIdentities(env).filter((item) => item.accessClientId === commonName);
+  if (matches.length !== 1) return null;
+  const [match] = matches;
   const scopes = Array.isArray(match.scopes) ? [...new Set(match.scopes.map(String))] : [];
   if (!scopes.length || scopes.some((scope) => !APP_SCOPES.has(scope))) return null;
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(String(match.actorId || ""))) return null;
@@ -93,8 +96,9 @@ export function identifyAccess(claims, env = {}) {
 export function authenticateMachine(authorizationHeader, env = {}) {
   const token = bearer(authorizationHeader);
   if (!token) return null;
-  const match = machineIdentities(env).find((item) => item.token && sameSecret(item.token, token));
-  if (!match) return null;
+  const matches = machineIdentities(env).filter((item) => item.token && sameSecret(item.token, token));
+  if (matches.length !== 1) return null;
+  const [match] = matches;
   if (humanRole(match.actorId)) return null;
   return {
     id: String(match.id),

@@ -4,6 +4,7 @@
 // Usage : node scripts/hq-regression-p1.mjs [ID ...]   (sans argument : tous les tests)
 import { dispatchHq } from "../src/hq/dispatch.js";
 import { memoryHqStore } from "../src/hq/memory-store.js";
+import { authenticateMachine, resolveServiceMachine } from "../src/hq/machine-auth.js";
 import * as missions from "../src/hq/missions.js";
 
 const { createMission, decideMission, missionContentHash, prepareExternalAction, presentMission, validApproval } = missions;
@@ -102,6 +103,22 @@ test("H5", "Une ancienne approbation FNV reste lisible (aucune perte de donnée)
   assert(renewed.approvals.length === 2 && renewed.approvals[0].id === "apr-old", "l'ancienne approbation est perdue");
   assert(validApproval(renewed, NOW)?.id === renewed.approvals[1].id, "la nouvelle approbation SHA-256 ne vaut pas");
   assert(SHA256.test(renewed.approvals[1].contentHash), "nouvelle approbation non SHA-256");
+});
+
+test("O1", "Un même Client ID (ou jeton) déclaré par deux fiches de deux organisations est refusé", async () => {
+  const clientId = `${"e".repeat(32)}.access`;
+  const env = { HQ_MACHINE_IDENTITIES: JSON.stringify([
+    { id: "dup-b", accessClientId: clientId, actorId: "machine-dup", orgId: "org-b", scopes: ["work"] },
+    { id: "dup-a", accessClientId: clientId, actorId: "machine-dup", orgId: "org-a", scopes: ["work"] },
+    { id: "tok-b", token: "jeton-factice-dup", actorId: "machine-tok", orgId: "org-b", scopes: ["work"] },
+    { id: "tok-a", token: "jeton-factice-dup", actorId: "machine-tok", orgId: "org-a", scopes: ["work"] },
+    { id: "seule", accessClientId: `${"f".repeat(32)}.access`, actorId: "machine-seule", orgId: "org-a", scopes: ["work"] },
+  ]) };
+  const dup = resolveServiceMachine(clientId, env);
+  assert(dup === null, `fiche ambiguë acceptée, organisation choisie : ${dup?.orgId}`);
+  const tok = authenticateMachine("Bearer jeton-factice-dup", env);
+  assert(tok === null, `jeton ambigu accepté : ${tok?.id}`);
+  assert(resolveServiceMachine(`${"f".repeat(32)}.access`, env)?.orgId === "org-a", "contrôle positif : une fiche unique doit passer");
 });
 
 let failed = 0;

@@ -63,6 +63,9 @@ jobs:
       - name: hq-regression-p1 (empreintes SHA-256, mémoire)
         run: node scripts/hq-regression-p1.mjs
 
+      - name: hq-isolation-local (isolation interorganisation, Worker + Durable Object local)
+        run: node scripts/hq-isolation-local.mjs
+
       - name: npm audit (informatif, non bloquant)
         run: |
           npm audit --audit-level=high || echo "::warning title=npm audit::Vulnérabilités hautes dans l'outillage (wrangler/miniflare). Voir le journal."
