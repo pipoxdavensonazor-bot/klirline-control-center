@@ -3,6 +3,7 @@ import { CONNECTIONS } from "./connections.js";
 import { visibleClient, visibleClients } from "./clients.js";
 import { canReadMission, createMission, isMissionId, presentMission } from "./missions.js";
 import { rosterView } from "./roster.js";
+import { auditEntry } from "./audit.js";
 import { SKILL_REGISTRY } from "./skills.js";
 
 function present(command) {
@@ -34,7 +35,30 @@ function writes(scopes) {
 
 const NO_SCOPE = { status: 403, body: { error: "Cette identité n'a pas ce droit." } };
 
-export async function dispatchHq(store, { method, pathname, searchParams, body, actorId, now, scopes, human, orgId }) {
+// Lot 2 : chaque écriture (y compris refusée) ajoute une entrée au journal d'audit du dépôt.
+// Écrite après l'opération, hors de sa transaction : une panne entre les deux peut perdre une
+// entrée, jamais en inventer une. Lecture : humains seulement ; aucune route d'écriture.
+export async function dispatchHq(store, request) {
+  const clock = request.now instanceof Date ? request.now : new Date();
+  if (request.pathname === "/api/hq/audit" || request.pathname.startsWith("/api/hq/audit/")) {
+    if (request.method !== "GET" || request.pathname !== "/api/hq/audit") return { status: 405, body: { error: "Journal d'audit en ajout seul." } };
+    if (request.human !== true) return { status: 403, body: { error: "Journal d'audit réservé aux humains." } };
+    const limit = Math.min(500, Math.max(1, Number.parseInt(request.searchParams?.get?.("limit") || "100", 10) || 100));
+    return { status: 200, body: { mode: "hq", audit: store.auditList ? await store.auditList(limit) : [] } };
+  }
+  let result;
+  try {
+    result = await dispatchCore(store, request);
+  } catch (error) {
+    result = { status: error.status || 500, body: { error: error.message } };
+    if (request.method !== "GET" && store.auditAppend) await store.auditAppend(auditEntry({ ...request, clock, result }));
+    throw error;
+  }
+  if (request.method !== "GET" && store.auditAppend) await store.auditAppend(auditEntry({ ...request, clock, result }));
+  return result;
+}
+
+async function dispatchCore(store, { method, pathname, searchParams, body, actorId, now, scopes, human, orgId }) {
   const clock = now instanceof Date ? now : new Date();
   if (method !== "GET" && body && typeof body === "object") {
     try {

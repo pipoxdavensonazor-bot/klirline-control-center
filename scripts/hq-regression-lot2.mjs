@@ -312,6 +312,32 @@ test("I1", "Contrôle avant déploiement : identités ambiguës (Client ID ou je
   assert(good.ok && good.errors.length === 0, `configuration saine refusée : ${JSON.stringify(good)}`);
 });
 
+test("J1", "Journal d'audit : chaque écriture (acceptée ou refusée) est tracée avec acteur, organisation, mission, commande, tentative, autorisation, résultat, empreinte, coût ; aucun secret ; lecture humaine seulement ; aucune route d'écriture", async () => {
+  const h = harness();
+  const c = await claimed(h, "Commande auditée");
+  await h.call("PATCH", `/api/hq/commands/${c.id}`, { status: "done", proof: "Preuve auditée.", attemptId: c.attemptId, claimToken: c.claimToken }, A);
+  await h.call("PATCH", `/api/hq/commands/${c.id}`, { status: "pending" }, B);
+  const m = await inReview(h);
+  await h.call("POST", `/api/hq/missions/${m.mid}/approval`, { decision: "approve", presentedHash: m.shown.approvalRequest.hash }, COO);
+  const machine = await h.call("GET", "/api/hq/audit", {}, A);
+  assert(machine.status === 403, `lecture machine : ${machine.status}`);
+  const log = await h.call("GET", "/api/hq/audit?limit=500", {}, COO);
+  assert(log.status === 200 && Array.isArray(log.body.audit), `lecture humaine : ${log.status}`);
+  const entries = log.body.audit;
+  const done = entries.find((e) => e.commandId === c.id && e.result.outcome === "completed");
+  assert(done && done.actorId === "agent-a" && done.orgId === "org-a" && done.attemptId === c.attemptId && /^sha256-/.test(done.contentHash) && done.authorization.scopes.includes("work"), `entrée de clôture : ${JSON.stringify(done)}`);
+  assert(entries.some((e) => e.commandId === c.id && e.actorId === "agent-b" && e.result.status >= 400), "tentative refusée non tracée");
+  const ap = entries.find((e) => e.missionId === m.mid && e.action.endsWith("/approval"));
+  assert(ap && ap.authorization.human === true && ap.authorization.approval === m.shown.approvalRequest.hash && ap.result.status === 200, `entrée d'approbation : ${JSON.stringify(ap)}`);
+  assert(entries.some((e) => e.missionId === m.mid && e.action.endsWith("/start") && e.costCents === null), "démarrage non tracé");
+  const all = JSON.stringify(entries);
+  assert(!all.includes(c.claimToken) && !all.includes(m.st.body.claimToken) && !all.includes("Preuve auditée."), "un secret ou un contenu en clair figure au journal");
+  for (const [method, path] of [["POST", "/api/hq/audit"], ["PATCH", "/api/hq/audit"], ["DELETE", "/api/hq/audit"], ["POST", "/api/hq/audit/1"]]) {
+    const r = await h.call(method, path, { body: "x" }, COO);
+    assert(r.status === 405, `${method} ${path} : ${r.status}`);
+  }
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;

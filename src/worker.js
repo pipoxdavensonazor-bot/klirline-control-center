@@ -5,7 +5,7 @@ import { decideClaim, decideCompletion, decideHeartbeat, decideInterrupt, expire
 import { accessScopes, resolveServiceMachine } from "./hq/machine-auth.js";
 import { dispatchHq } from "./hq/dispatch.js";
 import { runMissionOperation } from "./hq/missions.js";
-import { HQ_INDEX, HQ_INSERT, HQ_MISSION_INDEX, HQ_MISSION_INSERT, HQ_MISSION_SCHEMA, HQ_MISSION_SELECT, HQ_MISSION_UPDATE, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
+import { HQ_AUDIT_GUARDS, HQ_AUDIT_INSERT, HQ_AUDIT_SCHEMA, HQ_AUDIT_SELECT, HQ_INDEX, HQ_INSERT, HQ_MISSION_INDEX, HQ_MISSION_INSERT, HQ_MISSION_SCHEMA, HQ_MISSION_SELECT, HQ_MISSION_UPDATE, HQ_SCHEMA, HQ_SELECT, HQ_UPDATE, hqSelectBindings } from "./hq/sql.js";
 import { COMPANY } from "./policy.js";
 import { freshState } from "./fresh-state.js";
 import { API_LIMITS, RATE_OBJECT_NAME, nextWindow, rateKey } from "./limits.js";
@@ -121,6 +121,16 @@ export class CompanyState extends DurableObject {
     this.ctx.storage.sql.exec(HQ_INDEX);
     this.ctx.storage.sql.exec(HQ_MISSION_SCHEMA);
     this.ctx.storage.sql.exec(HQ_MISSION_INDEX);
+    this.ctx.storage.sql.exec(HQ_AUDIT_SCHEMA);
+    for (const guard of HQ_AUDIT_GUARDS) this.ctx.storage.sql.exec(guard);
+  }
+
+  hqAuditAppend(entry) {
+    this.ctx.storage.sql.exec(HQ_AUDIT_INSERT, entry.at, JSON.stringify(entry));
+  }
+
+  hqAuditList(limit = 100) {
+    return this.ctx.storage.sql.exec(HQ_AUDIT_SELECT, limit).toArray().map((row) => ({ seq: Number(row.seq), ...JSON.parse(row.body) }));
   }
 
   hqList(filter = {}) {
@@ -320,6 +330,8 @@ async function playbookCatalog(request, env) {
 
 export function hqDurableStore(company) {
   return {
+    auditAppend: (entry) => company.hqAuditAppend(entry),
+    auditList: (limit) => company.hqAuditList(limit),
     sweep: (now) => company.hqSweep(now instanceof Date ? now.toISOString() : now),
     list: (filter) => company.hqList(filter),
     get: (id) => company.hqGet(id),

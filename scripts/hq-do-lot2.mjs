@@ -77,6 +77,22 @@ test("E3", "Interruption pendant le dépôt d'un livrable : la commande reste da
   assert(resumed.status === 200 && resumed.body.mission.deliverables.length === 1, `reprise : ${resumed.status} ${resumed.body.error || ""}`);
 });
 
+test("J2", "Journal d'audit dans le Durable Object : écrit à chaque écriture, UPDATE et DELETE refusés par la base elle-même, cloisonné par organisation", async () => {
+  await readyMission();
+  const before = await sql("SELECT COUNT(*) AS n FROM hq_audit");
+  assert(before.ok && before.rows[0].n >= 2, `journal absent ou vide : ${JSON.stringify(before)}`);
+  const upd = await sql("UPDATE hq_audit SET body = '{}' WHERE seq = 1");
+  const del = await sql("DELETE FROM hq_audit");
+  const drop = await sql("DELETE FROM hq_audit WHERE seq = (SELECT MAX(seq) FROM hq_audit)");
+  assert(!upd.ok && !del.ok && !drop.ok && /ajout seul/.test(upd.error + del.error), `modification acceptée : ${JSON.stringify([upd, del, drop])}`);
+  const after = await sql("SELECT COUNT(*) AS n FROM hq_audit");
+  assert(after.rows[0].n === before.rows[0].n, "le nombre d'entrées a changé");
+  const human = await call("GET", "/api/hq/audit?limit=5", null, COO);
+  assert(human.status === 200 && human.body.audit.length === 5 && human.body.audit.every((e) => e.orgId === "klirline"), `lecture humaine : ${human.status}`);
+  const other = await call("GET", "/api/hq/audit", null, COO, T0, "org-b");
+  assert(other.status === 200 && other.body.audit.length === 0, `journal de B : ${other.body.audit?.length}`);
+});
+
 let failed = 0;
 try {
   for (const item of tests) {

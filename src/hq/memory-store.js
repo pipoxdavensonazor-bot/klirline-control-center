@@ -18,7 +18,14 @@ function commit(commands, id, decision) {
 export function memoryHqStore(seed = []) {
   const commands = seed.map((command) => ({ ...command }));
   const missions = [];
+  const audit = [];
   return {
+    async auditAppend(entry) {
+      audit.push(Object.freeze(JSON.parse(JSON.stringify(entry))));
+    },
+    async auditList(limit = 100) {
+      return audit.slice(-limit).reverse().map((entry, index) => ({ seq: audit.length - index, ...entry }));
+    },
     async sweep(now) {
       let count = 0;
       commands.forEach((command, index) => {
