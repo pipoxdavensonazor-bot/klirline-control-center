@@ -10,7 +10,7 @@ const SERVICE_CLIENT = /^[a-f0-9]{32}\.access$/;
 const SCOPES = new Set(["work", "review"]);
 const mask = (value) => `empreinte:${createHash("sha256").update(String(value)).digest("hex").slice(0, 8)}`;
 
-export function checkIdentityConfig(env = {}) {
+export function checkIdentityConfig(env = {}, { strict = false } = {}) {
   const errors = [];
   const warnings = [];
   let fiches = [];
@@ -49,7 +49,7 @@ export function checkIdentityConfig(env = {}) {
     try { orgObjectName(String(item?.orgId || "")); } catch { errors.push(`${name} : organisation invalide.`); }
   });
   const declared = new Set(fiches.map((item) => String(item?.accessClientId || "").toLowerCase()).filter(Boolean));
-  for (const id of allowed) if (!declared.has(id)) warnings.push(`Client ID ${mask(id)} autorisé sans fiche machine : refusé (403) à l'exécution.`);
+  for (const id of allowed) if (!declared.has(id)) (strict ? errors : warnings).push(`Client ID ${mask(id)} autorisé sans fiche machine : refusé (403) à l'exécution${strict ? " (mode strict : le poll de cette identité s'arrêterait)" : ""}.`);
   if (env.ACCESS_ACCOUNTS != null) {
     const parsed = parseAccessAccounts(env.ACCESS_ACCOUNTS);
     if (parsed.error) errors.push(`ACCESS_ACCOUNTS : ${parsed.error}.`);

@@ -350,6 +350,18 @@ test("I2", "L'exemple config/hq-machines.example.json passe le contrôle avant d
   assert(result.ok, `exemple refusé : ${result.errors.join(" | ")}`);
 });
 
+test("I3", "Mode strict : un Client ID autorisé sans fiche machine (le poll recevrait 403) est une erreur ; sans --strict, un avertissement ; une fiche présente passe", async () => {
+  const { checkIdentityConfig } = await import("../src/hq/identity-check.js");
+  const cid = `${"c3".repeat(16)}.access`;
+  const env = { ACCESS_SERVICE_CLIENT_IDS: cid, HQ_MACHINE_IDENTITIES: "[]" };
+  const lax = checkIdentityConfig(env);
+  assert(lax.ok && lax.warnings.length === 1, `sans strict : ${JSON.stringify(lax)}`);
+  const strict = checkIdentityConfig(env, { strict: true });
+  assert(!strict.ok && /sans fiche machine/.test(strict.errors.join(" ")) && !JSON.stringify(strict).includes(cid), `strict : ${JSON.stringify(strict)}`);
+  const withCard = checkIdentityConfig({ ...env, HQ_MACHINE_IDENTITIES: JSON.stringify([{ id: "poll", actorId: "office-poll", orgId: "klirline", accessClientId: cid, scopes: ["work"] }]) }, { strict: true });
+  assert(withCard.ok, `fiche présente refusée : ${JSON.stringify(withCard)}`);
+});
+
 let failed = 0;
 for (const item of tests) {
   if (only.size && !only.has(item.id)) continue;
