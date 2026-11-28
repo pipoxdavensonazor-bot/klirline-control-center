@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { buildHqCommand, credentialMatches, decideClaim, decideCompletion } from "./commands.js";
 import { visibleClient } from "./clients.js";
 import { connectionById } from "./connections.js";
@@ -40,22 +41,56 @@ function rejectElevation(input) {
   }
 }
 
+// Empreintes de contenu (KCO-AUDIT-2026-11-28 point 6) : SHA-256 sur un encodage JSON non ambigu.
+// node:crypto (nodejs_compat, déjà utilisé pour hashClaimToken) donne un résultat synchrone,
+// identique à crypto.subtle.digest("SHA-256") (vérifié par scripts/hq-regression-p1.mjs) : la
+// WebCrypto n'offre que digest() asynchrone, et un await dans CompanyState.hqMissionOperate
+// ouvrirait une fenêtre entre la lecture et l'écriture de la mission.
+export const CONTENT_HASH_PREFIX = "sha256-";
+const LEGACY_PREFIX = "fnv-";
+
 export function contentHash(parts) {
+  const text = JSON.stringify(parts.map((part) => String(part ?? "")));
+  return `${CONTENT_HASH_PREFIX}${createHash("sha256").update(text, "utf8").digest("hex")}`;
+}
+
+// Ancienne empreinte FNV-1a 32 bits, gardée pour la LECTURE seulement : reconnaître et marquer
+// « legacy » les approbations déjà enregistrées. Elle ne valide jamais rien.
+export function legacyContentHash(parts) {
   const text = parts.map((part) => String(part ?? "")).join("\n");
   let hash = 2166136261;
   for (let index = 0; index < text.length; index += 1) {
     hash ^= text.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `fnv-${(hash >>> 0).toString(16)}-${text.length}`;
+  return `${LEGACY_PREFIX}${(hash >>> 0).toString(16)}-${text.length}`;
 }
 
-export function missionContentHash(mission) {
+export function hashAlgorithm(value) {
+  const text = String(value || "");
+  if (/^sha256-[0-9a-f]{64}$/.test(text)) return "sha256";
+  if (text.startsWith(LEGACY_PREFIX)) return "fnv-legacy";
+  return "unknown";
+}
+
+function missionParts(mission) {
   const deliverables = (mission.deliverables || [])
     .slice()
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((item) => `${item.id}\n${item.body}`);
-  return contentHash([mission.objective, mission.successCriterion, ...deliverables]);
+  return [mission.objective, mission.successCriterion, ...deliverables];
+}
+
+export function missionContentHash(mission) {
+  return contentHash(missionParts(mission));
+}
+
+export function legacyMissionContentHash(mission) {
+  return legacyContentHash(missionParts(mission));
+}
+
+export function deliverableHash(body) {
+  return contentHash(["livrable", body]);
 }
 
 function clone(value) {
@@ -167,12 +202,32 @@ function openTasks(mission) {
 export function validApproval(mission, now = new Date()) {
   const hash = missionContentHash(mission);
   const nowMs = now instanceof Date ? now.getTime() : Date.parse(now);
+  // Seule une approbation SHA-256 vaut : une approbation FNV (legacy) ne valide jamais une
+  // clôture ni une action externe, même si son empreinte correspond encore au contenu.
   return (mission.approvals || []).find((approval) => (
     approval.decision === "approve"
     && !approval.invalidatedAt
+    && hashAlgorithm(approval.contentHash) === "sha256"
     && approval.contentHash === hash
     && Date.parse(approval.expiresAt) > nowMs
   )) || null;
+}
+
+// Lecture des approbations : algorithme affiché, anciennes empreintes marquées « legacy ».
+export function presentApprovals(mission) {
+  let legacyHash = null;
+  return (mission.approvals || []).map((approval) => {
+    const algorithm = hashAlgorithm(approval.contentHash);
+    if (algorithm !== "fnv-legacy") return { ...approval, hashAlgorithm: algorithm, legacy: false };
+    legacyHash ||= legacyMissionContentHash(mission);
+    return {
+      ...approval,
+      hashAlgorithm: algorithm,
+      legacy: true,
+      legacyMatchesContent: approval.contentHash === legacyHash,
+      validatesActions: false,
+    };
+  });
 }
 
 export function transitionMission(mission, input, options = {}) {
@@ -315,6 +370,7 @@ export function addDeliverable(mission, commands, input, options = {}) {
       body,
       source: "demonstration",
       state: "revision",
+      contentHash: deliverableHash(body),
       executionKind: input?.executionKind || "manual",
       createdAt: now,
       createdBy: options.actorId || "",
@@ -348,6 +404,7 @@ export function addDeliverable(mission, commands, input, options = {}) {
     body,
     source: "demonstration",
     state: "proposal",
+    contentHash: deliverableHash(body),
     executionKind: input?.executionKind || "deterministic-script",
     createdAt: now,
     createdBy: options.actorId || "",
@@ -451,6 +508,12 @@ export function presentMission(mission, actorId, now = new Date()) {
     ...mission,
     clientId: client ? mission.clientId : null,
     tasks: mission.tasks.map(({ claimToken, ...task }) => task),
+    approvals: presentApprovals(mission),
+    deliverables: (mission.deliverables || []).map((item) => ({
+      ...item,
+      hashAlgorithm: item.contentHash ? hashAlgorithm(item.contentHash) : "absent-legacy",
+      contentHashMatches: item.contentHash ? item.contentHash === deliverableHash(item.body) : null,
+    })),
     approvalValid: Boolean(approval),
     approvalExpiresAt: approval?.expiresAt || null,
     outcomes: { demosPrepared: mission.deliverables?.length || 0, demosBooked: 0 },

@@ -183,6 +183,11 @@ try {
   const reloaded = await call(mf, "GET", `/api/hq/missions/${missionId}`, undefined, approver);
   assert(after.includes("hq_mission"), "hq_mission absente après redémarrage");
   assert(reloaded.status === 200 && reloaded.payload.mission.id === missionId && reloaded.payload.mission.status === "in_review" && reloaded.payload.mission.approvalValid === true, `relecture ${reloaded.status} ${reloaded.payload.error || reloaded.payload.mission?.status || ""}`);
+  // KCO-AUDIT-2026-11-28 point 6 : dans workerd aussi, approbation et livrable portent du SHA-256.
+  const storedApproval = reloaded.payload.mission.approvals.at(-1);
+  const storedDeliverable = reloaded.payload.mission.deliverables[0];
+  assert(/^sha256-[0-9a-f]{64}$/.test(storedApproval.contentHash) && storedApproval.legacy === false, `empreinte d'approbation ${storedApproval.contentHash}`);
+  assert(/^sha256-[0-9a-f]{64}$/.test(storedDeliverable.contentHash || "") && storedDeliverable.contentHashMatches === true, `empreinte de livrable ${storedDeliverable.contentHash}`);
   const hidden = await call(mf, "GET", "/api/hq/clients/cli-reserve", undefined, executor);
   assert(hidden.status === 404, `dossier réservé ${hidden.status}`);
   console.log(JSON.stringify({
@@ -195,6 +200,7 @@ try {
     status: reloaded.payload.mission.status,
     deliverables: reloaded.payload.mission.deliverables.length,
     approvalValid: reloaded.payload.mission.approvalValid,
+    approvalHash: storedApproval.contentHash.slice(0, 15),
     draftSent: reloaded.payload.mission.drafts.at(-1).sent,
     concurrentClaims: outcomes,
     oldAttempt: stale.status,
