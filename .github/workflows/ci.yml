@@ -55,6 +55,9 @@ jobs:
         # À corriger dans le chantier 4 (une machine n'approuve jamais A3), pas ici.
         run: node scripts/hq-do-check.mjs
 
+      - name: hq-regression-p0 (défauts du banc phase 5, mémoire)
+        run: node scripts/hq-regression-p0.mjs
+
       - name: npm audit (informatif, non bloquant)
         run: |
           npm audit --audit-level=high || echo "::warning title=npm audit::Vulnérabilités hautes dans l'outillage (wrangler/miniflare). Voir le journal."

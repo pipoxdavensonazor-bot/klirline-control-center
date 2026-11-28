@@ -277,9 +277,15 @@ const serviceClaims = {
 const serviceOpts = { teamDomain: trial.teamDomain, aud: trial.aud, keys: [jwk], nowMs, serviceClientIds: withService.serviceClientIds };
 const serviceJwt = await verifyAccessJwt(sign(serviceClaims), serviceOpts);
 check(serviceJwt.kind === "service" && serviceJwt.clientId === listedId && serviceJwt.email == null, "Un JWT de service allowlisté n'a pas de courriel");
-const machine = identityFromAccess(serviceJwt, withService.accounts);
-check(machine.service && machine.actorId === HQ_SERVICE_ACTOR && machine.orgId === "klirline" && machine.email === HQ_SERVICE_ACTOR, "Le poll ouvre l'organisation unique, comme machine");
-check(machine.actorId !== "ceo" && machine.email !== "ada@example.com", "Le poll ne reprend pas le compte humain");
+// I1 : un jeton de service sans fiche machine n'obtient plus l'identité de repli HQ_SERVICE_ACTOR.
+try {
+  const fallback = identityFromAccess(serviceJwt, withService.accounts);
+  check(false, `Un jeton de service sans fiche machine est refusé (${fallback.actorId})`);
+} catch (error) {
+  check(error.status === 403, "Un jeton de service sans fiche machine est refusé");
+}
+check(HQ_SERVICE_ACTOR === "service:hq-poll", "L'ancien acteur de repli reste nommé, sans être attribué");
+const machine = { service: true, actorId: "machine-klirprospect", orgId: "klirline", email: "machine:executor-klirprospect" };
 const humanStill = identityFromAccess(accepted, withService.accounts);
 check(!humanStill.service && humanStill.actorId === "ceo" && humanStill.email === "ada@example.com", "Le courriel continue de choisir le rôle");
 try {
@@ -327,7 +333,7 @@ try {
   identityFromAccess(serviceJwt, twoOrgs.accounts);
   check(false, "Deux organisations refusent le jeton de service");
 } catch (error) {
-  check(error.status === 401, "Deux organisations refusent le jeton de service");
+  check(error.status === 403, "Deux organisations refusent le jeton de service");
 }
 assertServiceRoute(machine, "/api/hq/commands");
 assertServiceRoute(machine, "/api/hq/commands/hq-00000000-0000-4000-8000-000000000001/claim");

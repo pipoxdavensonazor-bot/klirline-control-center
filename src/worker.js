@@ -81,6 +81,7 @@ async function authenticate(request, env) {
         scopes: machine.scopes,
       };
     }
+    // I1 : sans fiche machine, identityFromAccess refuse le jeton de service (403), sans repli.
     return { ...identityFromAccess(verified, settings.accounts), human: false };
   }
   const human = identityFromAccess(verified, settings.accounts);
