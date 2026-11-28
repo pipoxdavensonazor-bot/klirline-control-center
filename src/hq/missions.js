@@ -218,7 +218,7 @@ export function createMission(input, actorId, options = {}) {
   const ownerSlug = campaign || synthese ? "klirprospect" : String(input?.ownerSlug || "office-klirline");
   if (!rosterAgent(ownerSlug)) fail(400, "Agent inconnu.");
   const clientId = campaign ? "cli-atelier-nord" : input?.clientId || null;
-  if (clientId && !visibleClient(actor, clientId)) fail(403, "Dossier client inaccessible.");
+  if (clientId && !visibleClient(actor, clientId, options.orgId)) fail(403, "Dossier client inaccessible.");
   return {
     id: `msn-${crypto.randomUUID()}`,
     template: campaign || synthese ? template : null,
@@ -673,7 +673,7 @@ export function presentMission(mission, actorId, now = new Date(), orgId) {
   if (!mission) return null;
   const context = { orgId };
   const approval = validApproval(mission, now, context);
-  const client = mission.clientId ? visibleClient(actorId, mission.clientId) : null;
+  const client = mission.clientId ? visibleClient(actorId, mission.clientId, orgId) : null;
   return {
     ...mission,
     clientId: client ? mission.clientId : null,

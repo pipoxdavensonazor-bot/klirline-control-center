@@ -46,10 +46,10 @@ export async function dispatchHq(store, { method, pathname, searchParams, body, 
   if (method === "GET" && pathname === "/api/hq/skills") return { status: 200, body: { mode: "hq", skills: SKILL_REGISTRY } };
   if (method === "POST" && pathname.startsWith("/api/hq/skills")) return { status: 403, body: { error: "Une compétence ne s'active pas elle-même." } };
   if (method === "GET" && pathname === "/api/hq/connections") return { status: 200, body: { mode: "hq", connections: CONNECTIONS } };
-  if (method === "GET" && pathname === "/api/hq/clients") return { status: 200, body: { mode: "hq", clients: visibleClients(actorId) } };
+  if (method === "GET" && pathname === "/api/hq/clients") return { status: 200, body: { mode: "hq", clients: visibleClients(actorId, orgId) } };
   const clientMatch = pathname.match(/^\/api\/hq\/clients\/([^/]+)$/);
   if (clientMatch && method === "GET") {
-    const client = visibleClient(actorId, clientMatch[1]);
+    const client = visibleClient(actorId, clientMatch[1], orgId);
     if (!client) return { status: 404, body: { error: "Dossier inaccessible" } };
     return { status: 200, body: { mode: "hq", client } };
   }
